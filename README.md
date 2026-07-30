@@ -26,6 +26,13 @@ npm run serve:web
 ## Repositorio y despliegue
 
 - **GitHub:** `carlosgarciacano87-dev/programaciones-online`
-- **Vercel:** proyecto `programaciones-online` (build: `npx expo export -p web`, salida: `dist`)
+- **Vercel:** equipo `Carlos' projects`, proyecto `programaciones-online`
+  (build: `npx expo export -p web`, salida: `dist`)
 
-Cada push a `main` redepliega la web en Vercel.
+El repositorio no está enlazado al proyecto de Vercel, así que un `git push` no
+publica nada por sí solo. Para actualizar la web:
+
+```bash
+git push
+npm run deploy:web
+```

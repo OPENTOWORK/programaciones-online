@@ -42,6 +42,7 @@
     "web": "expo start --web --port 3000",
     "export:web": "expo export -p web",
     "serve:web": "expo serve",
+    "deploy:web": "vercel deploy --prod --yes --scope carlos-projects-fef4821d",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "build:android": "eas build --platform android --profile production",
