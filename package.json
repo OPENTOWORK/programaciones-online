@@ -59,6 +59,7 @@
     "supabase:trainer-athlete-feedback": "node scripts/apply-trainer-athlete-feedback.mjs",
     "supabase:signup-welcome": "node scripts/apply-signup-welcome-message.mjs",
     "supabase:session-templates": "node scripts/apply-session-templates.mjs",
+    "supabase:auth-urls": "node scripts/update-auth-urls.mjs",
     "aimharder:fetch": "node scripts/fetch-aimharder-calendar.mjs",
     "aimharder:sync": "node scripts/sync-aimharder.mjs",
     "aimharder:update": "node scripts/sync-aimharder.mjs --fetch --videos",

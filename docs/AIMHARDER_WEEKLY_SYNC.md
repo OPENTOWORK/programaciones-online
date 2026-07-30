@@ -1,3 +1,10 @@
+# AimHarder weekly sync (GitHub Actions)
+
+Este workflow se eliminó del repositorio para permitir el primer push sin el scope `workflow` de GitHub.
+
+Puedes volver a añadirlo creando `.github/workflows/aimharder-weekly-sync.yml` con este contenido:
+
+```yaml
 name: AimHarder weekly sync
 
 on:
@@ -30,3 +37,6 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           AIMHARDER_SESSION: ${{ secrets.AIMHARDER_SESSION }}
           AIMHARDER_BOX: ${{ secrets.AIMHARDER_BOX }}
+```
+
+Alternativa en Windows: `scripts/register-weekly-sync-task.ps1`.

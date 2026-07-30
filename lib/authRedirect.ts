@@ -6,6 +6,9 @@ import { getWebLocationHref } from '@/lib/platformAccess';
 /** Debe coincidir con Supabase Site URL y `npm run dev` (puerto 3000). */
 export const LOCAL_WEB_AUTH_ORIGIN = 'http://localhost:3000';
 
+/** Dominio web de producción. Debe coincidir con Supabase Site URL. */
+export const PRODUCTION_WEB_AUTH_ORIGIN = 'https://trainingprogline.es';
+
 export const NATIVE_AUTH_SCHEME = 'programaciones-online';
 
 function normalizeNativeAuthPath(path: string) {

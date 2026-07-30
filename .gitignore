@@ -51,3 +51,5 @@ tmp-*.html
 android/keystore.properties
 android/app/release.keystore
 dist/
+
+.vercel

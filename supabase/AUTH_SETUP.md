@@ -4,7 +4,13 @@ Proyecto: [Supabase Dashboard](https://supabase.com/dashboard/project/nsdurlikku
 
 ## 1. Site URL
 
-Supabase redirige por defecto a **puerto 3000**. La app local también usa 3000:
+Producción (web pública):
+
+```text
+https://trainingprogline.es
+```
+
+Desarrollo local (`npm run dev`):
 
 ```text
 http://localhost:3000
@@ -21,6 +27,12 @@ Abre **http://localhost:3000** (no 8082).
 ## 2. Redirect URLs — añade todas estas
 
 ```text
+https://trainingprogline.es/**
+https://trainingprogline.es/auth/confirm-email
+https://trainingprogline.es/auth/update-password
+https://programaciones-online.vercel.app/**
+https://programaciones-online.vercel.app/auth/confirm-email
+https://programaciones-online.vercel.app/auth/update-password
 http://localhost:3000/**
 http://localhost:3000/auth/confirm-email
 http://localhost:3000/auth/update-password
