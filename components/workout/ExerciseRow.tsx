@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { formatExercisePrescription } from '@/lib/exercisePrescription';
 import type { Exercise } from '@/lib/types';
 
 interface ExerciseRowProps {
@@ -9,21 +10,12 @@ interface ExerciseRowProps {
   completed: boolean;
   hasVideo?: boolean;
   isVideoActive?: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
   onOpenVideo?: () => void;
 }
 
 function formatExerciseDetail(exercise: Exercise): string {
-  const hasStrengthSets = exercise.sets > 1 && /^\d/.test(exercise.reps);
-  const prescription = hasStrengthSets
-    ? `${exercise.sets} × ${exercise.reps}`
-    : exercise.reps;
-
-  if (exercise.notes) {
-    return `${prescription} · ${exercise.notes}`;
-  }
-
-  return prescription;
+  return formatExercisePrescription(exercise);
 }
 
 export function ExerciseRow({
@@ -42,20 +34,33 @@ export function ExerciseRow({
         isVideoActive && styles.rowVideoActive,
       ]}
     >
-      <Pressable
-        onPress={onToggle}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: completed }}
-        style={styles.checkboxPressable}
-      >
-        <View style={[styles.checkbox, completed && styles.checkboxChecked]}>
-          {completed ? <Text style={styles.checkmark}>✓</Text> : null}
+      {onToggle ? (
+        <Pressable
+          onPress={onToggle}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: completed }}
+          style={styles.checkboxPressable}
+        >
+          <View style={[styles.checkbox, completed && styles.checkboxChecked]}>
+            {completed ? <Text style={styles.checkmark}>✓</Text> : null}
+          </View>
+        </Pressable>
+      ) : (
+        <View style={styles.checkboxPressable}>
+          <View style={[styles.checkbox, completed && styles.checkboxChecked]}>
+            {completed ? <Text style={styles.checkmark}>✓</Text> : null}
+          </View>
         </View>
-      </Pressable>
+      )}
 
       <Pressable
-        onPress={hasVideo ? onOpenVideo : onToggle}
-        disabled={!hasVideo && !onOpenVideo}
+        onPress={() => {
+          if (hasVideo) {
+            onOpenVideo?.();
+            return;
+          }
+          onToggle?.();
+        }}
         style={styles.contentPressable}
       >
         <View style={styles.content}>
@@ -66,7 +71,7 @@ export function ExerciseRow({
           <Text style={styles.details}>{formatExerciseDetail(exercise)}</Text>
           {hasVideo ? (
             <Text style={styles.videoHint}>
-              {isVideoActive ? 'Reproduciendo arriba' : 'Pulsa para ver el vídeo'}
+              {isVideoActive ? 'Reproduciendo el vídeo abajo' : 'Pulsa para ver el vídeo'}
             </Text>
           ) : null}
           {exercise.notes ? (

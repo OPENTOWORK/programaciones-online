@@ -1,5 +1,19 @@
 import type { Exercise, Workout } from '@/lib/types';
+import { isMissingScheduleConfigError } from '@/lib/scheduleConfigColumn';
+import { parseScheduleFromJson } from '@/lib/sessionSchedule';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+
+const ENTRENO_FIELDS =
+  'id, program_id, workout_date, name, day_label, estimated_duration, warmup, main_part, core_part, cooldown';
+const ENTRENO_EXERCISES =
+  'entrenos_ejercicios(id, sort_order, name, sets, reps, rest, notes, metric_type, male_target, female_target, aimharder_ejer_id)';
+
+function entrenoSelect(includeScheduleConfig: boolean) {
+  if (includeScheduleConfig) {
+    return `${ENTRENO_FIELDS}, schedule_config, ${ENTRENO_EXERCISES}`;
+  }
+  return `${ENTRENO_FIELDS}, ${ENTRENO_EXERCISES}`;
+}
 
 interface EntrenoRow {
   id: string;
@@ -12,6 +26,7 @@ interface EntrenoRow {
   main_part: string | null;
   core_part: string | null;
   cooldown: string | null;
+  schedule_config?: unknown;
   entrenos_ejercicios: Array<{
     id: string;
     sort_order: number;
@@ -20,6 +35,9 @@ interface EntrenoRow {
     reps: string;
     rest: string | null;
     notes: string | null;
+    metric_type: string | null;
+    male_target: string | null;
+    female_target: string | null;
     aimharder_ejer_id: number | null;
   }> | null;
 }
@@ -35,6 +53,9 @@ function mapEntreno(row: EntrenoRow): Workout {
         reps: exercise.reps,
         rest: exercise.rest ?? '—',
         notes: exercise.notes ?? undefined,
+        metricType: (exercise.metric_type as Exercise['metricType']) ?? 'reps',
+        maleTarget: exercise.male_target ?? undefined,
+        femaleTarget: exercise.female_target ?? undefined,
         aimharderEjerId: exercise.aimharder_ejer_id ?? undefined,
       }),
     );
@@ -52,26 +73,104 @@ function mapEntreno(row: EntrenoRow): Workout {
     cooldown: row.cooldown ?? '',
     exercises,
     workoutDate: row.workout_date,
+    schedule: row.schedule_config ? parseScheduleFromJson(row.schedule_config) ?? undefined : undefined,
   };
 }
 
+async function queryEntrenos<T extends { data: unknown; error: { message: string } | null }>(
+  run: (select: string) => Promise<T>,
+) {
+  const withSchedule = await run(entrenoSelect(true));
+  if (!withSchedule.error) return withSchedule;
+  if (!isMissingScheduleConfigError(withSchedule.error.message)) return withSchedule;
+  return run(entrenoSelect(false));
+}
+
 export async function fetchWorkoutsByProgram(programId: string): Promise<Workout[]> {
+  return fetchWorkoutsWithExercisesByProgram(programId);
+}
+
+export interface WorkoutStub {
+  id: string;
+  programId: string;
+  name: string;
+  dayLabel: string;
+  estimatedDuration: string;
+  workoutDate?: string;
+}
+
+export function stubToWorkout(stub: WorkoutStub): Workout {
+  return {
+    id: stub.id,
+    programId: stub.programId,
+    weekNumber: 1,
+    dayLabel: stub.dayLabel,
+    name: stub.name,
+    estimatedDuration: stub.estimatedDuration,
+    warmup: '',
+    main: '',
+    cooldown: '',
+    exercises: [],
+    workoutDate: stub.workoutDate,
+  };
+}
+
+/** Consulta ligera sin ejercicios anidados — mucho más rápida para resúmenes. */
+export async function fetchWorkoutStubsByPrograms(programIds: string[]): Promise<Map<string, WorkoutStub[]>> {
+  const uniqueIds = [...new Set(programIds.filter(Boolean))];
+  const result = new Map<string, WorkoutStub[]>();
+  if (!isSupabaseConfigured || uniqueIds.length === 0) {
+    return result;
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) return result;
+
+  const { data, error } = await supabase
+    .from('entrenos_diarios')
+    .select('id, program_id, name, day_label, estimated_duration, workout_date')
+    .in('program_id', uniqueIds)
+    .order('workout_date', { ascending: true });
+
+  if (error || !data) return result;
+
+  for (const row of data) {
+    const list = result.get(row.program_id) ?? [];
+    list.push({
+      id: row.id,
+      programId: row.program_id,
+      name: row.name,
+      dayLabel: row.day_label ?? row.workout_date,
+      estimatedDuration: row.estimated_duration ?? '60 min',
+      workoutDate: row.workout_date,
+    });
+    result.set(row.program_id, list);
+  }
+
+  return result;
+}
+
+async function fetchWorkoutsWithExercisesByProgram(programId: string): Promise<Workout[]> {
   if (!isSupabaseConfigured) return [];
 
   const supabase = getSupabase();
   if (!supabase) return [];
 
-  const { data, error } = await supabase
-    .from('entrenos_diarios')
-    .select(
-      'id, program_id, workout_date, name, day_label, estimated_duration, warmup, main_part, core_part, cooldown, entrenos_ejercicios(id, sort_order, name, sets, reps, rest, notes, aimharder_ejer_id)',
-    )
-    .eq('program_id', programId)
-    .order('workout_date', { ascending: true });
+  try {
+    const { data, error } = await queryEntrenos((select) =>
+      supabase
+        .from('entrenos_diarios')
+        .select(select)
+        .eq('program_id', programId)
+        .order('workout_date', { ascending: true }),
+    );
 
-  if (error || !data) return [];
+    if (error || !Array.isArray(data)) return [];
 
-  return data.map((row) => mapEntreno(row as EntrenoRow));
+    return data.map((row) => mapEntreno(row as EntrenoRow));
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchWorkoutById(workoutId: string): Promise<Workout | null> {
@@ -80,17 +179,17 @@ export async function fetchWorkoutById(workoutId: string): Promise<Workout | nul
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  const { data, error } = await supabase
-    .from('entrenos_diarios')
-    .select(
-      'id, program_id, workout_date, name, day_label, estimated_duration, warmup, main_part, core_part, cooldown, entrenos_ejercicios(id, sort_order, name, sets, reps, rest, notes, aimharder_ejer_id)',
-    )
-    .eq('id', workoutId)
-    .maybeSingle();
+  try {
+    const { data, error } = await queryEntrenos((select) =>
+      supabase.from('entrenos_diarios').select(select).eq('id', workoutId).maybeSingle(),
+    );
 
-  if (error || !data) return null;
+    if (error || !data) return null;
 
-  return mapEntreno(data as EntrenoRow);
+    return mapEntreno(data as EntrenoRow);
+  } catch {
+    return null;
+  }
 }
 
 export async function logWorkoutCompletion(
@@ -134,14 +233,9 @@ export async function fetchTodayWorkoutForProgram(programId: string): Promise<Wo
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data, error } = await supabase
-    .from('entrenos_diarios')
-    .select(
-      'id, program_id, workout_date, name, day_label, estimated_duration, warmup, main_part, core_part, cooldown, entrenos_ejercicios(id, sort_order, name, sets, reps, rest, notes, aimharder_ejer_id)',
-    )
-    .eq('program_id', programId)
-    .eq('workout_date', today)
-    .maybeSingle();
+  const { data, error } = await queryEntrenos((select) =>
+    supabase.from('entrenos_diarios').select(select).eq('program_id', programId).eq('workout_date', today).maybeSingle(),
+  );
 
   if (error || !data) return null;
 

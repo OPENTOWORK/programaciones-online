@@ -48,3 +48,6 @@ tmp-*.html
 # generated native folders
 /ios
 /android
+android/keystore.properties
+android/app/release.keystore
+dist/

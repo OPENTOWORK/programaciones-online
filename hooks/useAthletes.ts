@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { fetchAthletes, fetchAthleteById } from '@/lib/athleteService';
 import { mockAthletes } from '@/lib/mockData';
+import { createStaleRefresh } from '@/lib/staleRefresh';
 import type { AthleteSummary } from '@/lib/types';
 
 export function useAthletes() {
@@ -10,56 +11,69 @@ export function useAthletes() {
   const [athletes, setAthletes] = useState<AthleteSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const refreshGate = useRef(createStaleRefresh(45_000));
 
-  const load = useCallback(async () => {
-    if (authLoading) return;
+  const load = useCallback(
+    async ({ silent = false, force = false }: { silent?: boolean; force?: boolean } = {}) => {
+      if (authLoading) return;
+      if (!force && silent && !refreshGate.current.shouldRefresh(false)) return;
 
-    if (isDemoMode) {
-      if (user?.role !== 'entrenador') {
-        setAthletes([]);
-        setError(null);
+      if (isDemoMode) {
+        if (user?.role !== 'entrenador') {
+          setAthletes((current) => (current.length === 0 ? current : []));
+          setError((current) => (current === null ? current : null));
+          setIsLoading((current) => (current ? false : current));
+          return;
+        }
+
+        setAthletes(mockAthletes);
+        setError((current) => (current === null ? current : null));
         setIsLoading(false);
+        refreshGate.current.markFetched();
         return;
       }
 
-      setAthletes(mockAthletes);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
+      if (user?.role !== 'entrenador') {
+        setAthletes((current) => (current.length === 0 ? current : []));
+        setError((current) => (current === null ? current : null));
+        setIsLoading((current) => (current ? false : current));
+        return;
+      }
 
-    if (user?.role !== 'entrenador') {
-      setAthletes([]);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
+      if (!silent) {
+        setIsLoading(true);
+      }
+      setError((current) => (current === null ? current : null));
 
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const data = await fetchAthletes();
-      setAthletes(data);
-    } catch (loadError) {
-      setAthletes([]);
-      setError(loadError instanceof Error ? loadError.message : 'No se pudieron cargar los atletas');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [authLoading, isDemoMode, user?.role]);
+      try {
+        const data = await fetchAthletes();
+        setAthletes(data);
+        refreshGate.current.markFetched();
+      } catch (loadError) {
+        setAthletes([]);
+        setError(loadError instanceof Error ? loadError.message : 'No se pudieron cargar los atletas');
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [authLoading, isDemoMode, user?.role],
+  );
 
   useEffect(() => {
-    void load();
+    refreshGate.current = createStaleRefresh(45_000);
+    void load({ force: true });
   }, [load]);
 
-  return { athletes, isLoading, isEmpty: !isLoading && athletes.length === 0, error, refresh: load };
+  const refresh = useCallback((force = false) => load({ silent: true, force }), [load]);
+
+  return { athletes, isLoading, isEmpty: !isLoading && athletes.length === 0, error, refresh };
 }
 
 export function useAthlete(athleteId: string) {
   const { user, isDemoMode } = useAuth();
   const [athlete, setAthlete] = useState<AthleteSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,7 +120,9 @@ export function useAthlete(athleteId: string) {
     return () => {
       cancelled = true;
     };
-  }, [athleteId, isDemoMode, user?.role]);
+  }, [athleteId, isDemoMode, user?.role, refreshKey]);
 
-  return { athlete, isLoading };
+  const refresh = useCallback(() => setRefreshKey((key) => key + 1), []);
+
+  return { athlete, isLoading, refresh };
 }

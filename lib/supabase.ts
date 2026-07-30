@@ -2,10 +2,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+import {
+  assertSupabaseConfiguredForNative,
+  isAuthDemoMode,
+  isSupabaseConfigured,
+  supabaseAnonKey,
+  supabaseRuntimeWarnings,
+  supabaseUrl,
+} from '@/lib/supabaseConfig.runtime';
+import { logAuthEvent, logReleaseDiagnostic, logSupabaseBootstrap } from '@/lib/releaseDiagnostics';
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export {
+  assertSupabaseConfiguredForNative,
+  isAuthDemoMode,
+  isSupabaseConfigured,
+  supabaseAnonKey,
+  supabaseRuntimeWarnings,
+  supabaseUrl,
+};
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -45,6 +59,13 @@ export function getSupabase(): SupabaseClient | null {
   if (!canUseSupabaseClient()) return null;
 
   if (!supabaseClient) {
+    assertSupabaseConfiguredForNative();
+    logSupabaseBootstrap();
+    for (const warning of supabaseRuntimeWarnings) {
+      logReleaseDiagnostic('supabase_config_warning', { warning }, 'warn');
+    }
+
+    logAuthEvent('client_init_start');
     supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         storage: getAuthStorage(),
@@ -53,6 +74,7 @@ export function getSupabase(): SupabaseClient | null {
         detectSessionInUrl: Platform.OS === 'web',
       },
     });
+    logAuthEvent('client_init_done');
   }
 
   return supabaseClient;
@@ -64,4 +86,29 @@ export function requireSupabase(): SupabaseClient {
     throw new Error('Supabase no está disponible en este entorno');
   }
   return client;
+}
+
+export async function verifySupabaseConnection(): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured) {
+    return { ok: false, error: 'Supabase no configurado' };
+  }
+
+  try {
+    const client = getSupabase();
+    if (!client) {
+      return { ok: false, error: 'Cliente Supabase no disponible' };
+    }
+
+    const { error } = await client.auth.getSession();
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'No se pudo conectar con Supabase',
+    };
+  }
 }

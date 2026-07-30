@@ -59,3 +59,14 @@ alter table public.athlete_plans
 alter table public.athlete_plans
   add column if not exists pdf_storage_path text,
   add column if not exists pdf_file_name text;
+
+-- Contenido estructurado del plan nutricional (macros, comidas, alimentos)
+alter table public.athlete_plans
+  add column if not exists nutrition_data jsonb;
+
+-- Agrupación de sesiones dentro de un mismo plan personalizado
+alter table public.athlete_plans
+  add column if not exists plan_group_id uuid,
+  add column if not exists session_number int;
+
+create index if not exists athlete_plans_plan_group_id_idx on public.athlete_plans (plan_group_id);

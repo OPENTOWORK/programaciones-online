@@ -32,7 +32,20 @@ export type AppIconName =
   | 'logo'
   | 'chat'
   | 'stats'
-  | 'play';
+  | 'play'
+  | 'time'
+  | 'chevronLeft'
+  | 'chevronRight'
+  | 'menuDots'
+  | 'add'
+  | 'close'
+  | 'trash'
+  | 'dragHandle'
+  | 'search'
+  | 'mic'
+  | 'stop'
+  | 'pause'
+  | 'video';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -68,6 +81,19 @@ const ICONS: Record<AppIconName, { default: IoniconName; outline?: IoniconName }
   chat: { default: 'chatbubble-ellipses-outline' },
   stats: { default: 'trending-up-outline' },
   play: { default: 'play-circle-outline' },
+  time: { default: 'time-outline' },
+  chevronLeft: { default: 'chevron-back' },
+  chevronRight: { default: 'chevron-forward' },
+  menuDots: { default: 'ellipsis-horizontal' },
+  add: { default: 'add' },
+  close: { default: 'close' },
+  trash: { default: 'trash-outline' },
+  dragHandle: { default: 'reorder-three-outline' },
+  search: { default: 'search-outline' },
+  mic: { default: 'mic', outline: 'mic-outline' },
+  stop: { default: 'stop-circle', outline: 'stop-circle-outline' },
+  pause: { default: 'pause-circle', outline: 'pause-circle-outline' },
+  video: { default: 'videocam', outline: 'videocam-outline' },
 };
 
 export function resolveIconName(name: AppIconName, outlined = false): IoniconName {

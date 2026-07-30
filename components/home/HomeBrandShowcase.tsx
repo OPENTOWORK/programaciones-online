@@ -1,317 +1,229 @@
-import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { AppIcon } from '@/components/ui/AppIcon';
-import { Button } from '@/components/ui/Button';
-import { colors, spacing, typography } from '@/constants/theme';
-import type { AppIconName } from '@/constants/icons';
+import { AppLogo } from '@/components/ui/AppLogo';
+import { borderRadius, colors, shadows, spacing, typography } from '@/constants/theme';
 
-const HYPE_WEBSITE_URL = 'https://trainwithhype.com/';
-const HERO_IMAGE_URL = 'https://trainwithhype.com/wp-content/uploads/2025/07/2-1024x576.webp';
+const heroBackground = require('@/assets/home-hero.jpg');
 
-const METHODOLOGY = [
+const APP_PURPOSE = [
   {
-    icon: 'goal' as AppIconName,
-    title: 'Conecta con tu propósito',
-    text: 'Entrenas por ti, no por expectativas externas. Adaptamos cada sesión a tu contexto.',
+    icon: 'programs' as const,
+    title: 'Tus programaciones en un solo sitio',
+    text: 'Accede a los planes que te asigna tu entrenador y al catálogo de programaciones disponibles.',
   },
   {
-    icon: 'progress' as AppIconName,
-    title: 'Diseña tu progreso',
-    text: 'Fuerza, resistencia y funcional con técnica y evolución real, sin presión.',
+    icon: 'main' as const,
+    title: 'Entrena sesión a sesión',
+    text: 'Sigue cada entreno con instrucciones claras, vídeos de ejercicios y registro de lo que completas.',
   },
   {
-    icon: 'trainer' as AppIconName,
-    title: 'Entrena en comunidad',
-    text: 'Un entorno respetuoso y motivador donde la energía colectiva impulsa tu constancia.',
+    icon: 'progress' as const,
+    title: 'Mide tu progreso',
+    text: 'Consulta tu evolución, registra sensaciones y mantén constancia con tu planificación.',
+  },
+  {
+    icon: 'trainer' as const,
+    title: 'Conecta con tu entrenador',
+    text: 'Tu coach puede prepararte planes personalizados y hacer seguimiento de tu trabajo.',
   },
 ];
-
-const DISCIPLINES = ['ATHX', 'HYROX', 'HY-PE', 'Cross Training', 'Calistenia', 'Styrkur'];
-
-function DisciplinesGrid() {
-  return (
-    <View style={styles.disciplinesCard}>
-      <Text style={styles.disciplinesTitle}>Nuestras disciplinas</Text>
-      <View style={styles.disciplinesGrid}>
-        {DISCIPLINES.map((discipline) => (
-          <View key={discipline} style={styles.disciplinePill}>
-            <Text style={styles.disciplineText}>{discipline}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
 
 export function HomeBrandShowcase() {
   const router = useRouter();
 
-  const openWebsite = () => {
-    void Linking.openURL(HYPE_WEBSITE_URL);
-  };
-
   return (
     <View style={styles.container}>
       <Pressable
-        onPress={openWebsite}
+        onPress={() => router.push('/tabs/programs')}
         accessibilityRole="button"
-        accessibilityLabel="Reservar clase de prueba en trainwithhype.com"
-        style={({ pressed }) => [styles.heroCard, pressed && styles.heroCardPressed]}
+        accessibilityLabel="Explorar programaciones"
+        style={({ pressed }) => [styles.heroCard, pressed && styles.pressed]}
       >
-        <Image source={{ uri: HERO_IMAGE_URL }} style={styles.heroImage} resizeMode="cover" />
-        <LinearGradient
-          colors={['transparent', `${colors.background}CC`, colors.background]}
-          style={styles.heroOverlay}
+        <ImageBackground
+          source={heroBackground}
+          style={styles.heroBackground}
+          imageStyle={styles.heroBackgroundImage}
+          resizeMode="cover"
         >
-          <Text style={styles.heroEyebrow}>Entrenamiento híbrido en Madrid</Text>
-          <Text style={styles.heroTitle}>Tu primera clase es gratis</Text>
-          <Text style={styles.heroSubtitle}>
-            Sesiones que te retan, te cuidan y se adaptan a tu nivel.
-          </Text>
-          <View style={styles.heroCtaRow}>
-            <Text style={styles.heroCta}>Reservar clase de prueba</Text>
-            <AppIcon name="programs" size={16} color={colors.accent} />
-          </View>
-        </LinearGradient>
+          <LinearGradient
+            colors={['rgba(15,20,25,0.2)', 'rgba(15,20,25,0.78)', colors.background]}
+            locations={[0, 0.5, 1]}
+            style={styles.heroOverlay}
+          >
+            <View style={styles.heroBrandRow}>
+              <AppLogo size={40} />
+              <View style={styles.heroBrandCopy}>
+                <Text style={styles.heroEyebrow}>HY-PE</Text>
+                <Text style={styles.heroBrandTagline}>Programaciones a tu medida</Text>
+              </View>
+            </View>
+
+            <Text style={styles.heroTitle}>Tu entrenamiento,{'\n'}organizado</Text>
+            <Text style={styles.heroSubtitle}>
+              Explora el catálogo o continúa donde lo dejaste.
+            </Text>
+
+            <View style={styles.heroCta}>
+              <Text style={styles.heroCtaText}>Explorar catálogo</Text>
+              <AppIcon name="programs" size={16} color={colors.black} />
+            </View>
+          </LinearGradient>
+        </ImageBackground>
       </Pressable>
 
-      <View style={styles.programsCtaShell}>
-        <Button
-          title="Explorar programaciones"
-          onPress={() => router.push('/tabs/programs')}
-          style={styles.programsBtn}
-          textStyle={styles.programsBtnText}
-        />
-      </View>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Qué es Training ProgLine</Text>
+        <Text style={styles.sectionIntro}>
+          Una app para que entrenes con método: tu entrenador te prepara la planificación y tú la
+          ejecutas con claridad, seguimiento y continuidad.
+        </Text>
 
-      <DisciplinesGrid />
-
-      <Text style={styles.sectionTitle}>Nuestra metodología</Text>
-      <View style={styles.methodologyList}>
-        {METHODOLOGY.map((item) => (
-          <View key={item.title} style={styles.methodCard}>
-            <View style={styles.methodIconWrap}>
-              <AppIcon name={item.icon} size={18} color={colors.accent} outlined />
+        <View style={styles.purposeList}>
+          {APP_PURPOSE.map((item) => (
+            <View key={item.title} style={styles.purposeCard}>
+              <View style={styles.purposeIconWrap}>
+                <AppIcon name={item.icon} size={18} color={colors.accent} outlined />
+              </View>
+              <View style={styles.purposeCopy}>
+                <Text style={styles.purposeTitle}>{item.title}</Text>
+                <Text style={styles.purposeText}>{item.text}</Text>
+              </View>
             </View>
-            <View style={styles.methodCopy}>
-              <Text style={styles.methodTitle}>{item.title}</Text>
-              <Text style={styles.methodText}>{item.text}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      <View style={styles.locationCard}>
-        <View style={styles.locationIconWrap}>
-          <AppIcon name="home" size={18} color={colors.accentBlue} outlined />
-        </View>
-        <View style={styles.locationCopy}>
-          <Text style={styles.locationTitle}>Centro HY-PE · Prosperidad</Text>
-          <Text style={styles.locationText}>Calle del General Zabala, 17 · 28002 Madrid</Text>
-          <Text style={styles.locationHours}>L-V 07:00–22:00 · S-D 09:00–14:00</Text>
+          ))}
         </View>
       </View>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: spacing.lg,
-    gap: spacing.md,
+    gap: spacing.lg,
   },
-  heroCard: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: `${colors.accent}33`,
-    minHeight: 280,
-    backgroundColor: colors.surface,
-  },
-  heroCardPressed: {
+  pressed: {
     opacity: 0.94,
   },
-  heroImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
+  heroCard: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: `${colors.accent}40`,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  heroBackground: {
+    minHeight: 220,
+  },
+  heroBackgroundImage: {
+    opacity: 0.88,
   },
   heroOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    padding: spacing.md,
-    minHeight: 280,
+    padding: spacing.lg,
+    minHeight: 220,
+    gap: spacing.sm,
+  },
+  heroBrandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
+    marginBottom: spacing.xs,
+  },
+  heroBrandCopy: {
+    flex: 1,
   },
   heroEyebrow: {
     ...typography.caption,
     color: colors.accent,
     fontWeight: '700',
-    letterSpacing: 0.8,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    marginBottom: spacing.xs,
+  },
+  heroBrandTagline: {
+    ...typography.bodySmall,
+    color: colors.text,
+    marginTop: 2,
+    fontWeight: '500',
   },
   heroTitle: {
     ...typography.h2,
     color: colors.text,
+    fontSize: 24,
+    lineHeight: 30,
   },
   heroSubtitle: {
     ...typography.bodySmall,
     color: colors.textSecondary,
-    marginTop: spacing.xs,
     lineHeight: 20,
-    maxWidth: 320,
-  },
-  heroCtaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.md,
+    maxWidth: 300,
   },
   heroCta: {
-    ...typography.bodySmall,
-    color: colors.accent,
-    fontWeight: '700',
-  },
-  disciplinesCard: {
-    padding: spacing.md,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  disciplinesTitle: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: spacing.sm,
-  },
-  disciplinesGrid: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  disciplinePill: {
-    width: '48%',
-    flexGrow: 1,
-    minWidth: '46%',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.sm,
+    minHeight: 42,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.accent,
   },
-  disciplineText: {
-    ...typography.caption,
-    color: colors.text,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    textAlign: 'center',
+  heroCtaText: {
+    ...typography.button,
+    color: colors.black,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  section: {
+    gap: spacing.sm,
   },
   sectionTitle: {
     ...typography.h3,
     color: colors.text,
-    marginTop: spacing.xs,
   },
-  methodologyList: {
+  sectionIntro: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: spacing.sm,
+  },
+  purposeList: {
     gap: spacing.sm,
   },
-  methodCard: {
+  purposeCard: {
     flexDirection: 'row',
     gap: spacing.md,
     padding: spacing.md,
-    borderRadius: 16,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  methodIconWrap: {
+  purposeIconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
     backgroundColor: `${colors.accent}14`,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  methodCopy: {
+  purposeCopy: {
     flex: 1,
+    gap: 4,
   },
-  methodTitle: {
+  purposeTitle: {
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
   },
-  methodText: {
+  purposeText: {
     ...typography.bodySmall,
     color: colors.textSecondary,
-    marginTop: 4,
     lineHeight: 20,
-  },
-  locationCard: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: 16,
-    backgroundColor: `${colors.accentBlue}10`,
-    borderWidth: 1,
-    borderColor: `${colors.accentBlue}33`,
-  },
-  locationIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: `${colors.accentBlue}18`,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationCopy: {
-    flex: 1,
-  },
-  locationTitle: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  locationText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginTop: 4,
-    lineHeight: 20,
-  },
-  locationHours: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
-  programsCtaShell: {
-    borderRadius: 16,
-    padding: 3,
-    backgroundColor: `${colors.accent}22`,
-    borderWidth: 1,
-    borderColor: `${colors.accent}55`,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
-    marginBottom: spacing.xs,
-  },
-  programsBtn: {
-    minHeight: 58,
-    borderWidth: 1,
-    borderColor: `${colors.white}30`,
-  },
-  programsBtnText: {
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.3,
   },
 });

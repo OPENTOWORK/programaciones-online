@@ -1,11 +1,14 @@
-import * as WebBrowser from 'expo-web-browser';
-import { Linking, Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { NutritionPlanContent } from '@/components/program/NutritionPlanContent';
+import { PersonalizedPlanContent } from '@/components/program/PersonalizedPlanContent';
 import { AppIcon, IconBadge } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { colors, spacing, typography } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
+import { openPlanPdf } from '@/lib/openPlanPdf';
+import { isStructuredPersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import type { AthletePlan } from '@/lib/types';
 
 const PLAN_ICONS: Record<AthletePlan['planType'], AppIconName> = {
@@ -21,27 +24,14 @@ function formatDate(isoDate: string) {
   });
 }
 
-async function openPlanPdf(url: string) {
-  if (Platform.OS === 'web') {
-    window.open(url, '_blank', 'noopener,noreferrer');
-    return;
-  }
-
-  const canOpen = await Linking.canOpenURL(url);
-  if (canOpen) {
-    await Linking.openURL(url);
-    return;
-  }
-
-  await WebBrowser.openBrowserAsync(url);
-}
-
 interface AthletePlanCardProps {
   plan: AthletePlan;
 }
 
 export function AthletePlanCard({ plan }: AthletePlanCardProps) {
   const hasPdf = Boolean(plan.pdfUrl);
+  const hasStructuredNutrition = Boolean(plan.nutritionData && plan.nutritionData.meals.length > 0);
+  const hasStructuredPersonalized = Boolean(plan.content && isStructuredPersonalizedPlanContent(plan.content));
 
   return (
     <Card style={styles.card}>
@@ -53,7 +43,15 @@ export function AthletePlanCard({ plan }: AthletePlanCardProps) {
         </View>
       </View>
 
-      {plan.content ? (
+      {hasStructuredNutrition ? (
+        <View style={styles.structuredWrap}>
+          <NutritionPlanContent data={plan.nutritionData!} />
+        </View>
+      ) : hasStructuredPersonalized ? (
+        <View style={styles.structuredWrap}>
+          <PersonalizedPlanContent content={plan.content} />
+        </View>
+      ) : plan.content ? (
         <View style={styles.contentWrap}>
           <AppIcon name="goal" size={16} color={colors.textMuted} />
           <Text style={styles.content}>{plan.content}</Text>
@@ -111,6 +109,9 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     flex: 1,
     lineHeight: 22,
+  },
+  structuredWrap: {
+    marginBottom: spacing.md,
   },
   pdfWrap: {
     flexDirection: 'row',

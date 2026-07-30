@@ -11,7 +11,6 @@ import { Card } from '@/components/ui/Card';
 
 interface ProgramCardProps {
   program: Program;
-  canEdit?: boolean;
 }
 
 function MetaItem({ icon, text }: { icon: AppIconName; text: string }) {
@@ -23,7 +22,7 @@ function MetaItem({ icon, text }: { icon: AppIconName; text: string }) {
   );
 }
 
-export function ProgramCard({ program, canEdit = false }: ProgramCardProps) {
+export function ProgramCard({ program }: ProgramCardProps) {
   const router = useRouter();
   const isLocked = program.status === 'bloqueada';
 
@@ -49,31 +48,13 @@ export function ProgramCard({ program, canEdit = false }: ProgramCardProps) {
         ) : null}
       </View>
 
-      {canEdit ? (
-        <View style={styles.actions}>
-          <Button
-            title={isLocked ? 'Bloqueada' : 'Ver programación'}
-            onPress={() => router.push(`/program/${program.id}`)}
-            variant={isLocked ? 'secondary' : 'primary'}
-            disabled={isLocked}
-            style={styles.actionButtonPrimary}
-          />
-          <Button
-            title="Editar"
-            variant="outline"
-            onPress={() => router.push({ pathname: '/trainer/program/[id]/edit', params: { id: program.id } })}
-            style={styles.actionButtonSecondary}
-          />
-        </View>
-      ) : (
-        <Button
-          title={isLocked ? 'Bloqueada' : 'Ver programación'}
-          onPress={() => router.push(`/program/${program.id}`)}
-          variant={isLocked ? 'secondary' : 'primary'}
-          disabled={isLocked}
-          style={styles.button}
-        />
-      )}
+      <Button
+        title={isLocked ? 'Bloqueada' : 'Ver programación'}
+        onPress={() => router.push(`/program/${program.id}`)}
+        variant={isLocked ? 'secondary' : 'primary'}
+        disabled={isLocked}
+        style={styles.button}
+      />
     </Card>
   );
 }
@@ -116,16 +97,5 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: spacing.xs,
-  },
-  actions: {
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  actionButtonPrimary: {
-    width: '100%',
-  },
-  actionButtonSecondary: {
-    width: '100%',
-    minHeight: 46,
   },
 });

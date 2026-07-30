@@ -1,22 +1,22 @@
-# Publicar la política de privacidad (Google Play)
+# Política de privacidad (Google Play)
 
-## URL que debes poner en Play Console
+## URL objetivo (sin nombre personal)
 
 ```
-https://tufitmentor360.github.io/programaciones-online/privacy.html
+https://tufitmentor360.github.io/privacy.html
 ```
 
-## Pasos en GitHub (solo una vez)
+Requiere crear el repo `tufitmentor360.github.io` en la cuenta GitHub `tufitmentor360` y activar Pages.
 
-1. Sube los cambios al repositorio `tufitmentor360/programaciones-online`.
-2. En GitHub: **Settings** → **Pages**.
-3. En **Build and deployment** → **Source**, elige **Deploy from a branch**.
-4. Branch: `main` · Folder: `/docs`.
-5. Guarda y espera 1–3 minutos.
+## URL temporal (ya funciona con el texto completo)
 
-Cuando esté activo, la URL anterior mostrará la política de privacidad.
+```
+https://carlosgarciacano87-dev.github.io/app-progras/privacy.html
+```
 
-## Archivos
+## Publicar en Supabase (alternativa)
 
-- `docs/privacy.html` — política de privacidad pública
-- `docs/index.html` — redirección a la política
+```bash
+npm run supabase:privacy-policy
+npm run supabase:deploy-privacy
+```

@@ -39,27 +39,35 @@ function PhotoSlot({
   label,
   uri,
   emptyHint,
+  dense = false,
 }: {
   label: string;
   uri?: string;
   emptyHint: string;
+  dense?: boolean;
 }) {
   return (
     <View style={styles.photoSlot}>
       {uri ? (
-        <Image source={{ uri }} style={styles.photoImage} accessibilityLabel={label} />
+        <Image
+          source={{ uri }}
+          style={[styles.photoImage, dense && styles.photoImageDense]}
+          accessibilityLabel={label}
+        />
       ) : (
-        <View style={styles.photoPlaceholder}>
-          <AppIcon name="measure" size={28} color={colors.textMuted} outlined />
-          <Text style={styles.photoPlaceholderText}>{emptyHint}</Text>
+        <View style={[styles.photoPlaceholder, dense && styles.photoPlaceholderDense]}>
+          <AppIcon name="measure" size={dense ? 18 : 28} color={colors.textMuted} outlined />
+          <Text style={[styles.photoPlaceholderText, dense && styles.photoPlaceholderTextDense]}>
+            {emptyHint}
+          </Text>
         </View>
       )}
-      <Text style={styles.photoLabel}>{label}</Text>
+      <Text style={[styles.photoLabel, dense && styles.photoLabelDense]}>{label}</Text>
     </View>
   );
 }
 
-export function ProgressPhotos() {
+export function ProgressPhotos({ dense = false }: { dense?: boolean }) {
   const { photos, isLoading, isUploading, error, uploadPhoto, isDemoMode } = useProgressPhotos();
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -81,34 +89,36 @@ export function ProgressPhotos() {
 
   if (isLoading) {
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Fotos de progreso</Text>
-        <Card>
-          <Text style={styles.loadingText}>Cargando fotos…</Text>
+      <View style={[styles.section, dense && styles.sectionDense]}>
+        <Text style={[styles.sectionTitle, dense && styles.sectionTitleDense]}>Fotos de progreso</Text>
+        <Card style={dense ? styles.denseCard : undefined}>
+          <Text style={[styles.loadingText, dense && styles.loadingTextDense]}>Cargando fotos…</Text>
         </Card>
       </View>
     );
   }
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Fotos de progreso</Text>
+    <View style={[styles.section, dense && styles.sectionDense]}>
+      <Text style={[styles.sectionTitle, dense && styles.sectionTitleDense]}>Fotos de progreso</Text>
 
       {isDemoMode ? (
-        <Card>
-          <Text style={styles.infoText}>Inicia sesión con tu cuenta para guardar fotos de progreso.</Text>
+        <Card style={dense ? styles.denseCard : undefined}>
+          <Text style={[styles.infoText, dense && styles.infoTextDense]}>
+            Inicia sesión con tu cuenta para guardar fotos de progreso.
+          </Text>
         </Card>
       ) : null}
 
       {photos.needsBeforePhoto ? (
-        <Card style={styles.promptCard}>
-          <View style={styles.promptHeader}>
-            <View style={styles.promptIcon}>
-              <AppIcon name="measure" size={22} color={colors.accent} />
+        <Card style={[styles.promptCard, dense && styles.promptCardDense]}>
+          <View style={[styles.promptHeader, dense && styles.promptHeaderDense]}>
+            <View style={[styles.promptIcon, dense && styles.promptIconDense]}>
+              <AppIcon name="measure" size={dense ? 18 : 22} color={colors.accent} />
             </View>
             <View style={styles.promptCopy}>
-              <Text style={styles.promptTitle}>Tu foto de antes</Text>
-              <Text style={styles.promptText}>
+              <Text style={[styles.promptTitle, dense && styles.promptTitleDense]}>Tu foto de antes</Text>
+              <Text style={[styles.promptText, dense && styles.promptTextDense]}>
                 Sube una foto inicial para comparar tu evolución con el tiempo.
               </Text>
             </View>
@@ -118,15 +128,17 @@ export function ProgressPhotos() {
             onPress={() => handleUpload('antes')}
             loading={isUploading}
             disabled={isDemoMode}
+            style={dense ? styles.denseButton : undefined}
+            textStyle={dense ? styles.denseButtonText : undefined}
           />
         </Card>
       ) : null}
 
       {!photos.needsBeforePhoto && photos.needsMonthlyPhoto ? (
-        <Card style={styles.reminderCard}>
+        <Card style={[styles.reminderCard, dense && styles.reminderCardDense]}>
           <View style={styles.reminderRow}>
-            <AppIcon name="calendar" size={20} color={colors.warning} outlined />
-            <Text style={styles.reminderText}>
+            <AppIcon name="calendar" size={dense ? 16 : 20} color={colors.warning} outlined />
+            <Text style={[styles.reminderText, dense && styles.reminderTextDense]}>
               Es momento de subir tu foto de {photos.currentMonthLabel}.
             </Text>
           </View>
@@ -135,17 +147,24 @@ export function ProgressPhotos() {
             onPress={() => handleUpload('mensual')}
             loading={isUploading}
             variant="outline"
-            style={styles.reminderButton}
+            style={[styles.reminderButton, dense && styles.denseButton]}
+            textStyle={dense ? styles.denseButtonText : undefined}
           />
         </Card>
       ) : null}
 
       {!photos.needsBeforePhoto ? (
-        <Card>
-          <Text style={styles.galleryTitle}>Comparativa</Text>
+        <Card style={dense ? styles.denseCard : undefined}>
+          <Text style={[styles.galleryTitle, dense && styles.galleryTitleDense]}>Comparativa</Text>
           <View style={styles.galleryRow}>
-            <PhotoSlot label="Antes" uri={photos.antesPhoto?.url} emptyHint="Sin foto" />
             <PhotoSlot
+              dense={dense}
+              label="Antes"
+              uri={photos.antesPhoto?.url}
+              emptyHint="Sin foto"
+            />
+            <PhotoSlot
+              dense={dense}
               label={formatMonthLabel(photos.currentMonthKey)}
               uri={photos.monthlyPhotos.find((photo) => photo.mes === photos.currentMonthKey)?.url}
               emptyHint="Pendiente este mes"
@@ -158,17 +177,21 @@ export function ProgressPhotos() {
               onPress={() => handleUpload('mensual')}
               loading={isUploading}
               variant="secondary"
-              style={styles.updateButton}
+              style={[styles.updateButton, dense && styles.denseButton]}
+              textStyle={dense ? styles.denseButtonText : undefined}
             />
           ) : null}
 
           {photos.monthlyPhotos.length > 0 ? (
-            <View style={styles.historyBlock}>
+            <View style={[styles.historyBlock, dense && styles.historyBlockDense]}>
               <Text style={styles.historyTitle}>Historial mensual</Text>
               <View style={styles.historyGrid}>
                 {photos.monthlyPhotos.map((photo) => (
                   <View key={photo.id} style={styles.historyItem}>
-                    <Image source={{ uri: photo.url }} style={styles.historyImage} />
+                    <Image
+                      source={{ uri: photo.url }}
+                      style={[styles.historyImage, dense && styles.historyImageDense]}
+                    />
                     <Text style={styles.historyLabel}>
                       {photo.mes ? formatMonthLabel(photo.mes) : '—'}
                     </Text>
@@ -335,5 +358,86 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.danger,
     marginTop: spacing.sm,
+  },
+  sectionDense: {
+    marginTop: 0,
+    flexShrink: 1,
+  },
+  sectionTitleDense: {
+    ...typography.body,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  denseCard: {
+    padding: spacing.sm + 2,
+  },
+  loadingTextDense: {
+    ...typography.bodySmall,
+  },
+  infoTextDense: {
+    lineHeight: 18,
+    marginBottom: 0,
+    ...typography.bodySmall,
+  },
+  promptCardDense: {
+    marginBottom: 0,
+    padding: spacing.sm + 2,
+    gap: spacing.sm,
+  },
+  promptHeaderDense: {
+    gap: spacing.sm,
+  },
+  promptIconDense: {
+    width: 34,
+    height: 34,
+  },
+  promptTitleDense: {
+    ...typography.bodySmall,
+    fontWeight: '700',
+  },
+  promptTextDense: {
+    lineHeight: 16,
+    fontSize: 12,
+  },
+  reminderCardDense: {
+    marginBottom: 0,
+    padding: spacing.sm + 2,
+    gap: spacing.sm,
+  },
+  reminderTextDense: {
+    ...typography.bodySmall,
+    lineHeight: 18,
+  },
+  galleryTitleDense: {
+    ...typography.bodySmall,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+  },
+  photoImageDense: {
+    aspectRatio: 16 / 9,
+  },
+  photoPlaceholderDense: {
+    aspectRatio: 16 / 9,
+    padding: spacing.xs,
+    gap: spacing.xs,
+  },
+  photoPlaceholderTextDense: {
+    fontSize: 10,
+  },
+  photoLabelDense: {
+    fontSize: 10,
+  },
+  historyBlockDense: {
+    marginTop: spacing.sm,
+  },
+  historyImageDense: {
+    aspectRatio: 1,
+  },
+  denseButton: {
+    minHeight: 40,
+    paddingVertical: spacing.sm,
+  },
+  denseButtonText: {
+    fontSize: 13,
   },
 });

@@ -1,0 +1,4 @@
+project_id = "nsdurlikkuoxqobabixr"
+
+[functions.privacy-policy]
+verify_jwt = false

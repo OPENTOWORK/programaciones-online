@@ -11,6 +11,7 @@ const SERVICE_PLAN_ICONS: Record<ServicePlanCategory, AppIconName> = {
   personalized: 'personal',
   nutrition: 'measure',
   home_training: 'home',
+  gym_training: 'phase',
 };
 
 interface ServicePlanEmptyCardProps {
@@ -19,6 +20,7 @@ interface ServicePlanEmptyCardProps {
   text: string;
   button: string;
   onRequest: () => void;
+  icon?: AppIconName;
 }
 
 function MetaItem({ icon, text }: { icon: AppIconName; text: string }) {
@@ -36,11 +38,14 @@ export function ServicePlanEmptyCard({
   text,
   button,
   onRequest,
+  icon,
 }: ServicePlanEmptyCardProps) {
+  const badgeIcon = icon ?? SERVICE_PLAN_ICONS[category];
+
   return (
     <Card style={styles.card}>
       <View style={styles.header}>
-        <IconBadge name={SERVICE_PLAN_ICONS[category]} containerSize={48} size={24} />
+        <IconBadge name={badgeIcon} containerSize={48} size={24} />
         <View style={styles.headerText}>
           <Text style={styles.name}>{title}</Text>
         </View>

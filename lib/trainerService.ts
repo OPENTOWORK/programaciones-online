@@ -1,3 +1,4 @@
+import { addCrmActivity, buildMessageSentActivity } from '@/lib/trainerCrmActivity';
 import type { TrainerMessage } from '@/lib/types';
 
 function mapMessage(row: {
@@ -86,9 +87,12 @@ export async function fetchUnansweredMessageCounts(athleteIds: string[]): Promis
 }
 
 export async function sendTrainerReply(athleteUserId: string, text: string): Promise<TrainerMessage | null> {
-  const { getSupabase } = await import('@/lib/supabase');
+  const { getSupabase, isSupabaseConfigured } = await import('@/lib/supabase');
   const supabase = getSupabase();
   if (!supabase) return null;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const trainerId = sessionData.session?.user.id;
 
   const { data, error } = await supabase
     .from('trainer_messages')
@@ -98,7 +102,43 @@ export async function sendTrainerReply(athleteUserId: string, text: string): Pro
 
   if (error || !data) return null;
 
+  if (trainerId) {
+    void addCrmActivity(
+      trainerId,
+      athleteUserId,
+      buildMessageSentActivity(text),
+      'message_sent',
+      !isSupabaseConfigured,
+    );
+  }
+
   return mapMessage(data);
+}
+
+export async function sendSignupWelcomeMessage(
+  userId: string,
+  name: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const { getSupabase, isSupabaseConfigured } = await import('@/lib/supabase');
+  if (!isSupabaseConfigured) {
+    return { ok: true };
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { ok: false, error: 'Supabase no está disponible.' };
+  }
+
+  const { error } = await supabase.rpc('send_signup_welcome_message', {
+    target_user_id: userId,
+    athlete_name: name.trim() || null,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true };
 }
 
 export const sendTrainerMessage = sendAthleteMessage;

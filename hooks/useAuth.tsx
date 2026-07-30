@@ -1,26 +1,82 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { User } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 
 import { checkEmailRegistered } from '@/lib/authService';
-import { hasRecoveryUrlParams } from '@/lib/recoverySession';
-import { isSupabaseConfigured, getSupabase, requireSupabase } from '@/lib/supabase';
-import { getPasswordResetRedirectUrl } from '@/lib/authRedirect';
-import { fetchUserProfile, updateUserProfile, type ProfileUpdates } from '@/lib/profileService';
+import { mapAuthException, mapSignInErrorMessage, signInWithPasswordSafe } from '@/lib/authErrors';
+import {
+  clearAuthCallbackParams,
+  ensureAuthCallbackProcessed,
+  getAuthCallbackFlowSnapshot,
+  hasWebAuthCallback,
+  parseAuthCallbackResult,
+  resetAuthCallbackCoordinator,
+} from '@/lib/authCallback';
+import {
+  getEmailConfirmationRedirectUrl,
+  getInitialNativeAuthUrl,
+  getPasswordResetRedirectUrl,
+  isAuthCallbackDeepLink,
+  isNativeAuthDeepLink,
+  subscribeNativeAuthUrls,
+} from '@/lib/authRedirect';
+import { hasRecoveryUrlParams, setActiveRecoveryUrl } from '@/lib/recoverySession';
+import { isAuthDemoMode, getSupabase, requireSupabase } from '@/lib/supabase';
+import {
+  fetchUserProfileResult,
+  updateUserProfile,
+  type ProfileUpdates,
+} from '@/lib/profileService';
+import {
+  isProfileReadyForNavigation,
+  profileResultToUserMessage,
+} from '@/lib/profileFetchResult';
 import { finishUserProgram } from '@/lib/userProgramService';
+import { sendSignupWelcomeMessage } from '@/lib/trainerService';
+import { setDemoWelcomeMessage } from '@/lib/trainerWelcomeMessage';
+import { interpretSignUpResponse, mapSignUpErrorMessage } from '@/lib/signUpResult';
+import { createStaleRefresh } from '@/lib/staleRefresh';
+import { logAuthEvent, logReleaseError } from '@/lib/releaseDiagnostics';
+import { TimeoutError, withTimeout } from '@/lib/withTimeout';
 import { DEMO_USER, DEMO_TRAINER, mockUser, mockTrainerUser } from '@/lib/mockData';
 import type { UserProfile } from '@/lib/types';
+
+const profileRefresh = createStaleRefresh(45_000);
+const AUTH_INIT_TIMEOUT_MS = 20_000;
+const PROFILE_LOAD_TIMEOUT_MS = 15_000;
+const SIGN_IN_TIMEOUT_MS = 25_000;
 
 interface AuthContextValue {
   user: UserProfile | null;
   isLoading: boolean;
+  initError: string | null;
+  profileError: string | null;
   isDemoMode: boolean;
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error?: string }>;
+  pendingAuthCallbackUrl: string | null;
+  signIn: (email: string, password: string) => Promise<{ error?: string; profile?: UserProfile }>;
+  signUp: (
+    email: string,
+    password: string,
+    name: string,
+  ) => Promise<{ error?: string; profile?: UserProfile; needsEmailConfirmation?: boolean }>;
   resetPassword: (email: string) => Promise<{ error?: string; success?: boolean }>;
   updateProfile: (updates: ProfileUpdates) => Promise<{ error?: string }>;
-  refreshUser: () => Promise<void>;
+  refreshUser: (force?: boolean) => Promise<{ ok: boolean; error?: string; profile?: UserProfile } | undefined>;
   finishActiveProgram: (programId: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  retryInit: () => void;
+  retryProfileLoad: () => Promise<void>;
+  consumePendingAuthCallbackUrl: () => string | null;
+  getAuthCallbackSnapshot: (url?: string | null) => ReturnType<typeof getAuthCallbackFlowSnapshot>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -28,61 +84,259 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const isDemoMode = !isSupabaseConfigured;
+  const [initError, setInitError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [initAttempt, setInitAttempt] = useState(0);
+  const [pendingAuthCallbackUrl, setPendingAuthCallbackUrl] = useState<string | null>(null);
+  const isDemoMode = isAuthDemoMode;
 
   const loadUserFromSupabase = useCallback(async (authUser: User) => {
-    const profile = await fetchUserProfile(authUser.id);
-    setUser(profile ?? mapSupabaseUserFallback(authUser));
-  }, []);
+    const result = await withTimeout(
+      fetchUserProfileResult(authUser.id),
+      PROFILE_LOAD_TIMEOUT_MS,
+      'Tiempo de espera agotado al cargar el perfil',
+    );
 
-  useEffect(() => {
-    if (isDemoMode) {
-      setIsLoading(false);
-      return;
+    if (isProfileReadyForNavigation(result)) {
+      setUser(result.profile);
+      setProfileError(null);
+      return { ok: true as const, profile: result.profile };
     }
 
-    let subscription: { unsubscribe: () => void } | undefined;
+    const message = profileResultToUserMessage(result);
+    setUser(null);
+    setProfileError(message);
+    return { ok: false as const, error: message };
+  }, []);
 
-    async function init() {
-      const supabase = getSupabase();
-      if (!supabase) {
-        setIsLoading(false);
+  const processAuthDeepLink = useCallback(
+    async (url: string, supabase: NonNullable<ReturnType<typeof getSupabase>>) => {
+      if (!url) {
+        return;
+      }
+
+      if (!isAuthCallbackDeepLink(url) && Platform.OS !== 'web') {
+        return;
+      }
+
+      const snapshot = getAuthCallbackFlowSnapshot(url);
+      if (snapshot.status === 'success' || snapshot.status === 'error') {
+        setPendingAuthCallbackUrl(url);
+        if (url.includes('update-password')) {
+          setActiveRecoveryUrl(url);
+        }
+        return;
+      }
+
+      setPendingAuthCallbackUrl(url);
+
+      logAuthEvent('deep_link_received', {
+        scheme: url.split(':')[0] ?? undefined,
+        pathname: url.includes('confirm-email')
+          ? '/auth/confirm-email'
+          : url.includes('update-password')
+            ? '/auth/update-password'
+            : undefined,
+      });
+
+      if (url.includes('update-password')) {
+        setActiveRecoveryUrl(url);
+      }
+
+      const result = await ensureAuthCallbackProcessed(supabase, url);
+      if (!result.ok) {
         return;
       }
 
       const { data } = await supabase.auth.getSession();
-      if (data.session?.user && !hasRecoveryUrlParams()) {
+      if (data.session?.user && !hasRecoveryUrlParams(url)) {
         await loadUserFromSupabase(data.session.user);
       }
-      setIsLoading(false);
+    },
+    [loadUserFromSupabase],
+  );
 
-      const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user) {
-          if (event === 'PASSWORD_RECOVERY' || hasRecoveryUrlParams()) {
-            return;
-          }
-          await loadUserFromSupabase(session.user);
-        } else {
-          setUser(null);
+  useEffect(() => {
+    if (isDemoMode || Platform.OS === 'web') {
+      return;
+    }
+
+    let subscription: { remove: () => void } | undefined;
+
+    void (async () => {
+      const initialUrl = await getInitialNativeAuthUrl();
+      const supabase = getSupabase();
+      if (supabase && initialUrl) {
+        await processAuthDeepLink(initialUrl, supabase);
+      }
+    })();
+
+    subscription = subscribeNativeAuthUrls((url) => {
+      const supabase = getSupabase();
+      if (supabase) {
+        void processAuthDeepLink(url, supabase);
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [isDemoMode, processAuthDeepLink]);
+
+  useEffect(() => {
+    if (isDemoMode) {
+      setIsLoading(false);
+      setInitError(null);
+      setProfileError(null);
+      return;
+    }
+
+    let cancelled = false;
+    let subscription: { unsubscribe: () => void } | undefined;
+
+    async function init() {
+      setIsLoading(true);
+      setInitError(null);
+      logAuthEvent('init_start');
+
+      try {
+        const supabase = getSupabase();
+        if (!supabase) {
+          setInitError('Supabase no está disponible en este dispositivo.');
+          return;
         }
-      });
-      subscription = listener.subscription;
+
+        await withTimeout(
+          (async () => {
+            if (Platform.OS === 'web' && hasWebAuthCallback()) {
+              const callback = parseAuthCallbackResult();
+              if (callback.status === 'error') {
+                return;
+              }
+
+              const result = await ensureAuthCallbackProcessed(supabase);
+              if (result.ok) {
+                const { data: confirmed } = await supabase.auth.getSession();
+                if (confirmed.session?.user && !hasRecoveryUrlParams()) {
+                  await loadUserFromSupabase(confirmed.session.user);
+                }
+                clearAuthCallbackParams();
+              }
+            }
+
+            const { data, error } = await supabase.auth.getSession();
+            if (error) {
+              logAuthEvent('session_restore_error', { message: error.message }, 'warn');
+            }
+
+            if (data.session?.user && !hasRecoveryUrlParams()) {
+              logAuthEvent('session_restore_ok', { userId: data.session.user.id });
+              await loadUserFromSupabase(data.session.user);
+            } else {
+              logAuthEvent('session_restore_empty');
+              setUser(null);
+              setProfileError(null);
+            }
+          })(),
+          AUTH_INIT_TIMEOUT_MS,
+          'Tiempo de espera agotado al restaurar la sesión',
+        );
+
+        if (cancelled) return;
+
+        const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+          logAuthEvent('state_change', { event, hasSession: Boolean(session?.user) });
+
+          if (session?.user) {
+            if (event === 'PASSWORD_RECOVERY' || hasRecoveryUrlParams()) {
+              return;
+            }
+            if (event === 'TOKEN_REFRESHED') {
+              return;
+            }
+            try {
+              await loadUserFromSupabase(session.user);
+            } catch (error) {
+              logReleaseError('auth_state_profile_failed', error, { event });
+            }
+          } else {
+            setUser(null);
+            setProfileError(null);
+          }
+        });
+        subscription = listener.subscription;
+        logAuthEvent('init_done');
+      } catch (error) {
+        const message =
+          error instanceof TimeoutError
+            ? 'La conexión tardó demasiado. Comprueba tu red e inténtalo de nuevo.'
+            : error instanceof Error
+              ? error.message
+              : 'No se pudo iniciar la sesión.';
+        logReleaseError('init_failed', error);
+        setInitError(message);
+        setUser(null);
+        setProfileError(null);
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
     }
 
     init();
-    return () => subscription?.unsubscribe();
-  }, [isDemoMode, loadUserFromSupabase]);
+
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe();
+    };
+  }, [isDemoMode, loadUserFromSupabase, initAttempt]);
+
+  const retryInit = useCallback(() => {
+    setInitAttempt((attempt) => attempt + 1);
+  }, []);
+
+  const retryProfileLoad = useCallback(async () => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    setIsLoading(true);
+    setProfileError(null);
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        await loadUserFromSupabase(data.session.user);
+      } else {
+        setUser(null);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadUserFromSupabase]);
+
+  const getAuthCallbackSnapshot = useCallback((url?: string | null) => {
+    return getAuthCallbackFlowSnapshot(url ?? pendingAuthCallbackUrl);
+  }, [pendingAuthCallbackUrl]);
+
+  const consumePendingAuthCallbackUrl = useCallback(() => {
+    const url = pendingAuthCallbackUrl;
+    setPendingAuthCallbackUrl(null);
+    return url;
+  }, [pendingAuthCallbackUrl]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
       if (isDemoMode) {
         if (email === DEMO_USER.email && password === DEMO_USER.password) {
           setUser(mockUser);
-          return {};
+          setProfileError(null);
+          return { profile: mockUser };
         }
         if (email === DEMO_TRAINER.email && password === DEMO_TRAINER.password) {
           setUser(mockTrainerUser);
-          return {};
+          setProfileError(null);
+          return { profile: mockTrainerUser };
         }
         return {
           error:
@@ -90,10 +344,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const { data, error } = await requireSupabase().auth.signInWithPassword({ email, password });
-      if (error) return { error: mapSignInError(error.message) };
-      if (data.user) await loadUserFromSupabase(data.user);
-      return {};
+      logAuthEvent('sign_in_start');
+      setProfileError(null);
+
+      try {
+        const { data, error } = await withTimeout(
+          signInWithPasswordSafe(requireSupabase(), { email, password }),
+          SIGN_IN_TIMEOUT_MS,
+          'Tiempo de espera agotado al iniciar sesión',
+        );
+
+        if (error) {
+          logAuthEvent('sign_in_failed', { reason: mapSignInErrorMessage(error.message) }, 'warn');
+          return { error: mapSignInErrorMessage(error.message) };
+        }
+
+        if (data.user) {
+          const loaded = await loadUserFromSupabase(data.user);
+          if (!loaded.ok) {
+            return { error: loaded.error };
+          }
+          logAuthEvent('sign_in_ok', { userId: data.user.id });
+          return { profile: loaded.profile };
+        }
+
+        return { error: 'No se pudo completar el inicio de sesión.' };
+      } catch (error) {
+        logReleaseError('sign_in_exception', error);
+        if (error instanceof TimeoutError) {
+          return { error: 'La conexión tardó demasiado. Comprueba tu red e inténtalo de nuevo.' };
+        }
+        return { error: mapAuthException(error) };
+      }
     },
     [isDemoMode, loadUserFromSupabase],
   );
@@ -101,18 +383,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback(
     async (email: string, password: string, name: string) => {
       if (isDemoMode) {
-        setUser({ ...mockUser, email, name, avatarInitials: name.slice(0, 2).toUpperCase() });
-        return {};
+        const profile = { ...mockUser, email, name, avatarInitials: name.slice(0, 2).toUpperCase() };
+        setDemoWelcomeMessage(profile.id, name);
+        setUser(profile);
+        setProfileError(null);
+        return { profile };
       }
 
-      const { data, error } = await requireSupabase().auth.signUp({
-        email,
-        password,
-        options: { data: { name } },
-      });
-      if (error) return { error: error.message };
-      if (data.user) await loadUserFromSupabase(data.user);
-      return {};
+      try {
+        const { data, error } = await withTimeout(
+          requireSupabase().auth.signUp({
+            email,
+            password,
+            options: {
+              data: { name },
+              emailRedirectTo: getEmailConfirmationRedirectUrl(),
+            },
+          }),
+          SIGN_IN_TIMEOUT_MS,
+          'Tiempo de espera agotado al registrarse',
+        );
+
+        if (error) {
+          logAuthEvent('sign_up_failed', { reason: mapSignUpErrorMessage(error.message) }, 'warn');
+          return { error: mapSignUpErrorMessage(error.message) };
+        }
+
+        const interpretation = interpretSignUpResponse(data);
+        logAuthEvent('sign_up_result', {
+          result: interpretation.type,
+          hasSession: Boolean(data.session),
+          identityCount: data.user?.identities?.length ?? 0,
+        });
+
+        if (interpretation.type === 'already_registered') {
+          return {
+            error:
+              'Este email ya está registrado. Inicia sesión. Si no confirmaste el email, usa "Reenviar" en confirmación o recuperar contraseña.',
+          };
+        }
+
+        if (interpretation.type === 'needs_email_confirmation') {
+          return { needsEmailConfirmation: true };
+        }
+
+        if (interpretation.type === 'session_created' && data.user) {
+          const loaded = await loadUserFromSupabase(data.user);
+          if (!loaded.ok) {
+            return { error: loaded.error };
+          }
+
+          const welcome = await sendSignupWelcomeMessage(data.user.id, name);
+          if (!welcome.ok) {
+            logAuthEvent('sign_up_welcome_failed', { reason: welcome.error }, 'warn');
+          }
+
+          return { profile: loaded.profile };
+        }
+        return { error: 'No se pudo completar el registro. Inténtalo de nuevo.' };
+      } catch (error) {
+        logReleaseError('sign_up_exception', error);
+        return { error: mapAuthException(error) };
+      }
     },
     [isDemoMode, loadUserFromSupabase],
   );
@@ -128,39 +460,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: true };
       }
 
-      const check = await checkEmailRegistered(normalizedEmail);
-      if (check.status === 'not_registered') {
-        return { error: 'Email incorrecto. No hay ninguna cuenta registrada con ese correo.' };
+      try {
+        const check = await checkEmailRegistered(normalizedEmail);
+        if (check.status === 'not_registered') {
+          return { error: 'Email incorrecto. No hay ninguna cuenta registrada con ese correo.' };
+        }
+
+        const redirectTo = getPasswordResetRedirectUrl();
+        const { error } = await withTimeout(
+          requireSupabase().auth.resetPasswordForEmail(normalizedEmail, { redirectTo }),
+          SIGN_IN_TIMEOUT_MS,
+          'Tiempo de espera agotado al enviar el correo',
+        );
+
+        if (error) {
+          return { error: mapResetPasswordError(error.message) };
+        }
+
+        return { success: true };
+      } catch (error) {
+        logReleaseError('reset_password_exception', error);
+        return { error: mapAuthException(error) };
       }
-
-      const redirectTo = getPasswordResetRedirectUrl();
-      const { error } = await requireSupabase().auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
-
-      if (error) {
-        return { error: mapResetPasswordError(error.message) };
-      }
-
-      return { success: true };
     },
     [isDemoMode],
   );
 
   const signOut = useCallback(async () => {
     if (!isDemoMode) {
-      await requireSupabase().auth.signOut({ scope: 'local' });
+      try {
+        await requireSupabase().auth.signOut({ scope: 'local' });
+      } catch (error) {
+        logReleaseError('sign_out_failed', error);
+      }
     }
     setUser(null);
+    setProfileError(null);
+    setPendingAuthCallbackUrl(null);
+    resetAuthCallbackCoordinator();
   }, [isDemoMode]);
 
-  const refreshUser = useCallback(async () => {
-    if (isDemoMode) return;
+  const userRef = useRef(user);
+  const profileErrorRef = useRef(profileError);
+  userRef.current = user;
+  profileErrorRef.current = profileError;
+
+  const refreshUser = useCallback(async (force = false) => {
+    if (isDemoMode) return { ok: true as const };
 
     const supabase = getSupabase();
-    if (!supabase) return;
+    if (!supabase) return { ok: false as const, error: 'Supabase no está disponible.' };
+    if (!profileRefresh.shouldRefresh(force)) {
+      const currentUser = userRef.current;
+      const currentProfileError = profileErrorRef.current;
+      if (currentUser && !currentProfileError) {
+        return { ok: true as const, profile: currentUser };
+      }
+      if (currentProfileError) {
+        return { ok: false as const, error: currentProfileError };
+      }
+      return undefined;
+    }
 
-    const { data } = await supabase.auth.getSession();
-    if (data.session?.user && !hasRecoveryUrlParams()) {
-      await loadUserFromSupabase(data.session.user);
+    try {
+      return await profileRefresh.track(
+        (async () => {
+          const { data } = await supabase.auth.getSession();
+          if (data.session?.user && !hasRecoveryUrlParams()) {
+            return loadUserFromSupabase(data.session.user);
+          }
+          return { ok: false as const, error: 'No hay sesión activa.' };
+        })(),
+      );
+    } catch (error) {
+      logReleaseError('refresh_user_failed', error);
+      return {
+        ok: false as const,
+        error: error instanceof Error ? error.message : 'No se pudo cargar el perfil.',
+      };
     }
   }, [isDemoMode, loadUserFromSupabase]);
 
@@ -189,7 +566,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error };
       }
 
-      await refreshUser();
+      await refreshUser(true);
       return {};
     },
     [isDemoMode, user, refreshUser],
@@ -225,7 +602,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (profile) {
         setUser(profile);
       } else {
-        await refreshUser();
+        await refreshUser(true);
       }
 
       return {};
@@ -237,7 +614,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       isLoading,
+      initError,
+      profileError,
       isDemoMode,
+      pendingAuthCallbackUrl,
       signIn,
       signUp,
       resetPassword,
@@ -245,11 +625,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshUser,
       finishActiveProgram,
       signOut,
+      retryInit,
+      retryProfileLoad,
+      consumePendingAuthCallbackUrl,
+      getAuthCallbackSnapshot,
     }),
     [
       user,
       isLoading,
+      initError,
+      profileError,
       isDemoMode,
+      pendingAuthCallbackUrl,
       signIn,
       signUp,
       resetPassword,
@@ -257,6 +644,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshUser,
       finishActiveProgram,
       signOut,
+      retryInit,
+      retryProfileLoad,
+      consumePendingAuthCallbackUrl,
+      getAuthCallbackSnapshot,
     ],
   );
 
@@ -269,18 +660,8 @@ export function useAuth() {
   return context;
 }
 
-function mapSignInError(message: string) {
-  const normalized = message.toLowerCase();
-
-  if (normalized.includes('email not confirmed')) {
-    return 'Tu email aún no está confirmado. Revisa tu bandeja de entrada (y spam) y haz clic en el enlace de confirmación.';
-  }
-
-  if (normalized.includes('invalid login credentials')) {
-    return 'Email o contraseña incorrectos.';
-  }
-
-  return message;
+function mapSignUpError(message: string) {
+  return mapSignUpErrorMessage(message);
 }
 
 function mapResetPasswordError(message: string) {
@@ -295,19 +676,4 @@ function mapResetPasswordError(message: string) {
   }
 
   return message;
-}
-
-function mapSupabaseUserFallback(authUser: User): UserProfile {
-  const name = (authUser.user_metadata?.name as string) ?? 'Usuario';
-  return {
-    id: authUser.id,
-    name,
-    email: authUser.email ?? '',
-    avatarInitials: name
-      .split(' ')
-      .map((part) => part[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase(),
-  };
 }

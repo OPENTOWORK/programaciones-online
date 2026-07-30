@@ -78,7 +78,8 @@ export const goalLabels = {
 export const categoryLabels = {
   standard: 'Estándar',
   hype: 'Hype / Intensivas',
-  personalized: 'Personalizado',
+  personalized: 'Entrenamiento personalizado',
   nutrition: 'Nutrición',
-  home_training: 'Entrenamiento personal',
+  home_training: 'Entrenamiento personal en tu domicilio',
+  gym_training: 'Programación para tu gimnasio',
 };

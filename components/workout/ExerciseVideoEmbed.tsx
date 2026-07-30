@@ -9,6 +9,7 @@ import {
 import { WebView } from 'react-native-webview';
 
 import { borderRadius, colors } from '@/constants/theme';
+import { useAppActive } from '@/hooks/useAppActive';
 import { getYoutubeEmbedUrl } from '@/lib/exerciseVideoService';
 
 function buildYoutubeWebViewHtml(embedUrl: string) {
@@ -66,20 +67,23 @@ interface ExerciseVideoEmbedProps {
 
 export function ExerciseVideoEmbed({ youtubeVideoId, title, style }: ExerciseVideoEmbedProps) {
   const [loading, setLoading] = useState(true);
+  const isAppActive = useAppActive();
   const embedUrl = getYoutubeEmbedUrl(youtubeVideoId);
   const html = useMemo(() => buildYoutubeWebViewHtml(embedUrl), [embedUrl]);
 
   if (Platform.OS === 'web') {
     return (
       <View style={[styles.container, style]}>
+        {/* eslint-disable-next-line react/no-unknown-property */}
         <iframe
           src={embedUrl}
           title={title}
+          width="100%"
+          height="100%"
           style={{
-            width: '100%',
-            height: '100%',
             border: 'none',
             backgroundColor: colors.black,
+            minHeight: 220,
           }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
           allowFullScreen
@@ -95,20 +99,25 @@ export function ExerciseVideoEmbed({ youtubeVideoId, title, style }: ExerciseVid
           <ActivityIndicator size="large" color={colors.accent} />
         </View>
       ) : null}
-      <WebView
-        source={{ html, baseUrl: 'https://www.youtube.com' }}
-        style={styles.webview}
-        onLoadEnd={() => setLoading(false)}
-        javaScriptEnabled
-        domStorageEnabled
-        allowsInlineMediaPlayback
-        allowsFullscreenVideo
-        mediaPlaybackRequiresUserAction={false}
-        scrollEnabled={false}
-        bounces={false}
-        setSupportMultipleWindows={false}
-        originWhitelist={['*']}
-      />
+      {isAppActive ? (
+        <WebView
+          source={{ html, baseUrl: 'https://www.youtube.com' }}
+          style={styles.webview}
+          onLoadEnd={() => setLoading(false)}
+          javaScriptEnabled
+          domStorageEnabled
+          allowsInlineMediaPlayback
+          allowsFullscreenVideo
+          mediaPlaybackRequiresUserAction={false}
+          scrollEnabled={false}
+          bounces={false}
+          setSupportMultipleWindows={false}
+          originWhitelist={['*']}
+          androidLayerType="hardware"
+        />
+      ) : (
+        <View style={styles.webview} />
+      )}
     </View>
   );
 }
@@ -116,6 +125,7 @@ export function ExerciseVideoEmbed({ youtubeVideoId, title, style }: ExerciseVid
 const styles = StyleSheet.create({
   container: {
     width: '100%',
+    minHeight: 220,
     aspectRatio: 16 / 9,
     borderRadius: borderRadius.md,
     overflow: 'hidden',

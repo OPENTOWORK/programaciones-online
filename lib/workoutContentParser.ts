@@ -102,12 +102,44 @@ export function getBlockAccent(label: string) {
     return { bg: `${'#00B8D4'}22`, text: '#00B8D4', border: `${'#00B8D4'}55` };
   }
 
-  if (normalized.includes('for time') || normalized.includes('rondas')) {
+  if (
+    normalized.includes('for time') ||
+    normalized.includes('rounds for time') ||
+    normalized.includes('rondas')
+  ) {
     return { bg: `${'#FF7373'}22`, text: '#FF7373', border: `${'#FF7373'}55` };
   }
 
-  if (normalized.includes('fuerza') || normalized.includes('libre')) {
+  if (normalized.includes('tabata')) {
+    return { bg: `${'#A78BFA'}22`, text: '#A78BFA', border: `${'#A78BFA'}55` };
+  }
+
+  if (normalized.includes('unbroken')) {
+    return { bg: `${'#FB923C'}22`, text: '#FB923C', border: `${'#FB923C'}55` };
+  }
+
+  if (normalized.includes('ladder') || normalized.includes('reps for time')) {
+    return { bg: `${'#818CF8'}22`, text: '#818CF8', border: `${'#818CF8'}55` };
+  }
+
+  if (normalized.includes('movilidad')) {
+    return { bg: `${'#2DD4BF'}22`, text: '#2DD4BF', border: `${'#2DD4BF'}55` };
+  }
+
+  if (normalized.includes('técnica') || normalized.includes('tecnica')) {
+    return { bg: `${'#60A5FA'}22`, text: '#60A5FA', border: `${'#60A5FA'}55` };
+  }
+
+  if (normalized.includes('estaciones')) {
+    return { bg: `${'#FBBF24'}22`, text: '#FBBF24', border: `${'#FBBF24'}55` };
+  }
+
+  if (normalized.includes('entrenamiento libre')) {
     return { bg: `${'#4ADE80'}22`, text: '#4ADE80', border: `${'#4ADE80'}55` };
+  }
+
+  if (normalized.includes('texto libre')) {
+    return { bg: '#243044', text: '#94A3B8', border: '#2D3A4F' };
   }
 
   return { bg: '#243044', text: '#94A3B8', border: '#2D3A4F' };

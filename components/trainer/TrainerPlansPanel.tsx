@@ -1,12 +1,14 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
+import { useFocusRefresh } from '@/hooks/useFocusRefresh';
+import { getSessionLabel, groupPersonalizedPlans } from '@/lib/personalizedPlanGroups';
 import { ATHLETE_PLAN_TYPE_LABELS, type AthletePlanType } from '@/lib/trainerConstants';
 import type { AthletePlan } from '@/lib/types';
 
@@ -17,13 +19,33 @@ function formatDate(isoDate: string) {
   });
 }
 
-function PlanListItem({ plan }: { plan: AthletePlan }) {
+function PlanGroupItem({
+  title,
+  sessions,
+  onOpenSession,
+}: {
+  title: string;
+  sessions: AthletePlan[];
+  onOpenSession: (planId: string) => void;
+}) {
   return (
-    <View style={styles.planItem}>
-      <Text style={styles.planTitle}>{plan.title}</Text>
-      <Text style={styles.planMeta}>
-        {plan.athleteName ?? 'Atleta'} · {ATHLETE_PLAN_TYPE_LABELS[plan.planType]} · {formatDate(plan.createdAt)}
-      </Text>
+    <View style={styles.groupItem}>
+      <View style={styles.groupHeader}>
+        <Text style={styles.planTitle}>{title}</Text>
+        <Text style={styles.planMeta}>
+          {sessions.length} sesión{sessions.length === 1 ? '' : 'es'}
+        </Text>
+      </View>
+      {sessions.map((session, index) => (
+        <Pressable
+          key={session.id}
+          onPress={() => onOpenSession(session.id)}
+          style={({ pressed }) => [styles.sessionItem, pressed && styles.planItemPressed]}
+        >
+          <Text style={styles.sessionTitle}>{getSessionLabel(session, index)}</Text>
+          <Text style={styles.planChevron}>›</Text>
+        </Pressable>
+      ))}
     </View>
   );
 }
@@ -36,10 +58,16 @@ export function TrainerPlansPanel({ activePlanType }: TrainerPlansPanelProps) {
   const router = useRouter();
   const { plans, isLoading, refresh } = useTrainerAthletePlans(activePlanType);
 
-  useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [refresh]),
+  useFocusRefresh(() => refresh());
+
+  const groupedPlans = useMemo(() => {
+    if (activePlanType !== 'personalized') return [];
+    return groupPersonalizedPlans(plans);
+  }, [activePlanType, plans]);
+
+  const nutritionPlans = useMemo(
+    () => (activePlanType === 'nutrition' ? plans : []),
+    [activePlanType, plans],
   );
 
   const createLabel =
@@ -65,17 +93,52 @@ export function TrainerPlansPanel({ activePlanType }: TrainerPlansPanelProps) {
 
       {isLoading ? (
         <ActivityIndicator color={colors.accent} style={styles.loader} />
+      ) : activePlanType === 'personalized' ? (
+        groupedPlans.length === 0 ? (
+          <Text style={styles.emptyText}>
+            Todavía no has creado planes en esta categoría. Usa el botón de arriba para empezar.
+          </Text>
+        ) : (
+          <View style={styles.list}>
+            {groupedPlans.slice(0, 5).map((group) => (
+              <PlanGroupItem
+                key={group.id}
+                title={group.title}
+                sessions={group.sessions}
+                onOpenSession={(planId) =>
+                  router.push({ pathname: '/trainer/plan/[id]', params: { id: planId } })
+                }
+              />
+            ))}
+            {groupedPlans.length > 5 ? (
+              <Text style={styles.moreText}>+ {groupedPlans.length - 5} planes más</Text>
+            ) : null}
+          </View>
+        )
       ) : plans.length === 0 ? (
         <Text style={styles.emptyText}>
           Todavía no has creado planes en esta categoría. Usa el botón de arriba para empezar.
         </Text>
       ) : (
         <View style={styles.list}>
-          {plans.slice(0, 5).map((plan) => (
-            <PlanListItem key={plan.id} plan={plan} />
+          {nutritionPlans.slice(0, 5).map((plan) => (
+            <Pressable
+              key={plan.id}
+              onPress={() => router.push({ pathname: '/trainer/plan/[id]', params: { id: plan.id } })}
+              style={({ pressed }) => [styles.planItem, pressed && styles.planItemPressed]}
+            >
+              <View style={styles.planItemText}>
+                <Text style={styles.planTitle}>{plan.title}</Text>
+                <Text style={styles.planMeta}>
+                  {plan.athleteName ?? 'Atleta'} · {ATHLETE_PLAN_TYPE_LABELS[plan.planType]} ·{' '}
+                  {formatDate(plan.createdAt)}
+                </Text>
+              </View>
+              <Text style={styles.planChevron}>›</Text>
+            </Pressable>
           ))}
-          {plans.length > 5 ? (
-            <Text style={styles.moreText}>+ {plans.length - 5} planes más</Text>
+          {nutritionPlans.length > 5 ? (
+            <Text style={styles.moreText}>+ {nutritionPlans.length - 5} planes más</Text>
           ) : null}
         </View>
       )}
@@ -106,10 +169,52 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.sm,
   },
-  planItem: {
+  groupItem: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: colors.background,
+  },
+  groupHeader: {
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    backgroundColor: `${colors.surfaceLight}88`,
+  },
+  sessionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  sessionTitle: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontWeight: '600',
+    flex: 1,
+  },
+  planItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  planItemPressed: {
+    opacity: 0.7,
+  },
+  planItemText: {
+    flex: 1,
+  },
+  planChevron: {
+    ...typography.h3,
+    color: colors.textMuted,
   },
   planTitle: {
     ...typography.body,

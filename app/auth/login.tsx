@@ -4,12 +4,14 @@ import { Alert, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Button } from '@/components/ui/Button';
-import { IconBadge } from '@/components/ui/AppIcon';
+import { AppLogo } from '@/components/ui/AppLogo';
 import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
-import { DEMO_USER } from '@/lib/mockData';
+import { DEMO_TRAINER, DEMO_USER } from '@/lib/mockData';
+import { isWebPlatform } from '@/lib/platformAccess';
 import { useAuth } from '@/hooks/useAuth';
+import { getPostLoginRoute } from '@/lib/navigation';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -18,6 +20,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const validate = () => {
     const newErrors: typeof errors = {};
@@ -31,14 +34,26 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!validate()) return;
+    setAuthError(null);
     setLoading(true);
-    const { error } = await signIn(email.trim(), password);
-    setLoading(false);
-    if (error) {
-      Alert.alert('Error', error);
-      return;
+
+    try {
+      const { error, profile } = await signIn(email.trim(), password);
+      if (error) {
+        setAuthError(error);
+        Alert.alert('Error', error);
+        return;
+      }
+      if (profile) {
+        router.replace(getPostLoginRoute(profile.role));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo iniciar sesión.';
+      setAuthError(message);
+      Alert.alert('Error', message);
+    } finally {
+      setLoading(false);
     }
-    router.replace('/tabs/home');
   };
 
   const fillDemo = () => {
@@ -47,20 +62,33 @@ export default function LoginScreen() {
     setErrors({});
   };
 
+  const fillDemoTrainer = () => {
+    setEmail(DEMO_TRAINER.email);
+    setPassword(DEMO_TRAINER.password);
+    setErrors({});
+  };
+
+  const isWeb = isWebPlatform();
+
   return (
     <ScreenWrapper>
       <LinearGradient colors={[`${colors.accent}22`, 'transparent']} style={styles.hero}>
         <View style={styles.logoWrap}>
-          <IconBadge name="logo" containerSize={72} size={36} />
+          <AppLogo size={72} />
         </View>
-        <Text style={styles.title}>Programaciones online</Text>
-        <Text style={styles.subtitle}>Tus programaciones de entrenamiento online</Text>
+        <Text style={styles.title}>Training ProgLine</Text>
+        {!isWeb ? (
+          <Text style={styles.subtitle}>Tus programaciones de entrenamiento online</Text>
+        ) : null}
       </LinearGradient>
 
       {isDemoMode && (
         <View style={styles.demoBanner}>
           <Text style={styles.demoText}>Modo demo activo — Supabase no configurado</Text>
-          <Button title="Usar cuenta demo" onPress={fillDemo} variant="outline" style={styles.demoBtn} />
+          <Button title="Usar cuenta demo atleta" onPress={fillDemo} variant="outline" style={styles.demoBtn} />
+          {isWeb ? (
+            <Button title="Usar cuenta demo entrenador" onPress={fillDemoTrainer} variant="outline" style={styles.demoBtn} />
+          ) : null}
         </View>
       )}
 
@@ -84,6 +112,8 @@ export default function LoginScreen() {
       />
 
       <Button title="Iniciar sesión" onPress={handleLogin} loading={loading} />
+
+      {authError ? <Text style={styles.authError}>{authError}</Text> : null}
 
       <Link href="/auth/forgot-password" style={styles.link}>
         <Text style={styles.linkText}>¿Olvidaste tu contraseña?</Text>
@@ -118,8 +148,14 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
   },
   demoText: { ...typography.bodySmall, color: colors.accent, marginBottom: spacing.sm },
-  demoBtn: { minHeight: 44 },
+  demoBtn: { minHeight: 44, marginBottom: spacing.xs },
   link: { alignSelf: 'center', marginTop: spacing.md },
+  authError: {
+    ...typography.bodySmall,
+    color: colors.danger,
+    textAlign: 'center',
+    marginTop: spacing.md,
+  },
   linkText: { ...typography.bodySmall, color: colors.textSecondary },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },
   footerText: { ...typography.bodySmall, color: colors.textSecondary },

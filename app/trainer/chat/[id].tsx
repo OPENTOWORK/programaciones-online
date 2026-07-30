@@ -6,7 +6,9 @@ import { TrainerChatPanel } from '@/components/trainer/TrainerChatPanel';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing } from '@/constants/theme';
 import { useAthlete } from '@/hooks/useAthletes';
+import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useTrainerMessages } from '@/hooks/useTrainerMessages';
+import { markAthleteAlertRead } from '@/lib/trainerAthleteAlerts';
 
 export default function TrainerAthleteChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -14,6 +16,12 @@ export default function TrainerAthleteChatScreen() {
   const { athlete, isLoading: loadingAthlete } = useAthlete(athleteId);
   const { messages, isEmpty, sendMessage } = useTrainerMessages({ athleteId, asTrainer: true });
   const [newMessage, setNewMessage] = useState('');
+
+  useFocusRefresh(() => {
+    if (athleteId) {
+      void markAthleteAlertRead(athleteId, 'chat');
+    }
+  });
 
   const handleSendMessage = async () => {
     const sent = await sendMessage(newMessage);

@@ -1,9 +1,23 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { mockTrainerMessages } from '@/lib/mockData';
+import { fetchTrainerAthleteFeedback } from '@/lib/trainerAthleteFeedbackService';
 import { fetchTrainerMessages, sendAthleteMessage, sendTrainerReply } from '@/lib/trainerService';
-import type { TrainerMessage } from '@/lib/types';
+import { addCrmActivity, buildMessageSentActivity } from '@/lib/trainerCrmActivity';
+import { getDemoTrainerMessages } from '@/lib/trainerWelcomeMessage';
+import type { TrainerAthleteFeedback, TrainerMessage } from '@/lib/types';
+
+function feedbackToMessage(entry: TrainerAthleteFeedback): TrainerMessage {
+  return {
+    id: `feedback-${entry.id}`,
+    sender: 'trainer',
+    text: entry.message,
+    timestamp: entry.createdAt,
+    origin: 'feedback',
+    attachments: entry.attachments,
+  };
+}
 
 interface UseTrainerMessagesOptions {
   athleteId?: string;
@@ -16,12 +30,48 @@ export function useTrainerMessages(options: UseTrainerMessagesOptions = {}) {
   const asTrainer = options.asTrainer ?? false;
   const conversationUserId = asTrainer ? athleteId : user?.id;
 
-  const [messages, setMessages] = useState<TrainerMessage[]>(isDemoMode ? mockTrainerMessages : []);
+  const [messages, setMessages] = useState<TrainerMessage[]>(
+    isDemoMode && conversationUserId
+      ? getDemoTrainerMessages(conversationUserId, mockTrainerMessages)
+      : isDemoMode
+        ? mockTrainerMessages
+        : [],
+  );
   const [isLoading, setIsLoading] = useState(!isDemoMode);
+  const [feedbackMessages, setFeedbackMessages] = useState<TrainerMessage[]>([]);
+
+  useEffect(() => {
+    if (!conversationUserId) {
+      setFeedbackMessages([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadFeedback() {
+      const { entries } = await fetchTrainerAthleteFeedback(
+        conversationUserId!,
+        asTrainer ? user?.id : undefined,
+        isDemoMode,
+      );
+      if (!cancelled) {
+        setFeedbackMessages(entries.map(feedbackToMessage));
+      }
+    }
+
+    void loadFeedback();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [asTrainer, conversationUserId, isDemoMode, user?.id]);
 
   useEffect(() => {
     if (isDemoMode) {
-      setMessages(mockTrainerMessages);
+      const seed = conversationUserId
+        ? getDemoTrainerMessages(conversationUserId, mockTrainerMessages)
+        : mockTrainerMessages;
+      setMessages(seed);
       setIsLoading(false);
       return;
     }
@@ -65,6 +115,17 @@ export function useTrainerMessages(options: UseTrainerMessagesOptions = {}) {
             timestamp: new Date().toISOString(),
           },
         ]);
+
+        if (asTrainer && user?.id && conversationUserId) {
+          void addCrmActivity(
+            user.id,
+            conversationUserId,
+            buildMessageSentActivity(trimmed),
+            'message_sent',
+            true,
+          );
+        }
+
         return true;
       }
 
@@ -79,13 +140,18 @@ export function useTrainerMessages(options: UseTrainerMessagesOptions = {}) {
       setMessages((prev) => [...prev, saved]);
       return true;
     },
-    [asTrainer, conversationUserId, isDemoMode],
+    [asTrainer, conversationUserId, isDemoMode, user?.id],
   );
 
+  const timeline = useMemo(() => {
+    if (feedbackMessages.length === 0) return messages;
+    return [...messages, ...feedbackMessages].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  }, [messages, feedbackMessages]);
+
   return {
-    messages,
+    messages: timeline,
     isLoading,
-    isEmpty: !isDemoMode && messages.length === 0,
+    isEmpty: !isDemoMode && timeline.length === 0,
     sendMessage,
   };
 }

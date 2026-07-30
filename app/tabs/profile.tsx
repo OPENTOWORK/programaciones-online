@@ -1,15 +1,36 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { IconBadge } from '@/components/ui/AppIcon';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { PrivacyPolicyLink } from '@/components/legal/PrivacyPolicyLink';
 import { Card } from '@/components/ui/Card';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { goalLabels, levelColors, colors, spacing, typography } from '@/constants/theme';
+import type { AppIconName } from '@/constants/icons';
+import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAuth } from '@/hooks/useAuth';
+import { useFocusRefresh } from '@/hooks/useFocusRefresh';
+import { useMyAthletePlans } from '@/hooks/useAthletePlans';
+import { usePrograms } from '@/hooks/usePrograms';
+import { isTrainerRole } from '@/lib/athleteService';
+import { groupPersonalizedPlans } from '@/lib/personalizedPlanGroups';
+import { ATHLETE_PLAN_TYPE_LABELS } from '@/lib/trainerConstants';
+import type { AthletePlan, AthletePlanType } from '@/lib/types';
+
+const PLAN_ICONS: Record<AthletePlanType, AppIconName> = {
+  personalized: 'personal',
+  nutrition: 'measure',
+};
+
+function planCategoryRoute(plans: { id: string; category: string }[], planType: AthletePlanType) {
+  const match = plans.find((plan) => plan.category === planType);
+  if (match) return match.id;
+  return planType === 'nutrition' ? 'plan-nutrition' : 'personalized';
+}
 
 function formatOptionalValue(value: string | number | undefined, suffix = '') {
   if (value === undefined || value === null || value === '') {
@@ -22,21 +43,37 @@ function formatOptionalValue(value: string | number | undefined, suffix = '') {
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, signOut, refreshUser, finishActiveProgram } = useAuth();
+  const { plans: catalogPlans } = usePrograms();
+  const {
+    plans: assignedPlans,
+    isLoading: assignedPlansLoading,
+    refresh: refreshAssignedPlans,
+  } = useMyAthletePlans();
+  const isAthlete = !isTrainerRole(user?.role);
+  const { isComplete: intakeComplete, isLoading: intakeLoading } = useAthleteIntakeForm();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [showFinishConfirm, setShowFinishConfirm] = useState<string | null>(null);
   const [finishingProgram, setFinishingProgram] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
+  useFocusRefresh(
+    () => {
       void refreshUser();
-    }, [refreshUser]),
+    },
+    () => {
+      void refreshAssignedPlans();
+    },
   );
 
   if (!user) return null;
 
   const activePrograms =
     user.currentPrograms ?? (user.currentProgram ? [user.currentProgram] : []);
+  const groupedPersonalizedPlans = groupPersonalizedPlans(
+    assignedPlans.filter((plan) => plan.planType === 'personalized'),
+  );
+  const nutritionPlans = assignedPlans.filter((plan) => plan.planType === 'nutrition');
+  const hasAssignedPlans = assignedPlans.length > 0;
 
   const confirmLogout = async () => {
     setLoggingOut(true);
@@ -118,6 +155,24 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {isAthlete && !intakeLoading ? (
+        <Card style={[styles.programCard, !intakeComplete && styles.intakeCardPending]}>
+          <SectionHeader
+            title="Formulario de bienvenida"
+            subtitle={
+              intakeComplete
+                ? 'Completado'
+                : 'Imprescindible para contactar con tu entrenador y empezar tu entrenamiento online'
+            }
+          />
+          <Button
+            title={intakeComplete ? 'Ver / editar respuestas' : 'Rellenar formulario'}
+            variant={intakeComplete ? 'outline' : 'primary'}
+            onPress={() => router.push('/profile/intake-form')}
+          />
+        </Card>
+      ) : null}
+
       <Card>
         <SectionHeader title="Datos físicos" />
         <InfoRow label="Altura" value={formatOptionalValue(user.height, ' cm')} />
@@ -125,10 +180,39 @@ export default function ProfileScreen() {
         <InfoRow label="Limitaciones" value={formatOptionalValue(user.injuries)} />
       </Card>
 
+      {assignedPlansLoading ? (
+        <Card style={styles.programCard}>
+          <SectionHeader title="Planes asignados" subtitle="Preparados por tu entrenador" />
+          <ActivityIndicator color={colors.accent} style={styles.inlineLoader} />
+        </Card>
+      ) : hasAssignedPlans ? (
+        <Card style={styles.programCard}>
+          <SectionHeader title="Planes asignados" subtitle="Preparados por tu entrenador" />
+          {groupedPersonalizedPlans.map((group) => (
+            <AssignedPlanRow
+              key={group.id}
+              icon="personal"
+              title={group.title}
+              meta={`${group.sessions.length} sesión${group.sessions.length === 1 ? '' : 'es'} · ${ATHLETE_PLAN_TYPE_LABELS.personalized}`}
+              onPress={() => router.push(`/plan/${planCategoryRoute(catalogPlans, 'personalized')}`)}
+            />
+          ))}
+          {nutritionPlans.map((plan) => (
+            <AssignedPlanRow
+              key={plan.id}
+              icon="measure"
+              title={plan.title}
+              meta={ATHLETE_PLAN_TYPE_LABELS.nutrition}
+              onPress={() => router.push(`/plan/${planCategoryRoute(catalogPlans, 'nutrition')}`)}
+            />
+          ))}
+        </Card>
+      ) : null}
+
       {activePrograms.length > 0 ? (
         <Card style={styles.programCard}>
           <SectionHeader
-            title="Programación actual"
+            title="Programación de catálogo"
             subtitle={`${activePrograms.length} de 3 activas`}
           />
           {activePrograms.map((program, index) => (
@@ -186,8 +270,12 @@ export default function ProfileScreen() {
         </Card>
       ) : (
         <Card style={styles.programCard}>
-          <SectionHeader title="Programación actual" />
-          <Text style={styles.emptyProgram}>No tienes ninguna programación activa asignada.</Text>
+          <SectionHeader title="Programación de catálogo" />
+          <Text style={styles.emptyProgram}>
+            {hasAssignedPlans
+              ? 'No tienes ninguna programación de catálogo activa. Tus planes personalizados aparecen arriba.'
+              : 'No tienes ninguna programación activa asignada.'}
+          </Text>
         </Card>
       )}
 
@@ -216,7 +304,34 @@ export default function ProfileScreen() {
       ) : (
         <Button title="Cerrar sesión" onPress={handleLogout} variant="ghost" style={styles.btn} />
       )}
+
+      <PrivacyPolicyLink variant="small" />
     </ScreenWrapper>
+  );
+}
+
+function AssignedPlanRow({
+  icon,
+  title,
+  meta,
+  onPress,
+}: {
+  icon: AppIconName;
+  title: string;
+  meta: string;
+  onPress: () => void;
+}) {
+  return (
+    <View style={styles.assignedPlanRow}>
+      <IconBadge name={icon} containerSize={32} size={16} />
+      <View style={styles.programInfo}>
+        <Text style={styles.programName}>{title}</Text>
+        <Text style={styles.programMeta}>{meta}</Text>
+      </View>
+      <Pressable onPress={onPress} style={styles.continueLink}>
+        <Text style={styles.continueLinkText}>Ver plan</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -245,6 +360,16 @@ const styles = StyleSheet.create({
   email: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 4 },
   badges: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   programCard: { marginTop: spacing.md },
+  intakeCardPending: { borderColor: colors.accent },
+  inlineLoader: { marginTop: spacing.sm },
+  assignedPlanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
   programDivider: {
     height: 1,
     backgroundColor: colors.border,

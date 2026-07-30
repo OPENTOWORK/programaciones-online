@@ -2,6 +2,12 @@ import type { FitnessLevel, ProgramGoal, UserProfile, UserRole } from '@/lib/typ
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { fetchActiveProgramsForUser } from '@/lib/userProgramService';
 import type { UserActiveProgram } from '@/lib/types';
+import {
+  isValidRole,
+  type ProfileFetchResult,
+} from '@/lib/profileFetchResult';
+import { logReleaseDiagnostic } from '@/lib/releaseDiagnostics';
+import { TimeoutError } from '@/lib/withTimeout';
 
 const PERFIL_TABLE = 'Perfil';
 
@@ -61,31 +67,92 @@ function mapProfileRow(
   };
 }
 
-async function fetchRoleSlug(
-  supabase: NonNullable<ReturnType<typeof getSupabase>>,
-  idRoles: unknown,
-): Promise<string | undefined> {
-  if (!idRoles || typeof idRoles !== 'string') return undefined;
+function classifyProfileError(error: { message?: string; code?: string; status?: number }): ProfileFetchResult {
+  const message = error.message ?? 'Error desconocido';
+  const code = error.code;
+  const httpStatus = typeof error.status === 'number' ? error.status : undefined;
+  const normalized = message.toLowerCase();
 
-  const { data } = await supabase.from('roles').select('slug').eq('id', idRoles).maybeSingle();
-  return data?.slug;
+  if (code === 'PGRST301' || httpStatus === 401 || httpStatus === 403 || normalized.includes('permission')) {
+    logReleaseDiagnostic('profile_fetch_failed', { errorCode: code, httpStatus, hasProfile: false, hasRole: false }, 'warn');
+    return { status: 'permission_denied', code, message, httpStatus };
+  }
+
+  if (normalized.includes('fetch') || normalized.includes('network') || normalized.includes('failed')) {
+    logReleaseDiagnostic('profile_fetch_failed', { errorCode: code, httpStatus, hasProfile: false, hasRole: false }, 'warn');
+    return { status: 'network', message };
+  }
+
+  logReleaseDiagnostic('profile_fetch_failed', { errorCode: code, httpStatus, hasProfile: false, hasRole: false }, 'warn');
+  return { status: 'unknown', message, code };
 }
 
-export async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
-  if (!isSupabaseConfigured) return null;
+export async function fetchUserProfileResult(userId: string): Promise<ProfileFetchResult> {
+  if (!isSupabaseConfigured) {
+    return { status: 'unknown', message: 'Supabase no está configurado.' };
+  }
 
   const supabase = getSupabase();
-  if (!supabase) return null;
+  if (!supabase) {
+    return { status: 'unknown', message: 'Supabase no está disponible.' };
+  }
 
-  const [{ data: profileRow, error: profileError }, activePrograms] = await Promise.all([
-    supabase.from(PERFIL_TABLE).select('*').eq('id', userId).maybeSingle(),
-    fetchActiveProgramsForUser(userId),
-  ]);
+  try {
+    const [{ data: profileRow, error: profileError }, activePrograms] = await Promise.all([
+      supabase.from(PERFIL_TABLE).select('*, roles(slug)').eq('id', userId).maybeSingle(),
+      fetchActiveProgramsForUser(userId),
+    ]);
 
-  if (profileError || !profileRow) return null;
+    if (profileError) {
+      return classifyProfileError(profileError);
+    }
 
-  const roleSlug = await fetchRoleSlug(supabase, profileRow.id_roles);
-  return mapProfileRow(profileRow, activePrograms, roleSlug);
+    if (!profileRow) {
+      logReleaseDiagnostic('profile_not_found', { hasProfile: false, hasRole: false });
+      return { status: 'not_found' };
+    }
+
+    const roles = profileRow.roles as { slug?: string } | { slug?: string }[] | null | undefined;
+    const roleData = Array.isArray(roles) ? roles[0] : roles;
+    const roleSlug = roleData?.slug;
+
+    if (!roleSlug) {
+      const profile = mapProfileRow(profileRow, activePrograms);
+      logReleaseDiagnostic('profile_role_missing', { hasProfile: true, hasRole: false });
+      return { status: 'role_missing', profile };
+    }
+
+    if (!isValidRole(roleSlug)) {
+      const profile = mapProfileRow(profileRow, activePrograms, roleSlug);
+      logReleaseDiagnostic('profile_fetch_failed', {
+        hasProfile: true,
+        hasRole: false,
+        roleSlug,
+      }, 'warn');
+      return { status: 'invalid_role', profile, roleSlug };
+    }
+
+    const profile = mapProfileRow(profileRow, activePrograms, roleSlug);
+    logReleaseDiagnostic('profile_fetch_success', { hasProfile: true, hasRole: true, roleSlug });
+    return { status: 'success', profile, roleSlug };
+  } catch (error) {
+    if (error instanceof TimeoutError) {
+      logReleaseDiagnostic('profile_fetch_failed', { hasProfile: false, hasRole: false, errorCode: 'timeout' }, 'warn');
+      return { status: 'timeout', message: error.message };
+    }
+
+    const message = error instanceof Error ? error.message : 'Error al cargar el perfil';
+    return { status: 'network', message };
+  }
+}
+
+/** @deprecated Usar fetchUserProfileResult para manejo explícito de errores. */
+export async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
+  const result = await fetchUserProfileResult(userId);
+  if (result.status === 'success') {
+    return result.profile;
+  }
+  return null;
 }
 
 export async function updateUserProfile(
@@ -121,11 +188,14 @@ export async function updateUserProfile(
     lesiones: updates.injuries?.trim() || null,
   };
 
-  const { data, error } = await supabase
-    .from(PERFIL_TABLE)
-    .upsert(profilePayload, { onConflict: 'id' })
-    .select('*')
-    .single();
+  const [{ data, error }, activePrograms] = await Promise.all([
+    supabase
+      .from(PERFIL_TABLE)
+      .upsert(profilePayload, { onConflict: 'id' })
+      .select('*, roles(slug)')
+      .single(),
+    fetchActiveProgramsForUser(userId),
+  ]);
 
   if (error) {
     const message = error.message.toLowerCase().includes('perfil')
@@ -138,10 +208,8 @@ export async function updateUserProfile(
     return { error: 'No se pudo guardar el perfil en Supabase.' };
   }
 
-  const [activePrograms, roleSlug] = await Promise.all([
-    fetchActiveProgramsForUser(userId),
-    fetchRoleSlug(supabase, data.id_roles),
-  ]);
+  const roles = data.roles as { slug?: string } | { slug?: string }[] | null | undefined;
+  const roleData = Array.isArray(roles) ? roles[0] : roles;
 
-  return { profile: mapProfileRow(data, activePrograms, roleSlug) };
+  return { profile: mapProfileRow(data, activePrograms, roleData?.slug) };
 }

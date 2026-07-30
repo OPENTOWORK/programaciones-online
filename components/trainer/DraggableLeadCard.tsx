@@ -1,0 +1,68 @@
+import { useMemo, useRef, useState } from 'react';
+import { Animated, PanResponder } from 'react-native';
+
+import { CrmLeadCard } from '@/components/trainer/CrmLeadCard';
+import type { AthleteSummary } from '@/lib/types';
+
+interface DraggableLeadCardProps {
+  athlete: AthleteSummary;
+  canMovePrev: boolean;
+  canMoveNext: boolean;
+  onPress: () => void;
+  onMovePrev: () => void;
+  onMoveNext: () => void;
+  onOpenActions: () => void;
+  onDragStart: (athleteId: string) => void;
+  onDragMove: (athleteId: string, pageX: number, pageY: number) => void;
+  onDragEnd: (athleteId: string, pageX: number, pageY: number) => void;
+}
+
+export function DraggableLeadCard({
+  athlete,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  ...cardProps
+}: DraggableLeadCardProps) {
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const [isDragging, setIsDragging] = useState(false);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          pan.setValue({ x: 0, y: 0 });
+          setIsDragging(true);
+          onDragStart(athlete.id);
+        },
+        onPanResponderMove: (_evt, gestureState) => {
+          pan.setValue({ x: gestureState.dx, y: gestureState.dy });
+          onDragMove(athlete.id, gestureState.moveX, gestureState.moveY);
+        },
+        onPanResponderRelease: (_evt, gestureState) => {
+          setIsDragging(false);
+          onDragEnd(athlete.id, gestureState.moveX, gestureState.moveY);
+          Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false, speed: 20 }).start();
+        },
+        onPanResponderTerminate: (_evt, gestureState) => {
+          setIsDragging(false);
+          onDragEnd(athlete.id, gestureState.moveX, gestureState.moveY);
+          pan.setValue({ x: 0, y: 0 });
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [athlete.id],
+  );
+
+  return (
+    <Animated.View
+      style={[
+        { transform: [{ translateX: pan.x }, { translateY: pan.y }] },
+        isDragging && { zIndex: 50, elevation: 12 },
+      ]}
+    >
+      <CrmLeadCard athlete={athlete} isDragging={isDragging} dragHandleProps={panResponder.panHandlers} {...cardProps} />
+    </Animated.View>
+  );
+}

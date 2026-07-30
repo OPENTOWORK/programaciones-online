@@ -16,11 +16,12 @@ interface ProgressStat {
 
 interface ProgressOverviewProps {
   stats: ProgressStat[];
+  dense?: boolean;
 }
 
-export function ProgressOverview({ stats }: ProgressOverviewProps) {
+export function ProgressOverview({ stats, dense = false }: ProgressOverviewProps) {
   return (
-    <Card style={styles.container}>
+    <Card style={[styles.container, dense && styles.containerDense]}>
       <View style={styles.row}>
         {stats.map((stat, index) => {
           const accent = stat.accent ?? colors.accentBlue;
@@ -29,12 +30,22 @@ export function ProgressOverview({ stats }: ProgressOverviewProps) {
             <Fragment key={stat.label}>
               {index > 0 ? <View style={styles.divider} /> : null}
               <View style={styles.item}>
-                <View style={[styles.iconBadge, { backgroundColor: `${accent}18` }]}>
-                  <AppIcon name={stat.icon} size={18} color={accent} outlined />
+                <View
+                  style={[
+                    styles.iconBadge,
+                    dense && styles.iconBadgeDense,
+                    { backgroundColor: `${accent}18` },
+                  ]}
+                >
+                  <AppIcon name={stat.icon} size={dense ? 16 : 18} color={accent} outlined />
                 </View>
-                <Text style={[styles.value, { color: accent }]}>{stat.value}</Text>
-                <Text style={styles.label}>{stat.label}</Text>
-                {stat.hint ? <Text style={styles.hint}>{stat.hint}</Text> : null}
+                <Text style={[styles.value, dense && styles.valueDense, { color: accent }]}>
+                  {stat.value}
+                </Text>
+                <Text style={[styles.label, dense && styles.labelDense]}>{stat.label}</Text>
+                {stat.hint ? (
+                  <Text style={[styles.hint, dense && styles.hintDense]}>{stat.hint}</Text>
+                ) : null}
               </View>
             </Fragment>
           );
@@ -49,6 +60,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.sm,
     marginBottom: spacing.md,
+  },
+  containerDense: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.sm,
   },
   row: {
     flexDirection: 'row',
@@ -72,10 +88,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
+  iconBadgeDense: {
+    width: 30,
+    height: 30,
+    marginBottom: spacing.xs,
+  },
   value: {
     ...typography.h2,
     fontSize: 24,
     lineHeight: 30,
+  },
+  valueDense: {
+    fontSize: 20,
+    lineHeight: 24,
   },
   label: {
     ...typography.caption,
@@ -89,5 +114,13 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: 2,
+  },
+  labelDense: {
+    fontSize: 11,
+    lineHeight: 13,
+  },
+  hintDense: {
+    fontSize: 10,
+    lineHeight: 12,
   },
 });

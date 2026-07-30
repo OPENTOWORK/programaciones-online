@@ -7,19 +7,27 @@ import type { ActiveProgramSummary } from '@/lib/types';
 
 interface ActiveProgramCardProps {
   active: ActiveProgramSummary;
+  dense?: boolean;
 }
 
-export function ActiveProgramCard({ active }: ActiveProgramCardProps) {
+export function ActiveProgramCard({ active, dense = false }: ActiveProgramCardProps) {
   return (
-    <LinearGradient colors={[colors.surface, `${colors.accent}18`]} style={styles.card}>
-      <Text style={styles.label}>Programación activa</Text>
-      <View style={styles.titleRow}>
-        <IconBadge name={active.program.icon} containerSize={36} size={18} />
-        <Text style={styles.name}>{active.program.name}</Text>
+    <LinearGradient
+      colors={[colors.surface, `${colors.accent}18`]}
+      style={[styles.card, dense && styles.cardDense]}
+    >
+      <Text style={[styles.label, dense && styles.labelDense]}>Programación activa</Text>
+      <View style={[styles.titleRow, dense && styles.titleRowDense]}>
+        <IconBadge name={active.program.icon} containerSize={dense ? 30 : 36} size={dense ? 16 : 18} />
+        <Text style={[styles.name, dense && styles.nameDense]} numberOfLines={dense ? 1 : undefined}>
+          {active.program.name}
+        </Text>
       </View>
-      <View style={styles.nextWorkout}>
+      <View style={[styles.nextWorkout, dense && styles.nextWorkoutDense]}>
         <Text style={styles.nextLabel}>Próximo entrenamiento</Text>
-        <Text style={styles.nextName}>{active.nextWorkout.name}</Text>
+        <Text style={[styles.nextName, dense && styles.nextNameDense]} numberOfLines={dense ? 1 : undefined}>
+          {active.nextWorkout.name}
+        </Text>
         <Text style={styles.nextMeta}>
           {active.nextWorkout.dayLabel} · {active.nextWorkout.estimatedDuration}
         </Text>
@@ -35,6 +43,29 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: `${colors.accent}44`,
+  },
+  cardDense: {
+    padding: spacing.sm + 2,
+    marginBottom: spacing.sm,
+    borderRadius: 12,
+  },
+  labelDense: {
+    fontSize: 10,
+  },
+  titleRowDense: {
+    marginVertical: spacing.xs,
+    gap: spacing.xs,
+  },
+  nameDense: {
+    ...typography.body,
+    fontWeight: '700',
+  },
+  nextWorkoutDense: {
+    marginTop: spacing.xs,
+  },
+  nextNameDense: {
+    ...typography.bodySmall,
+    marginTop: 2,
   },
   label: { ...typography.caption, color: colors.accent, fontWeight: '700', textTransform: 'uppercase' },
   titleRow: {

@@ -1,3 +1,4 @@
+import { lookupCardioExerciseVideoId } from '@/lib/cardioExerciseVideos';
 import { normalizeExerciseName } from '@/lib/exerciseName';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -5,6 +6,11 @@ export interface ExerciseVideoEntry {
   aimharderEjerId?: number;
   name: string;
   youtubeVideoId: string;
+}
+
+export interface ExerciseCatalogEntry {
+  name: string;
+  aimharderEjerId?: number;
 }
 
 export interface ExerciseVideoCatalog {
@@ -37,7 +43,41 @@ export function lookupExerciseVideoId(
     if (byId) return byId;
   }
 
+  const cardioVideoId = lookupCardioExerciseVideoId(name);
+  if (cardioVideoId) return cardioVideoId;
+
   return catalog.byNameKey.get(normalizeExerciseName(name)) ?? null;
+}
+
+export async function fetchExerciseCatalogEntries(): Promise<ExerciseCatalogEntry[]> {
+  if (!isSupabaseConfigured) return [];
+
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('ejercicios_videos')
+    .select('aimharder_ejer_id, name')
+    .order('name');
+
+  if (error || !data) return [];
+
+  return data.map((row) => ({
+    name: row.name,
+    aimharderEjerId: row.aimharder_ejer_id ?? undefined,
+  }));
+}
+
+export function searchExerciseCatalog(
+  query: string,
+  entries: ExerciseCatalogEntry[],
+  limit = 8,
+): ExerciseCatalogEntry[] {
+  const normalized = normalizeExerciseName(query);
+  if (!normalized) return entries.slice(0, limit);
+
+  const matches = entries.filter((entry) => normalizeExerciseName(entry.name).includes(normalized));
+  return matches.slice(0, limit);
 }
 
 export async function fetchExerciseVideoCatalog(): Promise<ExerciseVideoCatalog> {
@@ -74,10 +114,10 @@ export function getYoutubeEmbedUrl(videoId: string): string {
     modestbranding: '1',
     fs: '1',
     enablejsapi: '1',
-    origin: 'https://www.youtube.com',
+    autoplay: '1',
   });
 
-  return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
+  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
 }
 
 export function getYoutubeWatchUrl(videoId: string): string {

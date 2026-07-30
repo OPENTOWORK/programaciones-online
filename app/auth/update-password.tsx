@@ -1,16 +1,47 @@
 import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
+import * as Linking from 'expo-linking';
 
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
-import { waitForRecoverySession } from '@/lib/recoverySession';
+import { useAuth } from '@/hooks/useAuth';
+import { ensureAuthCallbackProcessed, parseAuthCallbackFromUrl } from '@/lib/authCallback';
+import {
+  clearActiveRecoveryUrl,
+  setActiveRecoveryUrl,
+  waitForRecoverySession,
+} from '@/lib/recoverySession';
 import { getSupabase } from '@/lib/supabase';
+import { getWebLocationHref } from '@/lib/platformAccess';
+
+async function resolveRecoveryCallbackUrl(
+  consumePendingAuthCallbackUrl: () => string | null,
+): Promise<string | null> {
+  const pending = consumePendingAuthCallbackUrl();
+  if (pending?.includes('update-password')) {
+    return pending;
+  }
+
+  if (Platform.OS !== 'web') {
+    const initialUrl = await Linking.getInitialURL();
+    if (initialUrl?.includes('update-password')) {
+      return initialUrl;
+    }
+  }
+
+  if (Platform.OS === 'web') {
+    return getWebLocationHref();
+  }
+
+  return pending;
+}
 
 export default function UpdatePasswordScreen() {
   const router = useRouter();
+  const { consumePendingAuthCallbackUrl, getAuthCallbackSnapshot } = useAuth();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,6 +49,7 @@ export default function UpdatePasswordScreen() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,14 +60,55 @@ export default function UpdatePasswordScreen() {
         if (!cancelled) {
           setReady(false);
           setCheckingSession(false);
+          setRecoveryError('Supabase no está disponible.');
         }
         return;
       }
 
-      const hasSession = await waitForRecoverySession(supabase);
+      const callbackUrl = await resolveRecoveryCallbackUrl(consumePendingAuthCallbackUrl);
+      if (callbackUrl) {
+        setActiveRecoveryUrl(callbackUrl);
+
+        const existingFlow = getAuthCallbackSnapshot(callbackUrl);
+        if (existingFlow.status === 'error') {
+          if (!cancelled) {
+            setRecoveryError(existingFlow.sanitizedMessage ?? 'El enlace no es válido o ha caducado.');
+            setReady(false);
+            setCheckingSession(false);
+          }
+          return;
+        }
+
+        if (existingFlow.status !== 'success') {
+          const parsed = parseAuthCallbackFromUrl(callbackUrl);
+          if (parsed.status === 'error') {
+            if (!cancelled) {
+              setRecoveryError(parsed.message);
+              setReady(false);
+              setCheckingSession(false);
+            }
+            return;
+          }
+
+          if (parsed.status === 'pending') {
+            const result = await ensureAuthCallbackProcessed(supabase, callbackUrl);
+            if (!result.ok && !cancelled) {
+              setRecoveryError(result.sanitizedMessage ?? result.error ?? 'El enlace no es válido o ha caducado.');
+              setReady(false);
+              setCheckingSession(false);
+              return;
+            }
+          }
+        }
+      }
+
+      const hasSession = await waitForRecoverySession(supabase, callbackUrl ?? undefined);
       if (!cancelled) {
         setReady(hasSession);
         setCheckingSession(false);
+        if (!hasSession) {
+          setRecoveryError('El enlace ha caducado o no es correcto. Solicita uno nuevo.');
+        }
       }
     }
 
@@ -44,7 +117,7 @@ export default function UpdatePasswordScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [consumePendingAuthCallbackUrl, getAuthCallbackSnapshot]);
 
   const handleUpdate = async () => {
     if (password.length < 6) {
@@ -80,6 +153,7 @@ export default function UpdatePasswordScreen() {
     }
 
     await supabase.auth.signOut({ scope: 'local' });
+    clearActiveRecoveryUrl();
     setSuccessMessage('Contraseña actualizada. Ya puedes iniciar sesión con tu nueva contraseña.');
 
     if (Platform.OS !== 'web') {
@@ -101,7 +175,7 @@ export default function UpdatePasswordScreen() {
       <ScreenWrapper scrollable={false}>
         <Text style={styles.title}>Enlace no válido</Text>
         <Text style={styles.subtitle}>
-          El enlace ha caducado o no es correcto. Solicita uno nuevo desde recuperar contraseña.
+          {recoveryError ?? 'El enlace ha caducado o no es correcto. Solicita uno nuevo desde recuperar contraseña.'}
         </Text>
         <Link href="/auth/forgot-password" style={styles.link}>
           <Text style={styles.linkText}>Solicitar nuevo enlace</Text>

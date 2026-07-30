@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
@@ -13,41 +14,37 @@ const PLAN_ICONS: Partial<Record<ProgramCategory, AppIconName>> = {
   hype: 'intense',
   nutrition: 'measure',
   home_training: 'home',
+  gym_training: 'phase',
 };
 
 interface CategoryTabsProps {
   plans: Plan[];
-  activePlanId: string;
-  onChange: (planId: string) => void;
 }
 
-export function CategoryTabs({ plans, activePlanId, onChange }: CategoryTabsProps) {
+export function CategoryTabs({ plans }: CategoryTabsProps) {
+  const router = useRouter();
+
   return (
     <Card style={styles.card}>
       <Text style={styles.cardTitle}>Tipo de plan</Text>
       <View style={styles.list}>
         {plans.map((plan) => {
-          const isActive = plan.id === activePlanId;
           const icon = PLAN_ICONS[plan.category] ?? 'programs';
 
           return (
             <Pressable
               key={plan.id}
-              onPress={() => onChange(plan.id)}
-              style={({ pressed }) => [
-                styles.option,
-                isActive && styles.optionActive,
-                pressed && !isActive ? styles.optionPressed : null,
-              ]}
+              onPress={() => router.push(`/plan/${plan.id}`)}
+              style={({ pressed }) => [styles.option, pressed && styles.optionPressed]}
             >
-              <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
-                <AppIcon name={icon} size={18} color={isActive ? colors.accent : colors.textMuted} outlined />
+              <View style={styles.iconWrap}>
+                <AppIcon name={icon} size={18} color={colors.textMuted} outlined />
               </View>
-              <Text style={[styles.optionText, isActive && styles.optionTextActive]} numberOfLines={2}>
+              <Text style={styles.optionText} numberOfLines={2}>
                 {plan.label}
               </Text>
-              <View style={[styles.radio, isActive && styles.radioActive]}>
-                {isActive ? <View style={styles.radioDot} /> : null}
+              <View style={styles.radio}>
+                <Text style={styles.chevron}>›</Text>
               </View>
             </Pressable>
           );
@@ -84,12 +81,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surfaceLight,
   },
-  optionActive: {
-    borderColor: `${colors.accent}88`,
-    backgroundColor: `${colors.accent}12`,
-  },
   optionPressed: {
     opacity: 0.88,
+    borderColor: `${colors.accent}55`,
+    backgroundColor: `${colors.accent}08`,
   },
   iconWrap: {
     width: 36,
@@ -99,34 +94,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrapActive: {
-    backgroundColor: `${colors.accent}18`,
-  },
   optionText: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.text,
     fontWeight: '600',
     flex: 1,
-  },
-  optionTextActive: {
-    color: colors.text,
   },
   radio: {
     width: 18,
     height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioActive: {
-    borderColor: colors.accent,
-  },
-  radioDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.accent,
+  chevron: {
+    color: colors.textMuted,
+    fontSize: 22,
+    lineHeight: 22,
+    fontWeight: '600',
   },
 });

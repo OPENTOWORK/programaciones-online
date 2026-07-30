@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -11,27 +11,28 @@ import {
 
 export function useProgressPhotos() {
   const { user, isDemoMode } = useAuth();
+  const userId = user?.id;
   const [photos, setPhotos] = useState<ProgressPhotosState>(emptyProgressPhotos);
   const [isLoading, setIsLoading] = useState(!isDemoMode);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (isDemoMode || !user) {
-      setPhotos(emptyProgressPhotos);
-      setIsLoading(false);
+    if (isDemoMode || !userId) {
+      setPhotos((current) => (current === emptyProgressPhotos ? current : emptyProgressPhotos));
+      setIsLoading((current) => (current ? false : current));
       return;
     }
 
     setIsLoading(true);
     setError(null);
-    const state = await fetchProgressPhotos(user.id);
+    const state = await fetchProgressPhotos(userId);
     setPhotos(state);
     setIsLoading(false);
-  }, [isDemoMode, user]);
+  }, [isDemoMode, userId]);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   const uploadPhoto = useCallback(
@@ -41,7 +42,7 @@ export function useProgressPhotos() {
         return { error: 'Modo demo' };
       }
 
-      if (!user) {
+      if (!userId) {
         setError('Inicia sesión para subir fotos');
         return { error: 'Sin sesión' };
       }
@@ -49,7 +50,7 @@ export function useProgressPhotos() {
       setIsUploading(true);
       setError(null);
 
-      const result = await uploadProgressPhoto(user.id, tipo, imageUri, mimeType);
+      const result = await uploadProgressPhoto(userId, tipo, imageUri, mimeType);
       if (result.error) {
         setError(result.error);
       } else if (result.state) {
@@ -59,7 +60,7 @@ export function useProgressPhotos() {
       setIsUploading(false);
       return result;
     },
-    [isDemoMode, user],
+    [isDemoMode, userId],
   );
 
   return {

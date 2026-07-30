@@ -6,20 +6,21 @@ import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 
 interface MotivationBannerProps {
   message: string;
+  dense?: boolean;
 }
 
-export function MotivationBanner({ message }: MotivationBannerProps) {
+export function MotivationBanner({ message, dense = false }: MotivationBannerProps) {
   return (
     <LinearGradient
       colors={[`${colors.accent}33`, `${colors.accentBlue}22`]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.banner}
+      style={[styles.banner, dense && styles.bannerDense]}
     >
-      <View style={styles.iconWrap}>
-        <AppIcon name="trophy" size={28} color={colors.accent} />
+      <View style={[styles.iconWrap, dense && styles.iconWrapDense]}>
+        <AppIcon name="trophy" size={dense ? 20 : 28} color={colors.accent} />
       </View>
-      <Text style={styles.text}>{message}</Text>
+      <Text style={[styles.text, dense && styles.textDense]}>{message}</Text>
     </LinearGradient>
   );
 }
@@ -48,5 +49,19 @@ const styles = StyleSheet.create({
     color: colors.text,
     flex: 1,
     fontWeight: '500',
+  },
+  bannerDense: {
+    padding: spacing.sm + 2,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  iconWrapDense: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
+  textDense: {
+    ...typography.bodySmall,
+    lineHeight: 18,
   },
 });

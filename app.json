@@ -1,27 +1,33 @@
 {
   "expo": {
-    "name": "Programaciones online",
+    "name": "Training ProgLine",
     "slug": "programaciones-online",
-    "version": "1.0.0",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "programaciones-online",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.trainingprogline.app"
     },
     "android": {
+      "package": "com.trainingprogline.app",
+      "versionCode": 9,
       "adaptiveIcon": {
         "backgroundColor": "#0F1419",
-        "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "single",
+      "lang": "es",
+      "themeColor": "#0F1419",
+      "description": "Entrenamientos y programaciones personalizadas de Training ProgLine.",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
@@ -38,6 +44,12 @@
         "expo-image-picker",
         {
           "photosPermission": "La app necesita acceder a tus fotos para registrar tu progreso físico."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "La app necesita el micrófono para grabar notas de voz de feedback."
         }
       ]
     ],

@@ -10,15 +10,17 @@ export interface Plan {
 
 export const APP_SERVICE_PLANS: Plan[] = [
   { id: 'plan-nutrition', label: 'Nutrición', category: 'nutrition' },
-  { id: 'plan-home-training', label: 'Entrenamiento personal', category: 'home_training' },
+  { id: 'plan-home-training', label: 'Entrenamiento personal en tu domicilio', category: 'home_training' },
+  { id: 'plan-gym-training', label: 'Programación para tu gimnasio', category: 'gym_training' },
 ];
 
 export const PLAN_DISPLAY_LABELS: Record<ProgramCategory, string> = {
-  personalized: 'Personalizado',
+  personalized: 'Entrenamiento personalizado',
   standard: 'Estándar',
   hype: 'Hype / Intensivas',
   nutrition: 'Nutrición',
-  home_training: 'Entrenamiento personal',
+  home_training: 'Entrenamiento personal en tu domicilio',
+  gym_training: 'Programación para tu gimnasio',
 };
 
 export function isTrainerEditableCategory(category?: ProgramCategory) {
@@ -49,6 +51,10 @@ function mapPlanCategory(descripcion: string): ProgramCategory {
 
   if (normalized.includes('domicilio') || normalized.includes('casa') || normalized.includes('entrenamiento personal')) {
     return 'home_training';
+  }
+
+  if (normalized.includes('gimnasio')) {
+    return 'gym_training';
   }
 
   if (normalized.includes('hype') || normalized.includes('intensiv')) {
@@ -99,7 +105,7 @@ function inferLevel(category: ProgramCategory): Program['level'] {
 }
 
 function mapPrograma(
-  row: { id: string; name: string; id_planes: string },
+  row: { id: string; name: string; id_planes: string; descripcion?: string | null },
   planLabel: string,
 ): Program {
   const category = mapPlanCategory(planLabel);
@@ -115,11 +121,55 @@ function mapPrograma(
     sessionsPerWeek: 3,
     status: 'disponible',
     icon: inferIcon(row.name),
-    description: `Programación del plan ${planLabel}.`,
+    description: row.descripcion?.trim() || `Programación del plan ${planLabel}.`,
     equipment: [],
     trainingDays: [],
     weeks: [],
   };
+}
+
+export function mapProgramFromJoin(
+  row: { id: string; name: string; id_planes: string; descripcion?: string | null },
+  planLabel: string,
+): Program {
+  return mapPrograma(row, planLabel);
+}
+
+export async function fetchProgramsByIds(programIds: string[]): Promise<Map<string, Program>> {
+  const uniqueIds = [...new Set(programIds.filter(Boolean))];
+  if (!isSupabaseConfigured || uniqueIds.length === 0) {
+    return new Map();
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) return new Map();
+
+  const { data, error } = await supabase
+    .from('programas')
+    .select('id, name, id_planes, descripcion, planes(descripcion)')
+    .in('id', uniqueIds);
+
+  if (error || !data) return new Map();
+
+  const programs = new Map<string, Program>();
+  for (const row of data) {
+    const plan = Array.isArray(row.planes) ? row.planes[0] : row.planes;
+    const planLabel = (plan as { descripcion?: string } | null)?.descripcion ?? '';
+    programs.set(
+      row.id,
+      mapPrograma(
+        {
+          id: row.id,
+          name: row.name,
+          id_planes: row.id_planes,
+          descripcion: row.descripcion,
+        },
+        planLabel,
+      ),
+    );
+  }
+
+  return programs;
 }
 
 export async function fetchPlansAndPrograms(): Promise<{ plans: Plan[]; programs: Program[] }> {
@@ -135,7 +185,7 @@ export async function fetchPlansAndPrograms(): Promise<{ plans: Plan[]; programs
   const [{ data: planes, error: planesError }, { data: programas, error: programasError }] =
     await Promise.all([
       supabase.from('planes').select('id, descripcion').order('descripcion'),
-      supabase.from('programas').select('id, name, id_planes').order('name'),
+      supabase.from('programas').select('id, name, id_planes, descripcion').order('name'),
     ]);
 
   if (planesError) {
@@ -169,7 +219,7 @@ export async function fetchProgramById(programId: string): Promise<Program | nul
 
   const { data, error } = await supabase
     .from('programas')
-    .select('id, name, id_planes, planes(descripcion)')
+    .select('id, name, id_planes, descripcion, planes(descripcion)')
     .eq('id', programId)
     .maybeSingle();
 
@@ -179,7 +229,12 @@ export async function fetchProgramById(programId: string): Promise<Program | nul
   const planLabel = (plan as { descripcion?: string } | null)?.descripcion ?? '';
 
   return mapPrograma(
-    { id: data.id, name: data.name, id_planes: data.id_planes },
+    {
+      id: data.id,
+      name: data.name,
+      id_planes: data.id_planes,
+      descripcion: data.descripcion,
+    },
     planLabel,
   );
 }

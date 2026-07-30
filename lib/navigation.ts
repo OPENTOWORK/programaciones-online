@@ -1,6 +1,19 @@
-import type { Href, Router } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 
-export function safeGoBack(router: Router, fallback: Href = '/tabs/home') {
+import { isTrainerDesktopWeb } from '@/lib/platformAccess';
+import type { UserRole } from '@/lib/types';
+
+type AppRouter = ReturnType<typeof useRouter>;
+
+export function getPostLoginRoute(role?: UserRole): '/tabs/programs' | '/tabs/home' {
+  if (isTrainerDesktopWeb(role)) {
+    return '/tabs/programs';
+  }
+
+  return '/tabs/home';
+}
+
+export function safeGoBack(router: AppRouter, fallback: Href = '/tabs/home') {
   if (router.canGoBack()) {
     router.back();
     return;

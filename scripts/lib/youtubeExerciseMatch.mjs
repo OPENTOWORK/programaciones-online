@@ -19,8 +19,6 @@ const STOP_WORDS = new Set([
 const SKIP_EXERCISE_KEYS = new Set([
   'descanso rest',
   'rest',
-  'any cardio mach metros',
-  'any cardio mach cal',
   'texto libre',
 ]);
 

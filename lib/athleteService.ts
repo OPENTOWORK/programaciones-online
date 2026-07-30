@@ -1,6 +1,6 @@
 import type { AthleteSummary, FitnessLevel, ProgramGoal, UserRole } from '@/lib/types';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import { fetchUnansweredMessageCounts } from '@/lib/trainerService';
+import { fetchTrainerAthleteAlerts } from '@/lib/trainerAthleteAlerts';
 
 const PERFIL_TABLE = 'Perfil';
 
@@ -87,11 +87,16 @@ export async function fetchAthletes(): Promise<AthleteSummary[]> {
     }
   }
 
-  const unansweredCounts = await fetchUnansweredMessageCounts(athleteIds);
+  const alertsByAthlete = await fetchTrainerAthleteAlerts(athleteIds);
 
   return data.map((row) => {
     const athlete = mapAthleteRow(row, programNames.get(row.id as string));
-    return { ...athlete, unansweredCount: unansweredCounts[row.id as string] ?? 0 };
+    const alerts = alertsByAthlete[row.id as string];
+    return {
+      ...athlete,
+      alerts,
+      unansweredCount: alerts?.total ?? 0,
+    };
   });
 }
 
@@ -125,7 +130,15 @@ export async function fetchAthleteById(athleteId: string): Promise<AthleteSummar
     ? activeProgram?.programas[0]
     : activeProgram?.programas;
 
-  return mapAthleteRow(profile, program?.name ? String(program.name) : undefined);
+  const athlete = mapAthleteRow(profile, program?.name ? String(program.name) : undefined);
+  const alertsByAthlete = await fetchTrainerAthleteAlerts([athleteId]);
+  const alerts = alertsByAthlete[athleteId];
+
+  return {
+    ...athlete,
+    alerts,
+    unansweredCount: alerts?.total ?? 0,
+  };
 }
 
 export function isTrainerRole(role?: UserRole) {

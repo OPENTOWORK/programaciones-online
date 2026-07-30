@@ -3,10 +3,13 @@ import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
+import { PrivacyPolicyLink } from '@/components/legal/PrivacyPolicyLink';
 import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
+import { isWebPlatform } from '@/lib/platformAccess';
 import { useAuth } from '@/hooks/useAuth';
+import { getPostLoginRoute } from '@/lib/navigation';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -16,6 +19,7 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const validate = () => {
@@ -32,20 +36,59 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!validate()) return;
+
+    setFormError(null);
     setLoading(true);
-    const { error } = await signUp(email.trim(), password, name.trim());
-    setLoading(false);
-    if (error) {
-      Alert.alert('Error', error);
-      return;
+
+    try {
+      const { error, profile, needsEmailConfirmation } = await signUp(email.trim(), password, name.trim());
+
+      if (needsEmailConfirmation) {
+        router.replace(`/auth/confirm-email?pending=1&email=${encodeURIComponent(email.trim())}`);
+        return;
+      }
+
+      if (error) {
+        setFormError(error);
+        if (!isWebPlatform()) {
+          Alert.alert('Error', error);
+        }
+        return;
+      }
+
+      if (profile) {
+        router.replace(getPostLoginRoute(profile.role));
+        return;
+      }
+
+      setFormError('No se pudo completar el registro. Inténtalo de nuevo.');
+    } catch (registerError) {
+      const message =
+        registerError instanceof Error ? registerError.message : 'No se pudo completar el registro.';
+      setFormError(message);
+      if (!isWebPlatform()) {
+        Alert.alert('Error', message);
+      }
+    } finally {
+      setLoading(false);
     }
-    router.replace('/tabs/home');
   };
+
+  const isWeb = isWebPlatform();
 
   return (
     <ScreenWrapper>
       <Text style={styles.title}>Crear cuenta</Text>
-      <Text style={styles.subtitle}>Empieza tu transformación hoy</Text>
+      <Text style={styles.subtitle}>
+        {isWeb ? 'Crea tu cuenta y accede según tu rol' : 'Empieza tu transformación hoy'}
+      </Text>
+
+      {isWeb ? (
+        <Text style={styles.webNote}>
+          Los entrenadores usan el panel web. Los atletas pueden entrar desde el navegador en versión móvil o desde la app
+          de Android.
+        </Text>
+      ) : null}
 
       <Input label="Nombre" placeholder="Tu nombre" value={name} onChangeText={setName} error={errors.name} />
       <Input
@@ -76,6 +119,19 @@ export default function RegisterScreen() {
         error={errors.confirm}
       />
 
+      <PrivacyPolicyLink />
+
+      {formError ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{formError}</Text>
+          {formError.includes('ya está registrado') ? (
+            <Link href="/auth/login" style={styles.errorLink}>
+              <Text style={styles.linkAccent}>Ir a iniciar sesión</Text>
+            </Link>
+          ) : null}
+        </View>
+      ) : null}
+
       <Button title="Registrarse" onPress={handleRegister} loading={loading} />
 
       <View style={styles.footer}>
@@ -90,7 +146,30 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   title: { ...typography.h1, color: colors.text, marginBottom: spacing.xs },
-  subtitle: { ...typography.bodySmall, color: colors.textSecondary, marginBottom: spacing.lg },
+  subtitle: { ...typography.bodySmall, color: colors.textSecondary, marginBottom: spacing.md },
+  webNote: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
+  errorBanner: {
+    backgroundColor: `${colors.danger}22`,
+    borderColor: colors.danger,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  errorText: {
+    ...typography.bodySmall,
+    color: colors.danger,
+    lineHeight: 20,
+  },
+  errorLink: {
+    alignSelf: 'flex-start',
+  },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },
   footerText: { ...typography.bodySmall, color: colors.textSecondary },
   linkAccent: { ...typography.bodySmall, color: colors.accent, fontWeight: '600' },

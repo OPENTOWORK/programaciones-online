@@ -6,6 +6,7 @@ import { AppIcon } from '@/components/ui/AppIcon';
 import { colors } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import { useAuth } from '@/hooks/useAuth';
+import { isTrainerDesktopWeb } from '@/lib/platformAccess';
 
 function TabIcon({ name, focused }: { name: AppIconName; focused: boolean }) {
   return (
@@ -36,16 +37,22 @@ export default function TabLayout() {
     return <Redirect href="/auth/login" />;
   }
 
+  const isTrainerWeb = isTrainerDesktopWeb(user?.role);
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          ...styles.tabBar,
-          height: 56 + insets.bottom,
-          paddingBottom: Math.max(insets.bottom, 8),
-          paddingTop: 8,
-        },
+        lazy: true,
+        freezeOnBlur: true,
+        tabBarStyle: isTrainerWeb
+          ? { display: 'none', height: 0 }
+          : {
+              ...styles.tabBar,
+              height: 56 + insets.bottom,
+              paddingBottom: Math.max(insets.bottom, 8),
+              paddingTop: 8,
+            },
         tabBarItemStyle: styles.tabBarItem,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,

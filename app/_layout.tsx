@@ -3,21 +3,47 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
-import { AuthProvider } from '@/hooks/useAuth';
-import { MobileShell } from '@/components/ui/MobileShell';
+import { AuthProvider, useAuth } from '@/hooks/useAuth';
+import { ProgramsProvider } from '@/hooks/usePrograms';
+import { AppShell } from '@/components/ui/AppShell';
 import { colors } from '@/constants/theme';
+import { logAppRuntimeInfo, logReleaseDiagnostic, logReleaseError } from '@/lib/releaseDiagnostics';
 
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+type NativeErrorUtils = {
+  getGlobalHandler: () => ((error: Error, isFatal?: boolean) => void) | undefined;
+  setGlobalHandler: (handler: (error: Error, isFatal?: boolean) => void) => void;
+};
+
+function installGlobalErrorHandlers() {
+  const errorUtils = (globalThis as typeof globalThis & { ErrorUtils?: NativeErrorUtils }).ErrorUtils;
+  if (errorUtils) {
+    const previousHandler = errorUtils.getGlobalHandler();
+    errorUtils.setGlobalHandler((error, isFatal) => {
+      logReleaseError('global_js_error', error, { isFatal });
+      previousHandler?.(error, isFatal);
+    });
+  }
+}
+
+installGlobalErrorHandlers();
+logReleaseDiagnostic('app_start');
+logAppRuntimeInfo();
+
+function RootNavigator() {
+  const { isLoading } = useAuth();
+
   useEffect(() => {
-    SplashScreen.hideAsync();
-  }, []);
+    if (!isLoading) {
+      void SplashScreen.hideAsync();
+    }
+  }, [isLoading]);
 
   return (
-    <AuthProvider>
+    <>
       <StatusBar style="light" />
-      <MobileShell>
+      <AppShell>
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: colors.surface },
@@ -30,16 +56,38 @@ export default function RootLayout() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="auth" options={{ headerShown: false }} />
           <Stack.Screen name="tabs" options={{ headerShown: false }} />
+          <Stack.Screen name="plan/[id]" options={{ title: 'Programación' }} />
           <Stack.Screen name="program/[id]" options={{ title: 'Programación' }} />
           <Stack.Screen name="workout/[id]" options={{ title: 'Sesión' }} />
+          <Stack.Screen name="calendar/[date]" options={{ title: 'Día de entreno' }} />
+          <Stack.Screen name="athlete/plan/[id]/session" options={{ title: 'Sesión del plan' }} />
           <Stack.Screen name="profile/edit" options={{ title: 'Editar perfil' }} />
+          <Stack.Screen name="profile/intake-form" options={{ title: 'Formulario de bienvenida' }} />
+          <Stack.Screen name="legal/privacy" options={{ title: 'Política de privacidad' }} />
           <Stack.Screen name="trainer/athlete/[id]" options={{ title: 'Ficha del atleta' }} />
+          <Stack.Screen name="trainer/athlete/[id]/log/[logId]" options={{ title: 'Registro de sesión' }} />
           <Stack.Screen name="trainer/chat/[id]" options={{ title: 'Chat con atleta' }} />
           <Stack.Screen name="trainer/plan/create" options={{ title: 'Nuevo plan' }} />
+          <Stack.Screen name="trainer/plan/[id]" options={{ title: 'Plan del atleta' }} />
+          <Stack.Screen name="trainer/template/[id]" options={{ title: 'Plantilla de sesión' }} />
+          <Stack.Screen name="trainer/program/create" options={{ title: 'Nueva programación' }} />
           <Stack.Screen name="trainer/program/[id]/edit" options={{ title: 'Editar programación' }} />
+          <Stack.Screen name="trainer/program/[id]/session/[workoutId]" options={{ title: 'Editar sesión' }} />
+          <Stack.Screen name="trainer/preview/session" options={{ title: 'Vista previa de sesión' }} />
+          <Stack.Screen name="trainer/preview/day/[date]" options={{ title: 'Vista previa del día' }} />
           <Stack.Screen name="+not-found" />
         </Stack>
-      </MobileShell>
+      </AppShell>
+    </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <ProgramsProvider>
+        <RootNavigator />
+      </ProgramsProvider>
     </AuthProvider>
   );
 }

@@ -1,20 +1,32 @@
-import { fetchProgramById } from '@/lib/programService';
+import { fetchProgramsByIds, mapProgramFromJoin } from '@/lib/programService';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import type { ActiveProgramSummary, UserActiveProgram } from '@/lib/types';
-import { fetchWorkoutsByProgram } from '@/lib/workoutService';
+import type { ActiveProgramSummary, Program, UserActiveProgram } from '@/lib/types';
+import { fetchWorkoutStubsByPrograms, stubToWorkout } from '@/lib/workoutService';
 
 const USER_PROGRAMS_TABLE = 'user_programs';
 export const MAX_ACTIVE_PROGRAMS = 3;
 
-async function mapProgramRow(programId: string, nameFromJoin?: string | null): Promise<UserActiveProgram> {
-  const fullProgram = await fetchProgramById(programId);
+type ProgramJoinRow = {
+  id: string;
+  name: string;
+  id_planes: string;
+  descripcion?: string | null;
+  planes?: { descripcion?: string } | { descripcion?: string }[] | null;
+};
 
+function planLabelFromJoin(row: ProgramJoinRow | null | undefined) {
+  if (!row?.planes) return '';
+  const plan = Array.isArray(row.planes) ? row.planes[0] : row.planes;
+  return plan?.descripcion ?? '';
+}
+
+function toUserActiveProgram(program: Program): UserActiveProgram {
   return {
-    id: programId,
-    name: String(nameFromJoin ?? fullProgram?.name ?? 'Programación'),
-    duration: fullProgram?.duration ?? 'Por definir',
-    sessionsPerWeek: fullProgram?.sessionsPerWeek ?? 3,
-    icon: fullProgram?.icon,
+    id: program.id,
+    name: program.name,
+    duration: program.duration,
+    sessionsPerWeek: program.sessionsPerWeek,
+    icon: program.icon,
   };
 }
 
@@ -26,7 +38,7 @@ export async function fetchActiveProgramsForUser(userId: string): Promise<UserAc
 
   const { data, error } = await supabase
     .from(USER_PROGRAMS_TABLE)
-    .select('program_id, started_at, programas(name)')
+    .select('program_id, started_at, programas(id, name, id_planes, descripcion, planes(descripcion))')
     .eq('user_id', userId)
     .eq('status', 'activa')
     .order('started_at', { ascending: true })
@@ -34,12 +46,24 @@ export async function fetchActiveProgramsForUser(userId: string): Promise<UserAc
 
   if (error || !data) return [];
 
-  return Promise.all(
-    data.map((row) => {
+  return data
+    .map((row) => {
       const programRow = Array.isArray(row.programas) ? row.programas[0] : row.programas;
-      return mapProgramRow(row.program_id, programRow?.name as string | null);
-    }),
-  );
+      if (!programRow) return null;
+
+      const program = mapProgramFromJoin(
+        {
+          id: programRow.id,
+          name: programRow.name,
+          id_planes: programRow.id_planes,
+          descripcion: programRow.descripcion,
+        },
+        planLabelFromJoin(programRow as ProgramJoinRow),
+      );
+
+      return toUserActiveProgram(program);
+    })
+    .filter((program): program is UserActiveProgram => program !== null);
 }
 
 export async function fetchActiveProgramForUser(userId: string): Promise<UserActiveProgram | undefined> {
@@ -47,53 +71,49 @@ export async function fetchActiveProgramForUser(userId: string): Promise<UserAct
   return programs[0];
 }
 
-async function buildActiveProgramSummary(
-  activeProgram: UserActiveProgram,
-  completedEntrenoIds: Set<string>,
-): Promise<ActiveProgramSummary | null> {
-  const program = await fetchProgramById(activeProgram.id);
-  if (!program) return null;
-
-  const workouts = await fetchWorkoutsByProgram(activeProgram.id);
-  if (workouts.length === 0) return null;
-
-  const programWorkoutIds = new Set(workouts.map((workout) => workout.id));
-  const completedSessions = [...completedEntrenoIds].filter((id) => programWorkoutIds.has(id)).length;
-  const nextWorkout = workouts.find((workout) => !completedEntrenoIds.has(workout.id)) ?? workouts[0];
-
-  return {
-    program: { ...program, status: 'activa' },
-    nextWorkout,
-    completedSessions,
-    totalSessions: Math.max(workouts.length, 1),
-  };
-}
-
 export async function fetchActiveProgramSummaries(userId: string): Promise<ActiveProgramSummary[]> {
   const activePrograms = await fetchActiveProgramsForUser(userId);
   if (activePrograms.length === 0) return [];
 
+  const programIds = activePrograms.map((program) => program.id);
   const supabase = getSupabase();
+
+  const [{ data: logs }, programsById, workoutsByProgram] = await Promise.all([
+    supabase
+      ? supabase.from('workout_logs').select('entreno_id').eq('user_id', userId)
+      : Promise.resolve({ data: [] as { entreno_id: string | null }[] }),
+    fetchProgramsByIds(programIds),
+    fetchWorkoutStubsByPrograms(programIds),
+  ]);
+
   const completedEntrenoIds = new Set<string>();
-
-  if (supabase) {
-    const { data: logs } = await supabase
-      .from('workout_logs')
-      .select('entreno_id')
-      .eq('user_id', userId);
-
-    for (const log of logs ?? []) {
-      if (log.entreno_id) {
-        completedEntrenoIds.add(log.entreno_id);
-      }
+  for (const log of logs ?? []) {
+    if (log.entreno_id) {
+      completedEntrenoIds.add(log.entreno_id);
     }
   }
 
-  const summaries = await Promise.all(
-    activePrograms.map((activeProgram) => buildActiveProgramSummary(activeProgram, completedEntrenoIds)),
-  );
+  const summaries: ActiveProgramSummary[] = [];
 
-  return summaries.filter((summary): summary is ActiveProgramSummary => summary !== null);
+  for (const activeProgram of activePrograms) {
+    const program = programsById.get(activeProgram.id);
+    const workoutStubs = workoutsByProgram.get(activeProgram.id) ?? [];
+    if (!program || workoutStubs.length === 0) continue;
+
+    const programWorkoutIds = new Set(workoutStubs.map((workout) => workout.id));
+    const completedSessions = [...completedEntrenoIds].filter((id) => programWorkoutIds.has(id)).length;
+    const nextStub =
+      workoutStubs.find((workout) => !completedEntrenoIds.has(workout.id)) ?? workoutStubs[0];
+
+    summaries.push({
+      program: { ...program, status: 'activa' },
+      nextWorkout: stubToWorkout(nextStub),
+      completedSessions,
+      totalSessions: Math.max(workoutStubs.length, 1),
+    });
+  }
+
+  return summaries;
 }
 
 export async function fetchActiveProgramSummary(userId: string): Promise<ActiveProgramSummary | null> {

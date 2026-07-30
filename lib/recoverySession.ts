@@ -1,30 +1,68 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export function hasRecoveryUrlParams() {
-  if (typeof window === 'undefined') {
-    return false;
+import { ensureAuthCallbackProcessed, parseAuthCallbackFromUrl } from '@/lib/authCallback';
+import { getWebLocation, getWebLocationHref, isWebPlatform } from '@/lib/platformAccess';
+import { isAuthDeepLinkUrl, parseSupabaseAuthCallbackUrl } from '@/lib/supabaseAuthCallbackUrl';
+
+let activeRecoveryUrl: string | null = null;
+
+export function setActiveRecoveryUrl(url: string | null) {
+  activeRecoveryUrl = url?.trim() || null;
+}
+
+export function clearActiveRecoveryUrl() {
+  activeRecoveryUrl = null;
+}
+
+export function hasRecoveryUrlParams(callbackUrl?: string | null) {
+  const url = callbackUrl ?? activeRecoveryUrl;
+  if (!url) {
+    const location = getWebLocation();
+    if (!location) {
+      return false;
+    }
+    const { hash, search, pathname } = location;
+    return (
+      pathname.includes('update-password') ||
+      hash.includes('type=recovery') ||
+      search.includes('type=recovery') ||
+      search.includes('code=')
+    );
   }
 
-  const { hash, search, pathname } = window.location;
-  return (
-    pathname.includes('update-password') ||
-    hash.includes('type=recovery') ||
-    search.includes('type=recovery') ||
-    search.includes('code=')
-  );
+  const parsed = parseSupabaseAuthCallbackUrl(url);
+  return parsed.callbackType === 'recovery' || url.includes('update-password') || parsed.hasCode;
 }
 
 export async function waitForRecoverySession(
   supabase: SupabaseClient,
+  callbackUrl?: string | null,
   timeoutMs = 8000,
 ): Promise<boolean> {
+  const url = callbackUrl ?? activeRecoveryUrl;
+
+  if (url && isAuthDeepLinkUrl(url)) {
+    const result = await ensureAuthCallbackProcessed(supabase, url, timeoutMs);
+    if (result.ok) {
+      return true;
+    }
+  }
+
   const { data: initial } = await supabase.auth.getSession();
   if (initial.session) {
     return true;
   }
 
-  if (!hasRecoveryUrlParams()) {
+  if (!hasRecoveryUrlParams(url)) {
     return false;
+  }
+
+  if (isWebPlatform()) {
+    const href = getWebLocationHref();
+    if (href) {
+      const webResult = await ensureAuthCallbackProcessed(supabase, href, timeoutMs);
+      return webResult.ok;
+    }
   }
 
   return new Promise((resolve) => {
@@ -67,4 +105,12 @@ export async function waitForRecoverySession(
 
     const timer = setTimeout(() => finish(false), timeoutMs);
   });
+}
+
+export function parseRecoveryCallbackResult(callbackUrl?: string | null) {
+  const url = callbackUrl ?? activeRecoveryUrl ?? getWebLocationHref();
+  if (!url) {
+    return { status: 'idle' as const };
+  }
+  return parseAuthCallbackFromUrl(url);
 }
