@@ -42,10 +42,28 @@ function Sync-ProjectToShortPath {
     }
   }
 
-  if (-not (Test-Path (Join-Path $buildRoot "node_modules"))) {
-    if (Test-Path (Join-Path $sourceRoot "node_modules")) {
+  $sourceModules = Join-Path $sourceRoot "node_modules"
+  $targetModules = Join-Path $buildRoot "node_modules"
+
+  if (-not (Test-Path $targetModules)) {
+    if (Test-Path $sourceModules) {
       Write-Host "Copiando node_modules (solo la primera vez puede tardar)..."
-      Copy-Item -Path (Join-Path $sourceRoot "node_modules") -Destination (Join-Path $buildRoot "node_modules") -Recurse -Force
+      Copy-Item -Path $sourceModules -Destination $targetModules -Recurse -Force
+    }
+  }
+  elseif (Test-Path $sourceModules) {
+    # Las dependencias nuevas no llegan solas a la copia: sin esto prebuild falla al resolver plugins.
+    $declared = (Get-Content (Join-Path $sourceRoot "package.json") -Raw | ConvertFrom-Json).dependencies.PSObject.Properties.Name
+    foreach ($dependency in $declared) {
+      $target = Join-Path $targetModules $dependency
+      if (Test-Path $target) { continue }
+
+      $source = Join-Path $sourceModules $dependency
+      if (-not (Test-Path $source)) { continue }
+
+      Write-Host "Copiando dependencia nueva: $dependency"
+      New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+      Copy-Item -Path $source -Destination $target -Recurse -Force
     }
   }
 
