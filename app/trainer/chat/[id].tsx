@@ -49,6 +49,7 @@ export default function TrainerAthleteChatScreen() {
           newMessage={newMessage}
           onChangeMessage={setNewMessage}
           onSend={handleSendMessage}
+          viewerRole="trainer"
         />
       </View>
     </ScreenWrapper>

@@ -18,6 +18,8 @@ interface TrainerChatPanelProps {
   onSend: () => void;
   disabled?: boolean;
   disabledMessage?: string;
+  /** Quién está viendo el chat: sus mensajes van a la derecha y en color de acento. */
+  viewerRole?: TrainerMessage['sender'];
 }
 
 export function TrainerChatPanel({
@@ -32,6 +34,7 @@ export function TrainerChatPanel({
   onSend,
   disabled = false,
   disabledMessage,
+  viewerRole = 'user',
 }: TrainerChatPanelProps) {
   return (
     <View style={styles.container}>
@@ -52,13 +55,14 @@ export function TrainerChatPanel({
           ) : (
             messages.map((msg) => {
               const isFeedback = msg.origin === 'feedback';
+              const isOwn = msg.sender === viewerRole;
 
               return (
                 <View
                   key={msg.id}
                   style={[
                     styles.bubble,
-                    msg.sender === 'user' ? styles.bubbleUser : styles.bubbleTrainer,
+                    isOwn ? styles.bubbleOwn : styles.bubbleOther,
                     isFeedback && styles.bubbleFeedback,
                     isFeedback && styles.bubbleWide,
                   ]}
@@ -71,7 +75,7 @@ export function TrainerChatPanel({
                   ) : null}
 
                   {msg.text ? (
-                    <Text style={[styles.bubbleText, msg.sender === 'user' ? styles.bubbleTextUser : null]}>
+                    <Text style={[styles.bubbleText, isOwn && !isFeedback ? styles.bubbleTextOwn : null]}>
                       {msg.text}
                     </Text>
                   ) : null}
@@ -124,11 +128,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     marginBottom: spacing.sm,
   },
-  bubbleTrainer: {
+  bubbleOther: {
     alignSelf: 'flex-start',
     backgroundColor: colors.surfaceLight,
   },
-  bubbleUser: {
+  bubbleOwn: {
     alignSelf: 'flex-end',
     backgroundColor: colors.accent,
   },
@@ -152,7 +156,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   bubbleText: { ...typography.body, color: colors.text },
-  bubbleTextUser: { color: colors.black },
+  bubbleTextOwn: { color: colors.black },
   inputRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xl },
   input: {
     flex: 1,
