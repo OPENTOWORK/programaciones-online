@@ -3,11 +3,12 @@ import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-nativ
 import { useState } from 'react';
 
 import { ProfileLoadError } from '@/components/auth/ProfileLoadError';
+import { LandingScreen } from '@/components/landing/LandingScreen';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/hooks/useAuth';
 import { parseAuthCallbackResult } from '@/lib/authCallback';
 import { getPostLoginRoute } from '@/lib/navigation';
-import { isTrainerDesktopWeb } from '@/lib/platformAccess';
+import { isTrainerDesktopWeb, isWebPlatform } from '@/lib/platformAccess';
 import { colors, spacing, typography } from '@/constants/theme';
 
 export default function Index() {
@@ -69,6 +70,11 @@ export default function Index() {
       return <Redirect href={getPostLoginRoute(user.role)} />;
     }
     return <Redirect href={getPostLoginRoute(user.role)} />;
+  }
+
+  // En la app nativa ya se ha descargado, así que la portada solo tiene sentido en web.
+  if (isWebPlatform()) {
+    return <LandingScreen />;
   }
 
   return <Redirect href="/auth/login" />;
