@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
@@ -15,12 +15,22 @@ import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
 import { useTrainerCrmActivity } from '@/hooks/useTrainerCrmActivity';
 import { fetchAthletePlansForAthlete } from '@/lib/athletePlanService';
-import { splitAssignedPlans, type PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
+import {
+  createPersonalizedPlanPreviewProgram,
+  parsePersonalizedPlanContent,
+  serializePersonalizedPlanContent,
+} from '@/lib/personalizedPlanContent';
+import { getNextSessionNumber, groupPersonalizedPlans, splitAssignedPlans, type PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
+import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
+import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
+import { formatScheduleSummary, toWeekdayIndex } from '@/lib/sessionSchedule';
+import { createEmptySessionDraft } from '@/lib/trainerSessionDraft';
 import { fetchAthleteSessionLogs } from '@/lib/sessionLogService';
 import { markAthleteDetailAlertsRead } from '@/lib/trainerAthleteAlerts';
 import type { AthletePlan } from '@/lib/types';
 import { AthleteSessionLogCard } from '@/components/trainer/AthleteSessionLogCard';
 import { AthleteFeedbackPanel } from '@/components/trainer/AthleteFeedbackPanel';
+import { ScheduleCalendarModal } from '@/components/trainer/ScheduleCalendarModal';
 import { AssignedPlansList } from '@/components/program/AssignedPlansList';
 import { IntakeAnswersTable } from '@/components/trainer/IntakeAnswersTable';
 
@@ -54,7 +64,7 @@ export default function AthleteDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const { removePlan } = useTrainerAthletePlans();
+  const { removePlan, createPlan, updatePlan } = useTrainerAthletePlans();
   const { athlete, isLoading, refresh: refreshAthlete } = useAthlete(id ?? '');
   const {
     entries: activityEntries,
@@ -70,6 +80,7 @@ export default function AthleteDetailScreen() {
   const [plansLoading, setPlansLoading] = useState(true);
   const [logsLoading, setLogsLoading] = useState(true);
   const [planActionError, setPlanActionError] = useState<string | null>(null);
+  const [calendarGroup, setCalendarGroup] = useState<PersonalizedPlanGroup | null>(null);
 
   const loadAssignedPlans = useCallback(async () => {
     if (!id || !user?.id) {
@@ -184,6 +195,106 @@ export default function AthleteDetailScreen() {
       pathname: '/trainer/plan/[id]',
       params: { id: firstSession.id, edit: 'group' },
     });
+  };
+
+  const calendarSource = useMemo<ScheduleCalendarSource>(
+    () => ({
+      program: createPersonalizedPlanPreviewProgram(calendarGroup?.title ?? 'Plan personalizado'),
+      workouts: [],
+      draft: createEmptySessionDraft(0),
+      isNewSession: false,
+      athleteSchedule: { plans: calendarGroup?.sessions ?? [], workouts: [] },
+    }),
+    [calendarGroup],
+  );
+
+  /** El calendario del atleta identifica cada sesión como `plan:<id>:<fecha>`. */
+  const loadCalendarSessionDraft = (item: SchedulePreviewItem) => {
+    const planId = item.id.startsWith('plan:') ? item.id.split(':')[1] : undefined;
+    const session = calendarGroup?.sessions.find((entry) => entry.id === planId);
+    if (!session) return null;
+    return parsePersonalizedPlanContent(session.content, (session.sessionNumber ?? 1) - 1);
+  };
+
+  const planIdFromCalendarItem = (item: SchedulePreviewItem) =>
+    item.id.startsWith('plan:') ? item.id.split(':')[1] : undefined;
+
+  const refreshCalendarGroup = useCallback(async () => {
+    if (!calendarGroup || !id || !user?.id) return;
+
+    const plans = await fetchAthletePlansForAthlete(id, user.id);
+    setAssignedPlans(plans);
+
+    const group = groupPersonalizedPlans(plans).find(
+      (entry) => entry.id === calendarGroup.id || entry.planGroupId === calendarGroup.planGroupId,
+    );
+    if (group) setCalendarGroup(group);
+    else setCalendarGroup(null);
+  }, [calendarGroup, id, user?.id]);
+
+  const handleCalendarDelete = async (item: SchedulePreviewItem) => {
+    const planId = planIdFromCalendarItem(item);
+    if (!planId) return 'No se pudo identificar la sesión.';
+
+    const result = await removePlan(planId);
+    if (result.error) return result.error;
+
+    await refreshCalendarGroup();
+    return null;
+  };
+
+  const handleCalendarCopy = async (item: SchedulePreviewItem) => {
+    const planId = planIdFromCalendarItem(item);
+    const source = calendarGroup?.sessions.find((session) => session.id === planId);
+    if (!source || !calendarGroup || !user?.id) return 'No se pudo copiar la sesión.';
+
+    const nextNumber = getNextSessionNumber(calendarGroup.sessions);
+    const draft = parsePersonalizedPlanContent(source.content, (source.sessionNumber ?? 1) - 1);
+    const result = await createPlan({
+      athleteId: source.athleteId,
+      planType: 'personalized',
+      title: calendarGroup.title,
+      content: serializePersonalizedPlanContent({ ...draft, name: `Sesión ${nextNumber}` }, nextNumber),
+      planGroupId: calendarGroup.planGroupId,
+      sessionNumber: nextNumber,
+      athleteName: athlete?.name,
+    });
+
+    if (result.error) return result.error;
+    await refreshCalendarGroup();
+    return null;
+  };
+
+  const handleCalendarMoveToDate = async (item: SchedulePreviewItem, date: Date) => {
+    const planId = planIdFromCalendarItem(item);
+    const source = calendarGroup?.sessions.find((session) => session.id === planId);
+    if (!source) return 'No se pudo mover la sesión.';
+
+    const draft = parsePersonalizedPlanContent(source.content, (source.sessionNumber ?? 1) - 1);
+    const schedule = { ...draft.schedule, weekdays: [toWeekdayIndex(date)] };
+    const updatedDraft = {
+      ...draft,
+      schedule,
+      dayLabel: formatScheduleSummary(schedule),
+    };
+
+    const result = await updatePlan(source.id, {
+      athleteId: source.athleteId,
+      planType: 'personalized',
+      title: source.title,
+      content: serializePersonalizedPlanContent(updatedDraft, source.sessionNumber ?? 1),
+    });
+
+    if (result.error) return result.error;
+    await refreshCalendarGroup();
+    return null;
+  };
+
+  const openCalendarSession = (item: SchedulePreviewItem) => {
+    const planId = item.id.startsWith('plan:') ? item.id.split(':')[1] : undefined;
+    if (!planId) return;
+    setCalendarGroup(null);
+    router.push({ pathname: '/trainer/plan/[id]', params: { id: planId, edit: '1' } });
   };
 
   const openNutritionPlanEditor = (planId: string) => {
@@ -386,6 +497,7 @@ export default function AthleteDetailScreen() {
               onOpenNutritionPlan={(planId) =>
                 router.push({ pathname: '/trainer/plan/[id]', params: { id: planId } })
               }
+              onViewGroupCalendar={setCalendarGroup}
               onEditGroup={openPlanGroupEditor}
               onDeleteSession={handleDeleteSession}
               onDeleteGroup={handleDeleteGroup}
@@ -457,6 +569,19 @@ export default function AthleteDetailScreen() {
         title="Abrir chat"
         onPress={() => router.push({ pathname: '/trainer/chat/[id]', params: { id: athlete.id } })}
         style={styles.chatBtn}
+      />
+
+      <ScheduleCalendarModal
+        visible={calendarGroup !== null}
+        onClose={() => setCalendarGroup(null)}
+        title={calendarGroup?.title ?? 'Calendario del plan'}
+        subtitle={`Sesiones programadas de ${athlete.name}. Despliega una sesión para ver su contenido.`}
+        source={calendarSource}
+        loadSessionDraft={loadCalendarSessionDraft}
+        onSessionEdit={openCalendarSession}
+        onSessionCopy={handleCalendarCopy}
+        onSessionDelete={handleCalendarDelete}
+        onSessionMoveToDate={handleCalendarMoveToDate}
       />
     </ScreenWrapper>
   );

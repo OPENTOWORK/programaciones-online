@@ -53,7 +53,10 @@ export function PersonalizedPlanGroupCard({ group }: PersonalizedPlanGroupCardPr
 
       {group.sessions.length === 1 ? (
         <View style={styles.preview}>
-          <PersonalizedPlanContent content={firstSession.content} />
+          <PersonalizedPlanContent
+            content={firstSession.content}
+            sessionNumber={firstSession.sessionNumber ?? undefined}
+          />
         </View>
       ) : null}
     </Card>

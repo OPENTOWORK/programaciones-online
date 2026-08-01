@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { DraggableLeadCard } from '@/components/trainer/DraggableLeadCard';
@@ -13,7 +13,6 @@ interface CrmColumnProps {
   emptyText?: string;
   canMoveLeft: boolean;
   canMoveRight: boolean;
-  isDragActive: boolean;
   isDropTarget: boolean;
   columnRef: (node: View | null) => void;
   onOpenColumnActions: () => void;
@@ -32,7 +31,6 @@ export function CrmColumn({
   emptyText = 'Sin atletas en esta columna',
   canMoveLeft,
   canMoveRight,
-  isDragActive,
   isDropTarget,
   columnRef,
   onOpenColumnActions,
@@ -59,12 +57,11 @@ export function CrmColumn({
         <AppIcon name="menuDots" size={16} color={colors.textMuted} />
       </Pressable>
 
-      <ScrollView
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        scrollEnabled={!isDragActive}
-      >
+      {stage.roleSlug === 'entrenador' ? (
+        <Text style={styles.roleHint}>Al soltar aquí, el atleta pasa a rol entrenador</Text>
+      ) : null}
+
+      <View style={styles.list}>
         {leads.length === 0 ? (
           <Text style={styles.emptyText}>{isDropTarget ? 'Suelta aquí' : emptyText}</Text>
         ) : (
@@ -84,7 +81,7 @@ export function CrmColumn({
             />
           ))
         )}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -92,13 +89,13 @@ export function CrmColumn({
 const styles = StyleSheet.create({
   column: {
     width: CRM_COLUMN_WIDTH,
+    minHeight: 180,
     marginRight: spacing.sm,
     backgroundColor: colors.surfaceLight,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
-    maxHeight: '100%',
   },
   columnDropTarget: {
     borderColor: colors.accent,
@@ -138,12 +135,16 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderRadius: borderRadius.full,
   },
-  list: {
-    flex: 1,
+  roleHint: {
+    ...typography.caption,
+    color: colors.accentBlue,
+    paddingHorizontal: spacing.sm + 2,
+    paddingTop: spacing.xs,
+    lineHeight: 15,
   },
-  listContent: {
+  list: {
+    flexGrow: 1,
     padding: spacing.sm,
-    paddingTop: spacing.sm,
   },
   emptyText: {
     ...typography.caption,

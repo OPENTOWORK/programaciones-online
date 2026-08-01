@@ -35,9 +35,10 @@ export function SessionDraftSummary({ draft }: { draft: SessionDraft }) {
           {section.blocks.map((block) => {
             if (block.type === 'free_text') {
               return (
-                <Text key={block.id} style={styles.freeText}>
-                  {block.timing.trim()}
-                </Text>
+                <View key={block.id} style={styles.block}>
+                  {block.title?.trim() ? <Text style={styles.blockHeader}>{block.title.trim()}</Text> : null}
+                  <Text style={styles.freeText}>{block.timing.trim()}</Text>
+                </View>
               );
             }
 

@@ -19,11 +19,13 @@ import { createEmptyNutritionPlan } from '@/lib/nutritionPlanContent';
 import { safeGoBack } from '@/lib/navigation';
 import { pickPlanPdf, type PickedPlanPdf } from '@/lib/planPdfPicker';
 import {
+  findPlanGroup,
   getNextSessionNumber,
   groupPersonalizedPlans,
   type PersonalizedPlanGroup,
 } from '@/lib/personalizedPlanGroups';
 import {
+  parsePersonalizedPlanContent,
   serializePersonalizedPlanContent,
   validatePersonalizedPlanDraft,
 } from '@/lib/personalizedPlanContent';
@@ -127,7 +129,7 @@ export default function CreateAthletePlanScreen() {
   }, [isNutrition, selectedAthleteId, user?.id]);
 
   const selectedGroup = useMemo(
-    () => existingGroups.find((group) => group.id === selectedGroupId),
+    () => (selectedGroupId ? findPlanGroup(existingGroups, selectedGroupId) : undefined),
     [existingGroups, selectedGroupId],
   );
 
@@ -188,6 +190,26 @@ export default function CreateAthletePlanScreen() {
     }));
   };
 
+  // Sesiones ya guardadas del plan elegido: se muestran en el calendario para no perderlas de vista.
+  const savedGroupSessions = useMemo<QueuedPlanSession[]>(() => {
+    if (createMode !== 'existing' || !selectedGroup) return [];
+
+    return selectedGroup.sessions.map((session, index) => {
+      const number = session.sessionNumber ?? index + 1;
+      return {
+        id: session.id,
+        sessionNumber: number,
+        draft: parsePersonalizedPlanContent(session.content, number - 1),
+        isSaved: true,
+      };
+    });
+  }, [createMode, selectedGroup]);
+
+  const calendarSessions = useMemo(
+    () => [...savedGroupSessions, ...queuedSessions],
+    [savedGroupSessions, queuedSessions],
+  );
+
   const canConfirmCurrentSession =
     createMode === 'new' &&
     validatePersonalizedPlanDraft(sessionDraft) === null &&
@@ -231,7 +253,7 @@ export default function CreateAthletePlanScreen() {
 
   const handleConfirmSession = () => {
     if (!canConfirmCurrentSession) {
-      setError('Confirma cada bloque con el botón verde, selecciona días y añade al menos un bloque.');
+      setError('Completa o elimina el bloque que estás editando antes de añadir otra sesión.');
       return;
     }
 
@@ -270,6 +292,9 @@ export default function CreateAthletePlanScreen() {
 
   const loadCalendarSessionDraft = (item: SchedulePreviewItem) => {
     const { sourceId } = parseSchedulePreviewItemKey(item.id);
+    // Las sesiones ya guardadas del plan solo se consultan aquí: se editan desde su propia ficha.
+    if (savedGroupSessions.some((session) => session.id === sourceId)) return null;
+
     const queued = queuedSessions.find((session) => session.id === sourceId);
     if (queued) return queued.draft;
     return item.isCurrent ? sessionDraft : null;
@@ -281,6 +306,11 @@ export default function CreateAthletePlanScreen() {
     if (!hasSessionBlockContent(draft)) return 'Añade al menos un bloque de entrenamiento.';
 
     const sourceId = item ? parseSchedulePreviewItemKey(item.id).sourceId : undefined;
+
+    if (sourceId && savedGroupSessions.some((session) => session.id === sourceId)) {
+      return 'Esta sesión ya está guardada. Ábrela desde el plan del atleta para modificarla.';
+    }
+
     const queued = sourceId ? queuedSessions.find((session) => session.id === sourceId) : undefined;
 
     if (queued) {
@@ -338,7 +368,7 @@ export default function CreateAthletePlanScreen() {
       const currentHasContent = hasSessionBlockContent(sessionDraft) || Boolean(attachedPdf);
       if (!currentDraftError && currentHasContent) {
         if (hasPendingBlocks) {
-          setError('Confirma cada bloque con el botón verde antes de guardar el plan.');
+          setError('Completa o elimina el bloque que estás editando antes de guardar el plan.');
           return;
         }
         sessionsToSave.push({ sessionNumber, draft: sessionDraft });
@@ -574,7 +604,7 @@ export default function CreateAthletePlanScreen() {
                     <Text style={styles.fieldLabel}>Plan existente</Text>
                     <View style={styles.groupRow}>
                       {existingGroups.map((group) => {
-                        const active = selectedGroupId === group.id;
+                        const active = selectedGroup?.id === group.id;
                         return (
                           <Pressable
                             key={group.id}
@@ -629,7 +659,7 @@ export default function CreateAthletePlanScreen() {
               showSessionName
               sessionNumber={sessionNumber}
               onSessionNumberChange={handleSessionNumberChange}
-              queuedSessions={queuedSessions}
+              queuedSessions={calendarSessions}
               onConfirmSession={createMode === 'new' ? handleConfirmSession : undefined}
               canConfirmSession={canConfirmCurrentSession}
               onPendingBlocksChange={setHasPendingBlocks}

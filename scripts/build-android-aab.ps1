@@ -198,7 +198,7 @@ try {
   Write-Host ""
   Write-Host "AAB generado:" $outputPath
   Write-Host "Nombre del paquete: com.trainingprogline.app"
-  Write-Host "Version: 1.0.8 (versionCode 9)"
+  Write-Host "Version: 1.0.9 (versionCode 10)"
   Write-Host ""
   Write-Host "Subelo en Google Play Console -> Crear nueva version -> App bundles"
 }

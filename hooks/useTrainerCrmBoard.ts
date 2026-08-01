@@ -4,20 +4,28 @@ import { useAthletes } from '@/hooks/useAthletes';
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import {
+  archiveCrmLead,
   createCrmStage,
   deleteCrmStage,
   fetchCrmBoard,
+  getLocalLeadRole,
   renameCrmStage,
   reorderCrmStages,
   saveCrmColumnOrder,
+  setCrmLeadRole,
 } from '@/lib/trainerCrm';
 import { addCrmActivity } from '@/lib/trainerCrmActivity';
 import { createStaleRefresh } from '@/lib/staleRefresh';
-import type { AthleteSummary, CrmLeadPosition, CrmStage } from '@/lib/types';
+import type { AthleteSummary, CrmLeadPosition, CrmStage, UserRole } from '@/lib/types';
 
 export interface CrmColumn {
   stage: CrmStage;
   leads: AthleteSummary[];
+}
+
+export interface CrmRoleNotice {
+  kind: 'success' | 'error';
+  message: string;
 }
 
 function sortStages(stages: CrmStage[]) {
@@ -36,6 +44,9 @@ export function useTrainerCrmBoard() {
 
   const [stages, setStages] = useState<CrmStage[]>([]);
   const [positions, setPositions] = useState<Map<string, CrmLeadPosition>>(new Map());
+  const [promotedLeads, setPromotedLeads] = useState<AthleteSummary[]>([]);
+  const [archivedLeadIds, setArchivedLeadIds] = useState<Set<string>>(new Set());
+  const [roleNotice, setRoleNotice] = useState<CrmRoleNotice | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [persistent, setPersistent] = useState(true);
   const refreshGate = useRef(createStaleRefresh(45_000));
@@ -55,6 +66,8 @@ export function useTrainerCrmBoard() {
         const board = await fetchCrmBoard(trainerId, isDemoMode);
         setStages(sortStages(board.stages));
         setPositions(board.positions);
+        setPromotedLeads(board.promotedLeads);
+        setArchivedLeadIds(new Set(board.archivedLeadIds));
         setPersistent(board.persistent);
         refreshGate.current.markFetched();
       } finally {
@@ -74,12 +87,24 @@ export function useTrainerCrmBoard() {
     () => load({ silent: true }),
   );
 
+  /** Los promocionados dejan de ser atletas, así que ya no llegan por `useAthletes`. */
+  const boardLeads = useMemo<AthleteSummary[]>(() => {
+    const withLocalRole = athletes.map((athlete) => {
+      const localRole = getLocalLeadRole(athlete.id);
+      return localRole ? { ...athlete, role: localRole } : athlete;
+    });
+    const knownIds = new Set(withLocalRole.map((athlete) => athlete.id));
+    return [...withLocalRole, ...promotedLeads.filter((lead) => !knownIds.has(lead.id))].filter(
+      (lead) => !archivedLeadIds.has(lead.id),
+    );
+  }, [athletes, promotedLeads, archivedLeadIds]);
+
   const columns = useMemo<CrmColumn[]>(() => {
     const sorted = sortStages(stages);
     const firstStageId = sorted[0]?.id;
 
     return sorted.map((stage) => {
-      const leads = athletes
+      const leads = boardLeads
         .filter((athlete) => (positions.get(athlete.id)?.stageId ?? firstStageId) === stage.id)
         .sort((a, b) => {
           const posA = positions.get(a.id)?.position ?? Number.MAX_SAFE_INTEGER;
@@ -90,12 +115,50 @@ export function useTrainerCrmBoard() {
 
       return { stage, leads };
     });
-  }, [stages, athletes, positions]);
+  }, [stages, boardLeads, positions]);
+
+  const applyRoleChange = useCallback(
+    async (athleteId: string, role: UserRole) => {
+      if (!trainerId) return;
+
+      const lead = boardLeads.find((athlete) => athlete.id === athleteId);
+      const name = lead?.name ?? 'El atleta';
+
+      const { error } = await setCrmLeadRole(athleteId, role, useLocalStore);
+
+      if (error) {
+        setRoleNotice({ kind: 'error', message: `No se pudo cambiar el rol de ${name}: ${error}` });
+        return;
+      }
+
+      setRoleNotice({
+        kind: 'success',
+        message:
+          role === 'entrenador'
+            ? `${name} pasa a rol entrenador. Verá el panel de entrenador al volver a entrar en la app.`
+            : `${name} vuelve a rol atleta.`,
+      });
+
+      void addCrmActivity(
+        trainerId,
+        athleteId,
+        role === 'entrenador' ? 'Cambiado a rol entrenador' : 'Devuelto a rol atleta',
+        'stage_change',
+        useLocalStore,
+      );
+
+      void refreshAthletes(true);
+      void load({ force: true, silent: true });
+    },
+    [boardLeads, trainerId, useLocalStore, refreshAthletes, load],
+  );
 
   const moveLeadToStage = useCallback(
     async (athleteId: string, targetStageId: string, targetIndex?: number) => {
       if (!trainerId) return;
 
+      const previousStageId = positions.get(athleteId)?.stageId;
+      const previousStage = stages.find((stage) => stage.id === previousStageId);
       const targetColumn = columns.find((column) => column.stage.id === targetStageId);
       const targetLeadIds = (targetColumn?.leads ?? []).map((athlete) => athlete.id).filter((id) => id !== athleteId);
       const insertIndex = targetIndex ?? targetLeadIds.length;
@@ -117,8 +180,14 @@ export function useTrainerCrmBoard() {
       if (targetStageName) {
         void addCrmActivity(trainerId, athleteId, `Movido a "${targetStageName}"`, 'stage_change', useLocalStore);
       }
+
+      const targetRole = targetColumn?.stage.roleSlug;
+      const nextRole: UserRole | undefined = targetRole ?? (previousStage?.roleSlug ? 'atleta' : undefined);
+      if (nextRole) {
+        await applyRoleChange(athleteId, nextRole);
+      }
     },
-    [columns, trainerId, useLocalStore],
+    [columns, positions, stages, trainerId, useLocalStore, applyRoleChange],
   );
 
   const moveLeadToAdjacentStage = useCallback(
@@ -159,6 +228,35 @@ export function useTrainerCrmBoard() {
       await saveCrmColumnOrder(trainerId, stageId, nextOrder, useLocalStore);
     },
     [columns, trainerId, useLocalStore],
+  );
+
+  /** Saca la ficha del tablero: el atleta y su historial siguen existiendo. */
+  const removeLead = useCallback(
+    async (athleteId: string) => {
+      if (!trainerId) return;
+
+      const name = boardLeads.find((lead) => lead.id === athleteId)?.name ?? 'La ficha';
+
+      setArchivedLeadIds((prev) => new Set(prev).add(athleteId));
+
+      const { error } = await archiveCrmLead(trainerId, athleteId, useLocalStore);
+
+      if (error) {
+        setArchivedLeadIds((prev) => {
+          const next = new Set(prev);
+          next.delete(athleteId);
+          return next;
+        });
+        setRoleNotice({ kind: 'error', message: `No se pudo eliminar la ficha de ${name}: ${error}` });
+        return;
+      }
+
+      setRoleNotice({
+        kind: 'success',
+        message: `${name} ya no aparece en el tablero. Su cuenta y su historial se mantienen.`,
+      });
+    },
+    [boardLeads, trainerId, useLocalStore],
   );
 
   const addStage = useCallback(
@@ -228,15 +326,20 @@ export function useTrainerCrmBoard() {
     void load({ silent: true });
   }, [refreshAthletes, load]);
 
+  const dismissRoleNotice = useCallback(() => setRoleNotice(null), []);
+
   return {
     columns,
     isLoading: isLoading || athletesLoading,
     error: athletesError,
     persistent,
+    roleNotice,
+    dismissRoleNotice,
     refresh,
     moveLeadToStage,
     moveLeadToAdjacentStage,
     reorderLeadWithinStage,
+    removeLead,
     addStage,
     renameStage,
     removeStage,

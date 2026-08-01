@@ -49,7 +49,7 @@ export function AthletePlanCard({ plan }: AthletePlanCardProps) {
         </View>
       ) : hasStructuredPersonalized ? (
         <View style={styles.structuredWrap}>
-          <PersonalizedPlanContent content={plan.content} />
+          <PersonalizedPlanContent content={plan.content} sessionNumber={plan.sessionNumber ?? undefined} />
         </View>
       ) : plan.content ? (
         <View style={styles.contentWrap}>

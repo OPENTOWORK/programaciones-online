@@ -42,6 +42,11 @@ export function CrmLeadCard({
             <Text style={styles.email} numberOfLines={1}>
               {athlete.email}
             </Text>
+            {athlete.role === 'entrenador' ? (
+              <View style={styles.roleTag}>
+                <Text style={styles.roleTagText}>Rol entrenador</Text>
+              </View>
+            ) : null}
           </View>
           {(athlete.alerts?.total ?? athlete.unansweredCount ?? 0) > 0 ? (
             <View style={styles.badge}>
@@ -170,6 +175,21 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     marginTop: 1,
+  },
+  roleTag: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: borderRadius.full,
+    backgroundColor: `${colors.accentBlue}22`,
+  },
+  roleTagText: {
+    ...typography.caption,
+    color: colors.accentBlue,
+    fontWeight: '700',
+    fontSize: 10,
+    lineHeight: 14,
   },
   badge: {
     minWidth: 20,

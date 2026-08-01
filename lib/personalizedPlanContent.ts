@@ -160,3 +160,21 @@ export function getPersonalizedPlanMainContent(content: string) {
   const draft = parsePersonalizedPlanContent(content);
   return combineMainPartsForSave(draft.main, draft.metcon);
 }
+
+export function parseSessionNumberFromPlanContent(content: string, fallback = 1) {
+  const match = content.match(/session=(\d+)/);
+  if (match) return Number(match[1]);
+
+  const draft = parsePersonalizedPlanContent(content);
+  const nameMatch = draft.name.match(/(\d+)/);
+  return nameMatch ? Number(nameMatch[1]) : fallback;
+}
+
+export function formatSessionSectionTitle(sessionNumber?: number, sessionName?: string) {
+  if (sessionNumber && sessionNumber > 0) return `Sesión ${sessionNumber}`;
+
+  const nameMatch = sessionName?.match(/sesi[oó]n\s*(\d+)/i) ?? sessionName?.match(/(\d+)/);
+  if (nameMatch) return `Sesión ${nameMatch[1]}`;
+
+  return 'Sesión 1';
+}

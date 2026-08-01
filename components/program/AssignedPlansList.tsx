@@ -11,6 +11,7 @@ interface AssignedPlansListProps {
   nutritionPlans: AthletePlan[];
   onOpenSession: (planId: string) => void;
   onOpenNutritionPlan: (planId: string) => void;
+  onViewGroupCalendar?: (group: PersonalizedPlanGroup) => void;
   onEditGroup?: (group: PersonalizedPlanGroup) => void;
   onDeleteSession?: (planId: string, label: string) => void;
   onDeleteGroup?: (group: PersonalizedPlanGroup) => void;
@@ -45,6 +46,7 @@ export function AssignedPlansList({
   nutritionPlans,
   onOpenSession,
   onOpenNutritionPlan,
+  onViewGroupCalendar,
   onEditGroup,
   onDeleteSession,
   onDeleteGroup,
@@ -63,6 +65,16 @@ export function AssignedPlansList({
               </Text>
             </View>
             <View style={styles.groupHeaderActions}>
+              {onViewGroupCalendar ? (
+                <Pressable
+                  onPress={() => onViewGroupCalendar(group)}
+                  accessibilityLabel={`Ver el calendario de ${group.title}`}
+                  style={({ pressed }) => [styles.viewPlanBtn, pressed && styles.viewPlanBtnPressed]}
+                >
+                  <Ionicons name="calendar-outline" size={15} color={colors.accent} />
+                  <Text style={styles.viewPlanText}>Ver plan</Text>
+                </Pressable>
+              ) : null}
               {onEditGroup ? (
                 <PlanActionButton
                   icon="create-outline"
@@ -235,6 +247,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingRight: spacing.xs,
     gap: 2,
+  },
+  viewPlanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: `${colors.accent}55`,
+    backgroundColor: `${colors.accent}14`,
+    marginRight: spacing.xs,
+  },
+  viewPlanBtnPressed: {
+    backgroundColor: `${colors.accent}26`,
+  },
+  viewPlanText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
   },
   actionBtn: {
     width: 36,

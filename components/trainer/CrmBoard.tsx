@@ -1,9 +1,24 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  PanResponder,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 
 import { ActionSheetModal, type ActionSheetAction } from '@/components/ui/ActionSheetModal';
 import { AppIcon } from '@/components/ui/AppIcon';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { PromptModal } from '@/components/ui/PromptModal';
 import { CrmColumn, CRM_COLUMN_WIDTH } from '@/components/trainer/CrmColumn';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
@@ -12,6 +27,9 @@ import { useTrainerCrmBoard } from '@/hooks/useTrainerCrmBoard';
 type LeadActionsState = { athleteId: string; stageId: string } | null;
 type ColumnActionsState = { stageId: string } | null;
 type PromptState = { mode: 'create' } | { mode: 'rename'; stageId: string } | null;
+type DeleteLeadState = { athleteId: string; name: string } | null;
+
+const MIN_SCROLL_THUMB_WIDTH = 48;
 
 export function CrmBoard() {
   const router = useRouter();
@@ -20,9 +38,12 @@ export function CrmBoard() {
     isLoading,
     error,
     persistent,
+    roleNotice,
+    dismissRoleNotice,
     moveLeadToStage,
     moveLeadToAdjacentStage,
     reorderLeadWithinStage,
+    removeLead,
     addStage,
     renameStage,
     removeStage,
@@ -32,6 +53,7 @@ export function CrmBoard() {
   const [leadActions, setLeadActions] = useState<LeadActionsState>(null);
   const [columnActions, setColumnActions] = useState<ColumnActionsState>(null);
   const [prompt, setPrompt] = useState<PromptState>(null);
+  const [leadToDelete, setLeadToDelete] = useState<DeleteLeadState>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [draggingAthleteId, setDraggingAthleteId] = useState<string | null>(null);
@@ -46,6 +68,18 @@ export function CrmBoard() {
   const scrollXRef = useRef(0);
   const autoScrollDirRef = useRef<'left' | 'right' | null>(null);
   const autoScrollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const contentWidthRef = useRef(0);
+  const viewportWidthRef = useRef(0);
+  const trackNodeRef = useRef<View | null>(null);
+  const trackWidthRef = useRef(0);
+  const trackPageXRef = useRef(0);
+  const thumbWidthRef = useRef(0);
+  const grabOffsetRef = useRef(0);
+  const thumbTranslateX = useRef(new Animated.Value(0)).current;
+  const [thumbWidth, setThumbWidth] = useState(0);
+  const [canScrollBoard, setCanScrollBoard] = useState(false);
+  const [isDraggingThumb, setIsDraggingThumb] = useState(false);
 
   const stopAutoScroll = useCallback(() => {
     autoScrollDirRef.current = null;
@@ -167,9 +201,132 @@ export function CrmBoard() {
     [columns, findStageAtPageX, moveLeadToStage, stopAutoScroll],
   );
 
-  const handleBoardScroll = useCallback((event: { nativeEvent: { contentOffset: { x: number } } }) => {
-    scrollXRef.current = event.nativeEvent.contentOffset.x;
+  /** Coloca el pulgar de la barra sin re-renderizar el tablero en cada frame de scroll. */
+  const syncScrollbar = useCallback(() => {
+    const scrollable = contentWidthRef.current - viewportWidthRef.current;
+    const scrollableBoard = scrollable > 1;
+
+    setCanScrollBoard((current) => (current === scrollableBoard ? current : scrollableBoard));
+
+    if (!scrollableBoard) {
+      thumbWidthRef.current = 0;
+      setThumbWidth((current) => (current === 0 ? current : 0));
+      thumbTranslateX.setValue(0);
+      return;
+    }
+
+    // La guía se mide al montarse; hasta entonces no hay nada que colocar.
+    const track = trackWidthRef.current;
+    if (track <= 0) return;
+
+    const ratio = viewportWidthRef.current / contentWidthRef.current;
+    const nextWidth = Math.min(track, Math.max(MIN_SCROLL_THUMB_WIDTH, Math.round(track * ratio)));
+
+    if (nextWidth !== thumbWidthRef.current) {
+      thumbWidthRef.current = nextWidth;
+      setThumbWidth(nextWidth);
+    }
+
+    const progress = Math.min(1, Math.max(0, scrollXRef.current / scrollable));
+    thumbTranslateX.setValue(progress * (track - nextWidth));
+  }, [thumbTranslateX]);
+
+  const handleBoardScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+      scrollXRef.current = contentOffset.x;
+      contentWidthRef.current = contentSize.width;
+      viewportWidthRef.current = layoutMeasurement.width;
+      syncScrollbar();
+    },
+    [syncScrollbar],
+  );
+
+  const handleBoardContentSizeChange = useCallback(
+    (width: number) => {
+      contentWidthRef.current = width;
+      syncScrollbar();
+    },
+    [syncScrollbar],
+  );
+
+  const handleBoardLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      viewportWidthRef.current = event.nativeEvent.layout.width;
+      syncScrollbar();
+    },
+    [syncScrollbar],
+  );
+
+  const measureTrack = useCallback(() => {
+    trackNodeRef.current?.measureInWindow((x, _y, width) => {
+      trackPageXRef.current = x;
+      trackWidthRef.current = width;
+      syncScrollbar();
+    });
+  }, [syncScrollbar]);
+
+  const handleTrackLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      trackWidthRef.current = event.nativeEvent.layout.width;
+      measureTrack();
+    },
+    [measureTrack],
+  );
+
+  /** Desplaza el tablero según la posición del dedo/ratón dentro de la barra. */
+  const scrollToTrackPosition = useCallback((localX: number) => {
+    const range = trackWidthRef.current - thumbWidthRef.current;
+    const scrollable = contentWidthRef.current - viewportWidthRef.current;
+    if (range <= 0 || scrollable <= 0) return;
+
+    const progress = Math.min(1, Math.max(0, (localX - grabOffsetRef.current) / range));
+    boardScrollRef.current?.scrollTo({ x: progress * scrollable, animated: false });
   }, []);
+
+  const scrollByStep = useCallback((direction: -1 | 1) => {
+    const scrollable = contentWidthRef.current - viewportWidthRef.current;
+    if (scrollable <= 0) return;
+
+    const step = CRM_COLUMN_WIDTH + spacing.sm;
+    const nextX = Math.min(scrollable, Math.max(0, scrollXRef.current + direction * step));
+    boardScrollRef.current?.scrollTo({ x: nextX, animated: true });
+  }, []);
+
+  const trackPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: (_event, gesture) => {
+          measureTrack();
+          setIsDraggingThumb(true);
+
+          const localX = gesture.x0 - trackPageXRef.current;
+          const scrollable = contentWidthRef.current - viewportWidthRef.current;
+          const range = trackWidthRef.current - thumbWidthRef.current;
+          const thumbLeft =
+            scrollable > 0 ? Math.min(1, Math.max(0, scrollXRef.current / scrollable)) * range : 0;
+
+          const grabbedThumb = localX >= thumbLeft && localX <= thumbLeft + thumbWidthRef.current;
+          if (grabbedThumb) {
+            // Agarrar el pulgar no debe moverlo: se conserva el punto donde se pinchó.
+            grabOffsetRef.current = localX - thumbLeft;
+            return;
+          }
+
+          grabOffsetRef.current = thumbWidthRef.current / 2;
+          scrollToTrackPosition(localX);
+        },
+        onPanResponderMove: (_event, gesture) => {
+          scrollToTrackPosition(gesture.moveX - trackPageXRef.current);
+        },
+        onPanResponderRelease: () => setIsDraggingThumb(false),
+        onPanResponderTerminate: () => setIsDraggingThumb(false),
+      }),
+    [measureTrack, scrollToTrackPosition],
+  );
 
   useEffect(() => stopAutoScroll, [stopAutoScroll]);
 
@@ -239,6 +396,15 @@ export function CrmBoard() {
           router.push({ pathname: '/trainer/athlete/[id]', params: { id: leadActions.athleteId } });
         },
       },
+      {
+        key: 'delete',
+        label: 'Eliminar ficha del tablero',
+        destructive: true,
+        onPress: () => {
+          setLeadToDelete({ athleteId: leadActions.athleteId, name: activeLead.name });
+          setLeadActions(null);
+        },
+      },
     );
   }
 
@@ -298,6 +464,20 @@ export function CrmBoard() {
         </View>
       ) : null}
 
+      {roleNotice ? (
+        <View style={[styles.roleNotice, roleNotice.kind === 'error' && styles.roleNoticeError]}>
+          <AppIcon
+            name={roleNotice.kind === 'error' ? 'info' : 'check'}
+            size={14}
+            color={roleNotice.kind === 'error' ? colors.danger : colors.accentBlue}
+          />
+          <Text style={styles.roleNoticeText}>{roleNotice.message}</Text>
+          <Pressable onPress={dismissRoleNotice} hitSlop={8}>
+            <AppIcon name="close" size={14} color={colors.textMuted} />
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={styles.searchBar}>
         <AppIcon name="search" size={16} color={colors.textMuted} />
         <TextInput
@@ -316,48 +496,88 @@ export function CrmBoard() {
 
       <View ref={boardWrapperRef} collapsable={false} style={styles.boardWrapper}>
         <ScrollView
-          ref={boardScrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
+          style={styles.boardVerticalScroll}
+          contentContainerStyle={styles.boardVerticalContent}
           scrollEnabled={!draggingAthleteId}
-          onScroll={handleBoardScroll}
-          scrollEventThrottle={16}
-          style={styles.boardScroll}
-          contentContainerStyle={styles.board}
+          showsVerticalScrollIndicator
         >
-          {visibleColumns.map((column, index) => (
-            <CrmColumn
-              key={column.stage.id}
-              stage={column.stage}
-              leads={column.leads}
-              emptyText={normalizedQuery ? 'Sin resultados' : 'Sin atletas en esta columna'}
-              canMoveLeft={index > 0}
-              canMoveRight={index < columns.length - 1}
-              isDragActive={Boolean(draggingAthleteId)}
-              isDropTarget={hoverStageId === column.stage.id}
-              columnRef={registerColumnRef(column.stage.id)}
-              onOpenColumnActions={() => setColumnActions({ stageId: column.stage.id })}
-              onOpenLead={(athleteId) =>
-                router.push({ pathname: '/trainer/athlete/[id]', params: { id: athleteId } })
-              }
-              onOpenLeadActions={(athleteId) => setLeadActions({ athleteId, stageId: column.stage.id })}
-              onMoveLeadPrev={(athleteId) => moveLeadToAdjacentStage(athleteId, 'prev')}
-              onMoveLeadNext={(athleteId) => moveLeadToAdjacentStage(athleteId, 'next')}
-              onDragStart={handleDragStart}
-              onDragMove={handleDragMove}
-              onDragEnd={handleDragEnd}
-            />
-          ))}
-
-          <Pressable
-            onPress={() => setPrompt({ mode: 'create' })}
-            style={({ pressed }) => [styles.addColumn, pressed && styles.addColumnPressed]}
+          <ScrollView
+            ref={boardScrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={!draggingAthleteId}
+            onScroll={handleBoardScroll}
+            onLayout={handleBoardLayout}
+            onContentSizeChange={handleBoardContentSizeChange}
+            scrollEventThrottle={16}
+            style={styles.boardScroll}
+            contentContainerStyle={styles.board}
           >
-            <AppIcon name="add" size={20} color={colors.accent} />
-            <Text style={styles.addColumnText}>Nueva columna</Text>
-          </Pressable>
+            {visibleColumns.map((column, index) => (
+              <CrmColumn
+                key={column.stage.id}
+                stage={column.stage}
+                leads={column.leads}
+                emptyText={normalizedQuery ? 'Sin resultados' : 'Sin atletas en esta columna'}
+                canMoveLeft={index > 0}
+                canMoveRight={index < columns.length - 1}
+                isDropTarget={hoverStageId === column.stage.id}
+                columnRef={registerColumnRef(column.stage.id)}
+                onOpenColumnActions={() => setColumnActions({ stageId: column.stage.id })}
+                onOpenLead={(athleteId) =>
+                  router.push({ pathname: '/trainer/athlete/[id]', params: { id: athleteId } })
+                }
+                onOpenLeadActions={(athleteId) => setLeadActions({ athleteId, stageId: column.stage.id })}
+                onMoveLeadPrev={(athleteId) => moveLeadToAdjacentStage(athleteId, 'prev')}
+                onMoveLeadNext={(athleteId) => moveLeadToAdjacentStage(athleteId, 'next')}
+                onDragStart={handleDragStart}
+                onDragMove={handleDragMove}
+                onDragEnd={handleDragEnd}
+              />
+            ))}
+
+            <Pressable
+              onPress={() => setPrompt({ mode: 'create' })}
+              style={({ pressed }) => [styles.addColumn, pressed && styles.addColumnPressed]}
+            >
+              <AppIcon name="add" size={20} color={colors.accent} />
+              <Text style={styles.addColumnText}>Nueva columna</Text>
+            </Pressable>
+          </ScrollView>
         </ScrollView>
       </View>
+
+      {canScrollBoard ? (
+        <View style={styles.scrollbarRow}>
+          <Pressable
+            onPress={() => scrollByStep(-1)}
+            hitSlop={6}
+            style={({ pressed }) => [styles.scrollbarArrow, pressed && styles.scrollbarArrowPressed]}
+          >
+            <AppIcon name="chevronLeft" size={16} color={colors.textSecondary} />
+          </Pressable>
+
+          <View style={styles.scrollbarHitArea} {...trackPanResponder.panHandlers}>
+            <View ref={trackNodeRef} collapsable={false} style={styles.scrollbarTrack} onLayout={handleTrackLayout}>
+              <Animated.View
+                style={[
+                  styles.scrollbarThumb,
+                  isDraggingThumb && styles.scrollbarThumbActive,
+                  { width: thumbWidth, transform: [{ translateX: thumbTranslateX }] },
+                ]}
+              />
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() => scrollByStep(1)}
+            hitSlop={6}
+            style={({ pressed }) => [styles.scrollbarArrow, pressed && styles.scrollbarArrowPressed]}
+          >
+            <AppIcon name="chevronRight" size={16} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+      ) : null}
 
       <ActionSheetModal
         visible={Boolean(leadActions && activeLead)}
@@ -372,6 +592,20 @@ export function CrmBoard() {
         title={activeColumn?.stage.name}
         actions={columnModalActions}
         onClose={() => setColumnActions(null)}
+      />
+
+      <ConfirmModal
+        visible={leadToDelete !== null}
+        title="Eliminar ficha del tablero"
+        message={`${leadToDelete?.name ?? 'Esta ficha'} dejará de aparecer en tu CRM. Su cuenta, su chat y sus entrenamientos no se borran, pero perderás la columna y el orden que tenía.`}
+        checkboxLabel="Entiendo que la ficha desaparecerá del tablero"
+        confirmLabel="Eliminar ficha"
+        destructive
+        onCancel={() => setLeadToDelete(null)}
+        onConfirm={() => {
+          if (leadToDelete) void removeLead(leadToDelete.athleteId);
+          setLeadToDelete(null);
+        }}
       />
 
       <PromptModal
@@ -435,6 +669,27 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 16,
   },
+  roleNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: `${colors.accentBlue}18`,
+    borderWidth: 1,
+    borderColor: `${colors.accentBlue}44`,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  roleNoticeError: {
+    backgroundColor: `${colors.danger}18`,
+    borderColor: `${colors.danger}44`,
+  },
+  roleNoticeText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    flex: 1,
+    lineHeight: 16,
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -457,11 +712,63 @@ const styles = StyleSheet.create({
   boardWrapper: {
     flex: 1,
   },
-  boardScroll: {
+  boardVerticalScroll: {
     flex: 1,
+  },
+  boardVerticalContent: {
+    flexGrow: 1,
+  },
+  /** Sin encoger: la altura la marcan las columnas y el scroll vertical lo lleva el contenedor. */
+  boardScroll: {
+    flexGrow: 1,
+    flexShrink: 0,
   },
   board: {
     paddingBottom: spacing.md,
+    alignItems: 'stretch',
+  },
+  scrollbarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    marginRight: spacing.sm,
+  },
+  scrollbarArrow: {
+    width: 28,
+    height: 24,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
+  },
+  scrollbarArrowPressed: {
+    backgroundColor: colors.surface,
+    borderColor: colors.accent,
+  },
+  scrollbarHitArea: {
+    flex: 1,
+    paddingVertical: spacing.xs + 2,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
+  },
+  scrollbarTrack: {
+    height: 12,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  scrollbarThumb: {
+    height: '100%',
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.textSecondary,
+  },
+  scrollbarThumbActive: {
+    backgroundColor: colors.accent,
   },
   addColumn: {
     width: CRM_COLUMN_WIDTH,

@@ -1,8 +1,11 @@
 import {
+  hasBulletList,
+  isKnownBlockLabel,
   isStructuredWorkoutContent,
   parseWorkoutContent,
   type WorkoutContentBlock,
 } from '@/lib/workoutContentParser';
+import { isStructuredTimingPart, dedupeTimingTokens } from '@/lib/workoutDisplayFormat';
 
 export type WorkoutBlockType =
   | 'free_training'
@@ -297,15 +300,64 @@ function guessBlockType(label: string): WorkoutBlockType {
   return 'free_training';
 }
 
+const FREE_TEXT_LABEL = BLOCK_LABELS.free_text;
+
+function splitSectionHeader(line: string) {
+  const [label, ...rest] = line.split('·').map((part) => part.trim());
+  return { label: label ?? '', rest: rest.join(' · ') };
+}
+
+function isFreeTextHeaderLine(line: string) {
+  return splitSectionHeader(line).label.toLowerCase() === FREE_TEXT_LABEL.toLowerCase();
+}
+
+function isKnownBlockHeaderLine(line: string) {
+  return isKnownBlockLabel(splitSectionHeader(line).label);
+}
+
+function sectionLines(section: string) {
+  return section
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim());
+}
+
+function freeTextBlockFromLines(lines: string[]): WorkoutBlockDraft {
+  return {
+    ...createEmptyBlock('free_text'),
+    title: splitSectionHeader(lines[0] ?? '').rest,
+    timing: lines.slice(1).join('\n').trim(),
+    items: [],
+  };
+}
+
+function rawFreeTextBlock(text: string): WorkoutBlockDraft {
+  return { ...createEmptyBlock('free_text'), timing: text.trim(), items: [] };
+}
+
 function blockFromParsed(parsed: WorkoutContentBlock): WorkoutBlockDraft {
   const type = guessBlockType(parsed.label);
-  const timingParts = parsed.timing?.split(' · ').map((part) => part.trim()).filter(Boolean) ?? [];
+  const parts = parsed.timing?.split(' · ').map((part) => part.trim()).filter(Boolean) ?? [];
+
+  let title = '';
+  const timingParts: string[] = [];
+
+  for (const part of parts) {
+    if (!title && !isStructuredTimingPart(part)) {
+      title = part;
+    } else {
+      timingParts.push(part);
+    }
+  }
+
+  const dedupedTimingParts = dedupeTimingTokens(timingParts);
 
   return {
     id: createId('block'),
     type,
-    timing: timingParts[0] ?? '',
-    subtitle: timingParts.slice(1).join(' · ') || '',
+    title,
+    timing: dedupedTimingParts[0] ?? '',
+    subtitle: dedupedTimingParts.slice(1).join(' · ') || '',
     items:
       parsed.items.length > 0
         ? parsed.items.map((text) => ({ id: createId('block-item'), ...parseBlockItemFromText(text) }))
@@ -317,26 +369,54 @@ export function parseWorkoutBlocksFromText(content: string): WorkoutBlockDraft[]
   const trimmed = content.trim();
   if (!trimmed) return [];
 
+  const sections = trimmed
+    .split(/\n\n+/)
+    .map((section) => section.trim())
+    .filter(Boolean);
+
   if (!isStructuredWorkoutContent(trimmed)) {
-    return [
-      {
-        ...createEmptyBlock('free_text'),
-        timing: trimmed,
-        items: [],
-      },
-    ];
+    const lines = sectionLines(sections[0] ?? '');
+    return [isFreeTextHeaderLine(lines[0] ?? '') ? freeTextBlockFromLines(lines) : rawFreeTextBlock(trimmed)];
   }
 
-  const parsed = parseWorkoutContent(trimmed);
-  if (parsed.length === 0) return [];
-  return parsed.map(blockFromParsed);
+  const blocks: WorkoutBlockDraft[] = [];
+
+  for (const section of sections) {
+    const lines = sectionLines(section);
+    const firstLine = lines[0] ?? '';
+
+    if (isFreeTextHeaderLine(firstLine)) {
+      blocks.push(freeTextBlockFromLines(lines));
+      continue;
+    }
+
+    // Sin cabecera conocida ni lista con viñetas es texto del entrenador: se mantiene
+    // entero aunque tenga líneas en blanco, en lugar de partirse en varios bloques.
+    if (!isKnownBlockHeaderLine(firstLine) && !hasBulletList(section)) {
+      const previous = blocks[blocks.length - 1];
+      if (previous?.type === 'free_text') {
+        previous.timing = [previous.timing, section].filter(Boolean).join('\n\n');
+      } else {
+        blocks.push(rawFreeTextBlock(section));
+      }
+      continue;
+    }
+
+    const [parsed] = parseWorkoutContent(section);
+    if (parsed) blocks.push(blockFromParsed(parsed));
+  }
+
+  return blocks;
 }
 
 export function serializeWorkoutBlocks(blocks: WorkoutBlockDraft[]): string {
   return blocks
     .map((block) => {
       if (block.type === 'free_text') {
-        return block.timing.trim();
+        const body = block.timing.trim();
+        const title = block.title?.trim();
+        if (!title) return body;
+        return body ? `${FREE_TEXT_LABEL} · ${title}\n${body}` : `${FREE_TEXT_LABEL} · ${title}`;
       }
 
       const label = BLOCK_LABELS[block.type];
@@ -370,7 +450,7 @@ export function getBlockTypeConfig(type: WorkoutBlockType) {
 
 export function canConfirmWorkoutBlock(block: WorkoutBlockDraft): boolean {
   if (block.type === 'free_text') {
-    return Boolean(block.timing.trim());
+    return Boolean(block.timing.trim() || block.title?.trim());
   }
 
   const hasTiming = Boolean(block.timing.trim() || block.subtitle?.trim());
@@ -382,6 +462,7 @@ export function sanitizeWorkoutBlock(block: WorkoutBlockDraft): WorkoutBlockDraf
   if (block.type === 'free_text') {
     return {
       ...block,
+      title: block.title?.trim() ?? '',
       timing: block.timing.trim(),
       subtitle: '',
       items: [],
@@ -411,10 +492,12 @@ export function getWorkoutBlockSummary(block: WorkoutBlockDraft): string {
   const config = getBlockTypeConfig(block.type);
 
   if (block.type === 'free_text') {
+    const title = block.title?.trim();
     const text = block.timing.trim();
-    if (!text) return config.label;
+    if (!text) return title || config.label;
     const firstLine = text.split('\n').find(Boolean) ?? text;
-    return firstLine.length > 72 ? `${firstLine.slice(0, 72)}…` : firstLine;
+    const summary = firstLine.length > 72 ? `${firstLine.slice(0, 72)}…` : firstLine;
+    return title ? `${title} · ${summary}` : summary;
   }
 
   const headerParts = [block.title?.trim(), block.timing.trim(), block.subtitle?.trim()].filter(Boolean);

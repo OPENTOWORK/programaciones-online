@@ -2,6 +2,8 @@ export interface WorkoutContentBlock {
   label: string;
   timing?: string;
   items: string[];
+  /** Texto escrito por el entrenador: se muestra tal cual, sin reinterpretar sus líneas. */
+  text?: string;
 }
 
 function parseBlockTitle(line: string) {
@@ -59,29 +61,73 @@ function normalizeEmomBlock(block: WorkoutContentBlock): WorkoutContentBlock {
   return { ...block, timing, items };
 }
 
+function parseListSection(section: string): WorkoutContentBlock {
+  const lines = section.split('\n').map((line) => line.trim()).filter(Boolean);
+  const firstLine = lines[0] ?? '';
+  const { label, timing: titleTiming } = parseBlockTitle(firstLine);
+
+  let cursor = 1;
+  let timing = titleTiming;
+
+  if (lines[1] && !/^[•\-–]/.test(lines[1])) {
+    timing = timing ? `${timing} · ${lines[1]}` : lines[1];
+    cursor = 2;
+  }
+
+  const items = lines.slice(cursor).map(normalizeItem).filter(Boolean);
+
+  return normalizeEmomBlock({ label, timing, items });
+}
+
+export function hasBulletList(section: string) {
+  return section.split('\n').some((line) => /^[•\-–]\s+/.test(line.trim()));
+}
+
 export function parseWorkoutContent(content: string): WorkoutContentBlock[] {
-  return content
+  const sections = content
     .split(/\n\n+/)
     .map((section) => section.trim())
-    .filter(Boolean)
-    .map((section) => {
-      const lines = section.split('\n').map((line) => line.trim()).filter(Boolean);
-      const firstLine = lines[0] ?? '';
-      const { label, timing: titleTiming } = parseBlockTitle(firstLine);
+    .filter(Boolean);
 
-      let cursor = 1;
-      let timing = titleTiming;
+  const blocks: WorkoutContentBlock[] = [];
+  let pendingText: { title: string; parts: string[] } | null = null;
 
-      if (lines[1] && !/^[•\-–]/.test(lines[1])) {
-        timing = timing ? `${timing} · ${lines[1]}` : lines[1];
-        cursor = 2;
-      }
+  const flushText = () => {
+    if (!pendingText) return;
 
-      const items = lines.slice(cursor).map(normalizeItem).filter(Boolean);
+    const text = pendingText.parts.join('\n\n');
+    if (text || pendingText.title) {
+      blocks.push({ label: pendingText.title, items: [], text });
+    }
+    pendingText = null;
+  };
 
-      return { label, timing, items };
-    })
-    .map(normalizeEmomBlock);
+  for (const section of sections) {
+    const firstLine = section.split('\n')[0]?.trim() ?? '';
+    const { label, timing } = parseBlockTitle(firstLine);
+
+    if (isFreeTextBlockLabel(label)) {
+      flushText();
+      const body = section.split('\n').slice(1).join('\n').trim();
+      pendingText = { title: timing?.trim() ?? '', parts: body ? [body] : [] };
+      continue;
+    }
+
+    // Solo las cabeceras conocidas y las listas con viñetas se reinterpretan:
+    // lo demás es texto del entrenador y se respeta con sus saltos de línea.
+    if (isKnownBlockLabel(label) || hasBulletList(section)) {
+      flushText();
+      blocks.push(parseListSection(section));
+      continue;
+    }
+
+    if (!pendingText) pendingText = { title: '', parts: [] };
+    pendingText.parts.push(section);
+  }
+
+  flushText();
+
+  return blocks;
 }
 
 export function isStructuredWorkoutContent(content: string) {
@@ -89,6 +135,44 @@ export function isStructuredWorkoutContent(content: string) {
   if (!trimmed) return false;
 
   return trimmed.includes('•') || /\n\n/.test(trimmed);
+}
+
+const KNOWN_BLOCK_LABELS = [
+  'amrap',
+  'emom',
+  'for time',
+  'rounds for time',
+  'tabata',
+  'unbroken',
+  'ladder',
+  'reps for time',
+  'movilidad',
+  'entrenamiento de tecnica',
+  'entrenamiento libre',
+  'estaciones de tiempo',
+  'estaciones',
+  'texto libre',
+];
+
+function normalizeLabel(label: string) {
+  return label
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * Distingue una cabecera con tipo de bloque (AMRAP, EMOM…) del texto que escribe
+ * el entrenador, que no debe pintarse como si fuera una etiqueta de tipo.
+ */
+export function isKnownBlockLabel(label: string) {
+  const normalized = normalizeLabel(label);
+  return KNOWN_BLOCK_LABELS.some((known) => normalized.startsWith(known));
+}
+
+export function isFreeTextBlockLabel(label: string) {
+  return normalizeLabel(label) === 'texto libre';
 }
 
 export function getBlockAccent(label: string) {

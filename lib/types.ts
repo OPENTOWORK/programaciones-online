@@ -165,6 +165,8 @@ export interface AthleteSummary {
   avatarInitials: string;
   currentProgramName?: string;
   alerts?: AthleteAlertSummary;
+  /** Rol actual en la app. Solo se rellena donde puede diferir de 'atleta' (tablero CRM). */
+  role?: UserRole;
   /** @deprecated Use alerts instead. */
   unansweredCount?: number;
 }
@@ -230,6 +232,8 @@ export interface CrmStage {
   id: string;
   name: string;
   position: number;
+  /** Si está definido, mover un lead a esta columna le asigna ese rol en la app. */
+  roleSlug?: UserRole;
 }
 
 export interface CrmLeadPosition {

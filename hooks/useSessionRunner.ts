@@ -18,6 +18,7 @@ export interface SessionWorkoutContent {
   cooldown: string;
   exercises: Exercise[];
   programId?: string;
+  sessionNumber?: number;
 }
 
 interface UseSessionRunnerOptions {

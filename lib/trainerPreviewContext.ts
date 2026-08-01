@@ -78,8 +78,11 @@ export function peekTrainerPreview(key: string) {
 }
 
 export function draftToPreviewWorkout(draft: SessionDraft, title?: string): SessionWorkoutContent {
+  const sessionMatch = draft.name.match(/(\d+)/);
+
   return {
     name: title?.trim() || draft.name,
+    sessionNumber: sessionMatch ? Number(sessionMatch[1]) : 1,
     estimatedDuration: draft.estimatedDuration,
     warmup: draft.warmup,
     main: combineMainPartsForSave(draft.main, draft.metcon),

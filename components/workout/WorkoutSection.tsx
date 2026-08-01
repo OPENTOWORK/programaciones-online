@@ -6,6 +6,8 @@ import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import {
   getBlockAccent,
+  isFreeTextBlockLabel,
+  isKnownBlockLabel,
   isStructuredWorkoutContent,
   parseWorkoutContent,
   type WorkoutContentBlock,
@@ -14,6 +16,7 @@ import {
   getBlockTimingHint,
   parseBlockItemForDisplay,
   parseTimingForDisplay,
+  splitBlockTimingMetadata,
   type TimingDisplayPart,
 } from '@/lib/workoutDisplayFormat';
 
@@ -44,27 +47,210 @@ function TimingPartPill({ part, accentText }: { part: TimingDisplayPart; accentT
   );
 }
 
-function WorkoutBlockCard({
-  block,
-  blockIndex,
-  sectionKey,
-  completedItems,
-  onToggleItem,
-  onExercisePress,
-  hasExerciseVideo,
-  activeExerciseName,
-}: {
-  block: WorkoutContentBlock;
+interface BlockItemsProps {
+  items: string[];
   blockIndex: number;
+  accentText: string;
   sectionKey?: string;
   completedItems?: Record<string, boolean>;
   onToggleItem?: (key: string) => void;
   onExercisePress?: (exerciseName: string, aimharderEjerId?: number) => void;
   hasExerciseVideo?: (exerciseName: string, aimharderEjerId?: number) => boolean;
   activeExerciseName?: string;
-}) {
+}
+
+function BlockItems({
+  items,
+  blockIndex,
+  accentText,
+  sectionKey,
+  completedItems,
+  onToggleItem,
+  onExercisePress,
+  hasExerciseVideo,
+  activeExerciseName,
+}: BlockItemsProps) {
+  if (items.length === 0) return null;
+
+  return (
+    <View style={styles.itemsList}>
+      {items.map((item, index) => {
+        const exerciseName = parseExerciseLabelFromBlockItem(item);
+        const display = parseBlockItemForDisplay(item);
+        const showVideo = hasExerciseVideo?.(exerciseName) ?? false;
+        const itemKey = sectionKey ? `${sectionKey}:b${blockIndex}:i${index}` : '';
+        const isChecked = itemKey ? !!completedItems?.[itemKey] : false;
+        const showCheckbox = Boolean(itemKey && (onToggleItem || completedItems));
+        const isActive =
+          Boolean(activeExerciseName) &&
+          activeExerciseName?.toLowerCase() === exerciseName.toLowerCase();
+
+        const openVideo = () => {
+          if (showVideo) onExercisePress?.(exerciseName);
+        };
+
+        return (
+          <View
+            key={`${item}-${index}`}
+            style={[styles.itemRow, isActive && styles.itemRowActive, isChecked && styles.itemRowChecked]}
+          >
+            {showCheckbox ? (
+              onToggleItem ? (
+                <Pressable
+                  onPress={() => onToggleItem(itemKey)}
+                  style={styles.itemCheckbox}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: isChecked }}
+                >
+                  <View style={[styles.checkbox, isChecked && styles.checkboxChecked]}>
+                    {isChecked ? <Text style={styles.checkmark}>✓</Text> : null}
+                  </View>
+                </Pressable>
+              ) : (
+                <View style={styles.itemCheckbox}>
+                  <View style={[styles.checkbox, isChecked && styles.checkboxChecked]}>
+                    {isChecked ? <Text style={styles.checkmark}>✓</Text> : null}
+                  </View>
+                </View>
+              )
+            ) : (
+              <View style={[styles.itemBullet, { backgroundColor: accentText }]} />
+            )}
+            <View style={styles.itemCopy}>
+              <Pressable
+                onPress={() => {
+                  if (onToggleItem && itemKey) {
+                    onToggleItem(itemKey);
+                  }
+                }}
+                disabled={!onToggleItem || !itemKey}
+              >
+                <Text style={styles.itemName}>{display.name}</Text>
+                {display.quantity || display.load ? (
+                  <View style={styles.itemMetrics}>
+                    {display.quantity ? (
+                      <View style={styles.itemMetricPill}>
+                        <Text style={styles.itemMetricLabel}>Cantidad</Text>
+                        <Text style={styles.itemMetricValue}>{display.quantity}</Text>
+                      </View>
+                    ) : null}
+                    {display.load ? (
+                      <View style={styles.itemMetricPill}>
+                        <Text style={styles.itemMetricLabel}>Carga</Text>
+                        <Text style={styles.itemMetricValue}>{display.load}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+              </Pressable>
+              {showVideo ? (
+                <Pressable onPress={openVideo} style={styles.itemVideoPressable}>
+                  <Text style={styles.itemVideoHint}>
+                    {isActive ? 'Reproduciendo arriba' : 'Ver vídeo'}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {showVideo ? (
+              <Pressable onPress={openVideo} style={styles.itemPlayBtn} accessibilityLabel="Ver vídeo">
+                <AppIcon name="play" size={18} color={accentText} outlined />
+              </Pressable>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+interface BlockCardProps extends Omit<BlockItemsProps, 'items' | 'accentText'> {
+  block: WorkoutContentBlock;
+}
+
+/** Texto libre: se muestra exactamente como lo escribió el entrenador. */
+function WorkoutTextCard({
+  block,
+  blockIndex,
+  sectionKey,
+  completedItems,
+  onToggleItem,
+}: BlockCardProps) {
+  const text = block.text ?? '';
+  const title = block.label.trim();
+  const itemKey = sectionKey ? `${sectionKey}:b${blockIndex}:text` : '';
+  const isChecked = itemKey ? !!completedItems?.[itemKey] : false;
+  const showCheckbox = Boolean(itemKey && (onToggleItem || completedItems));
+
+  const body = text ? <Text style={styles.noteText}>{text}</Text> : null;
+
+  return (
+    <View style={styles.noteCard}>
+      {title ? (
+        <Text style={[styles.noteTitle, text ? styles.noteTitleWithBody : undefined]}>{title}</Text>
+      ) : null}
+      {showCheckbox ? (
+        <Pressable
+          onPress={() => onToggleItem?.(itemKey)}
+          disabled={!onToggleItem}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: isChecked }}
+          style={[styles.plainCheckRow, isChecked && styles.itemRowChecked]}
+        >
+          <View style={[styles.checkbox, isChecked && styles.checkboxChecked]}>
+            {isChecked ? <Text style={styles.checkmark}>✓</Text> : null}
+          </View>
+          <View style={styles.itemCopy}>{body}</View>
+        </Pressable>
+      ) : (
+        body
+      )}
+    </View>
+  );
+}
+
+/**
+ * Bloque escrito a mano por el entrenador: su primera línea es un título, no un
+ * tipo de entrenamiento, así que se lee como una nota y no como una etiqueta.
+ */
+function WorkoutNoteCard({ block, ...itemProps }: BlockCardProps) {
+  const timingParts = (block.timing ?? '')
+    .split('·')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  // En texto libre el nombre del bloque viaja en la cabecera, delante del cuerpo.
+  const isFreeText = isFreeTextBlockLabel(block.label);
+  const title = isFreeText ? timingParts[0] ?? '' : block.label.trim();
+  const details = isFreeText ? timingParts.slice(1) : timingParts;
+  const hasBody = details.length > 0 || block.items.length > 0;
+
+  return (
+    <View style={styles.noteCard}>
+      {title ? (
+        <Text style={[styles.noteTitle, hasBody ? styles.noteTitleWithBody : undefined]}>{title}</Text>
+      ) : null}
+      {details.map((detail, index) => (
+        <Text key={`${detail}-${index}`} style={styles.noteDetail}>
+          {detail}
+        </Text>
+      ))}
+      <BlockItems items={block.items} accentText={colors.accent} {...itemProps} />
+    </View>
+  );
+}
+
+function WorkoutBlockCard({ block, ...itemProps }: BlockCardProps) {
+  if (block.text !== undefined) {
+    return <WorkoutTextCard block={block} {...itemProps} />;
+  }
+
+  if (!isKnownBlockLabel(block.label) || isFreeTextBlockLabel(block.label)) {
+    return <WorkoutNoteCard block={block} {...itemProps} />;
+  }
+
   const accent = getBlockAccent(block.label);
-  const timingParts = parseTimingForDisplay(block.timing, block.label);
+  const { blockTitle, pillTiming } = splitBlockTimingMetadata(block.timing);
+  const timingParts = parseTimingForDisplay(pillTiming, block.label);
   const timingHint = getBlockTimingHint(block.label);
 
   return (
@@ -73,6 +259,7 @@ function WorkoutBlockCard({
         <View style={[styles.blockChip, { backgroundColor: `${accent.text}18` }]}>
           <Text style={[styles.blockChipText, { color: accent.text }]}>{block.label}</Text>
         </View>
+        {blockTitle ? <Text style={styles.blockTitleText}>{blockTitle}</Text> : null}
         {timingParts.length > 0 ? (
           <View style={styles.timingRow}>
             {timingParts.map((part, index) => (
@@ -84,101 +271,7 @@ function WorkoutBlockCard({
 
       {timingHint ? <Text style={styles.timingHint}>{timingHint}</Text> : null}
 
-      {block.items.length > 0 ? (
-        <View style={styles.itemsList}>
-          {block.items.map((item, index) => {
-            const exerciseName = parseExerciseLabelFromBlockItem(item);
-            const display = parseBlockItemForDisplay(item);
-            const showVideo = hasExerciseVideo?.(exerciseName) ?? false;
-            const itemKey = sectionKey ? `${sectionKey}:b${blockIndex}:i${index}` : '';
-            const isChecked = itemKey ? !!completedItems?.[itemKey] : false;
-            const showCheckbox = Boolean(itemKey && (onToggleItem || completedItems));
-            const isActive =
-              Boolean(activeExerciseName) &&
-              activeExerciseName?.toLowerCase() === exerciseName.toLowerCase();
-
-            const openVideo = () => {
-              if (showVideo) onExercisePress?.(exerciseName);
-            };
-
-            return (
-              <View
-                key={`${block.label}-${index}`}
-                style={[
-                  styles.itemRow,
-                  isActive && styles.itemRowActive,
-                  isChecked && styles.itemRowChecked,
-                ]}
-              >
-                {showCheckbox ? (
-                  onToggleItem ? (
-                    <Pressable
-                      onPress={() => onToggleItem(itemKey)}
-                      style={styles.itemCheckbox}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: isChecked }}
-                    >
-                      <View style={[styles.checkbox, isChecked && styles.checkboxChecked]}>
-                        {isChecked ? <Text style={styles.checkmark}>✓</Text> : null}
-                      </View>
-                    </Pressable>
-                  ) : (
-                    <View style={styles.itemCheckbox}>
-                      <View style={[styles.checkbox, isChecked && styles.checkboxChecked]}>
-                        {isChecked ? <Text style={styles.checkmark}>✓</Text> : null}
-                      </View>
-                    </View>
-                  )
-                ) : (
-                  <View style={[styles.itemBullet, { backgroundColor: accent.text }]} />
-                )}
-                <View style={styles.itemCopy}>
-                  <Pressable
-                    onPress={() => {
-                      if (onToggleItem && itemKey) {
-                        onToggleItem(itemKey);
-                      }
-                    }}
-                    disabled={!onToggleItem || !itemKey}
-                  >
-                    <Text style={styles.itemName}>{display.name}</Text>
-                    {display.quantity || display.load ? (
-                      <View style={styles.itemMetrics}>
-                        {display.quantity ? (
-                          <View style={styles.itemMetricPill}>
-                            <Text style={styles.itemMetricLabel}>Cantidad</Text>
-                            <Text style={styles.itemMetricValue}>{display.quantity}</Text>
-                          </View>
-                        ) : null}
-                        {display.load ? (
-                          <View style={styles.itemMetricPill}>
-                            <Text style={styles.itemMetricLabel}>Carga</Text>
-                            <Text style={styles.itemMetricValue}>{display.load}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    ) : null}
-                  </Pressable>
-                  {showVideo ? (
-                    <Pressable onPress={openVideo} style={styles.itemVideoPressable}>
-                      <Text style={styles.itemVideoHint}>
-                        {isActive ? 'Reproduciendo arriba' : 'Ver vídeo'}
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-                {showVideo ? (
-                  <Pressable onPress={openVideo} style={styles.itemPlayBtn} accessibilityLabel="Ver vídeo">
-                    <AppIcon name="play" size={18} color={accent.text} outlined />
-                  </Pressable>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
-      ) : block.timing ? null : (
-        <Text style={styles.plainBlockText}>{block.label}</Text>
-      )}
+      <BlockItems items={block.items} accentText={accent.text} {...itemProps} />
     </View>
   );
 }
@@ -202,14 +295,12 @@ export function WorkoutSection({
 
   return (
     <Card style={[styles.card, variant === 'featured' ? styles.cardFeatured : undefined]}>
-      {variant !== 'featured' ? (
-        <View style={styles.header}>
-          <View style={styles.iconBadge}>
-            <AppIcon name={icon} size={18} color={colors.accent} outlined />
-          </View>
-          <Text style={styles.headerTitle}>{title}</Text>
+      <View style={styles.header}>
+        <View style={styles.iconBadge}>
+          <AppIcon name={icon} size={18} color={colors.accent} outlined />
         </View>
-      ) : null}
+        <Text style={styles.headerTitle}>{title}</Text>
+      </View>
 
       {structured ? (
         <View style={styles.blocks}>
@@ -307,6 +398,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
+  blockTitleText: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontWeight: '600',
+  },
   timingPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -340,6 +436,7 @@ const styles = StyleSheet.create({
   },
   itemsList: {
     gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   itemRow: {
     flexDirection: 'row',
@@ -438,9 +535,36 @@ const styles = StyleSheet.create({
     marginTop: 2,
     padding: spacing.xs,
   },
-  plainBlockText: {
+  noteCard: {
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderLeftWidth: 3,
+    borderLeftColor: `${colors.accent}66`,
+    backgroundColor: colors.surfaceLight,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  noteTitle: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  noteTitleWithBody: {
+    paddingBottom: spacing.sm,
+    marginBottom: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  noteDetail: {
     ...typography.bodySmall,
     color: colors.textSecondary,
     lineHeight: 22,
+  },
+  noteText: {
+    ...typography.body,
+    color: colors.text,
+    lineHeight: 24,
   },
 });

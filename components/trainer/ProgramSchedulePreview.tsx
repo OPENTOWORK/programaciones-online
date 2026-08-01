@@ -16,7 +16,8 @@ interface ProgramSchedulePreviewProps {
   draft: SessionDraft;
   editingWorkoutId?: string | null;
   isNewSession: boolean;
-  additionalDrafts?: Array<{ id: string; draft: SessionDraft; isCurrent?: boolean }>;
+  additionalDrafts?: Array<{ id: string; draft: SessionDraft; isCurrent?: boolean; isDraft?: boolean }>;
+  currentSessionSaved?: boolean;
   overrideItems?: SchedulePreviewItem[];
   athleteSchedule?: {
     plans: AthletePlan[];
@@ -36,6 +37,7 @@ export function ProgramSchedulePreview({
   editingWorkoutId,
   isNewSession,
   additionalDrafts,
+  currentSessionSaved,
   overrideItems,
   athleteSchedule,
   onDayPress,
@@ -55,6 +57,7 @@ export function ProgramSchedulePreview({
           editingWorkoutId,
           isNewSession,
           additionalDrafts,
+          currentSessionSaved,
           overrideItems,
           athleteSchedule,
         },
@@ -68,6 +71,7 @@ export function ProgramSchedulePreview({
       editingWorkoutId,
       isNewSession,
       additionalDrafts,
+      currentSessionSaved,
       overrideItems,
       athleteSchedule,
       focusDate,

@@ -30,6 +30,7 @@ export default function AthletePlanSessionScreen() {
     const sessionName = draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
     return {
       name: sessionName,
+      sessionNumber: plan.sessionNumber ?? 1,
       estimatedDuration: draft.estimatedDuration,
       warmup: draft.warmup,
       main: combineMainPartsForSave(draft.main, draft.metcon),

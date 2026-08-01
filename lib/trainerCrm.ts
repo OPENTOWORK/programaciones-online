@@ -1,14 +1,27 @@
+import { fetchNonAthleteProfiles } from '@/lib/athleteService';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import type { CrmLeadPosition, CrmStage } from '@/lib/types';
+import type { AthleteSummary, CrmLeadPosition, CrmStage, UserRole } from '@/lib/types';
 
 const STAGES_TABLE = 'trainer_crm_stages';
 const LEADS_TABLE = 'trainer_crm_leads';
 
-export const DEFAULT_CRM_STAGE_NAMES = ['Registrado', 'Contactado', 'Propuesta enviada', 'Cliente activo'];
+const DEFAULT_CRM_STAGES: Array<{ name: string; roleSlug?: UserRole }> = [
+  { name: 'Registrado' },
+  { name: 'Contactado' },
+  { name: 'Propuesta enviada' },
+  { name: 'Cliente activo' },
+  { name: 'Rol entrenador', roleSlug: 'entrenador' },
+];
+
+export const DEFAULT_CRM_STAGE_NAMES = DEFAULT_CRM_STAGES.map((stage) => stage.name);
 
 export interface CrmBoardData {
   stages: CrmStage[];
   positions: Map<string, CrmLeadPosition>;
+  /** Leads del tablero que ya no son atletas (promocionados a entrenador). */
+  promotedLeads: AthleteSummary[];
+  /** Fichas que el entrenador ha quitado del tablero. */
+  archivedLeadIds: Set<string>;
   /** false si la tabla real aún no existe en Supabase (falta ejecutar la migración) */
   persistent: boolean;
 }
@@ -16,13 +29,32 @@ export interface CrmBoardData {
 // ---- Almacén local en memoria (modo demo o respaldo si la tabla no existe todavía) ----
 const localStagesByTrainer = new Map<string, CrmStage[]>();
 const localPositionsByTrainer = new Map<string, Map<string, CrmLeadPosition>>();
+const localRolesByAthlete = new Map<string, UserRole>();
+const localArchivedByTrainer = new Map<string, Set<string>>();
 
 function buildDefaultStages(): CrmStage[] {
-  return DEFAULT_CRM_STAGE_NAMES.map((name, index) => ({
+  return DEFAULT_CRM_STAGES.map((stage, index) => ({
     id: `local-stage-${index}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    name,
+    name: stage.name,
     position: index,
+    roleSlug: stage.roleSlug,
   }));
+}
+
+function mapStageRow(row: Record<string, unknown>): CrmStage {
+  const roleSlug = row.role_slug as string | null | undefined;
+
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    position: row.position as number,
+    roleSlug: roleSlug === 'atleta' || roleSlug === 'entrenador' ? roleSlug : undefined,
+  };
+}
+
+/** Rol aplicado en modo local/demo, donde no se puede tocar la tabla Perfil. */
+export function getLocalLeadRole(athleteId: string): UserRole | undefined {
+  return localRolesByAthlete.get(athleteId);
 }
 
 function getLocalStages(trainerId: string): CrmStage[] {
@@ -43,6 +75,15 @@ function getLocalPositions(trainerId: string): Map<string, CrmLeadPosition> {
   return positions;
 }
 
+function getLocalArchived(trainerId: string): Set<string> {
+  let archived = localArchivedByTrainer.get(trainerId);
+  if (!archived) {
+    archived = new Set();
+    localArchivedByTrainer.set(trainerId, archived);
+  }
+  return archived;
+}
+
 function isLocalStageId(stageId: string) {
   return stageId.startsWith('local-stage-');
 }
@@ -60,53 +101,171 @@ function isMissingTableError(error: { message?: string; code?: string } | null |
   );
 }
 
+function localBoard(trainerId: string, persistent: boolean): CrmBoardData {
+  return {
+    stages: getLocalStages(trainerId),
+    positions: getLocalPositions(trainerId),
+    promotedLeads: [],
+    archivedLeadIds: getLocalArchived(trainerId),
+    persistent,
+  };
+}
+
+function isMissingArchivedColumnError(error: { message?: string } | null | undefined) {
+  return (error?.message ?? '').toLowerCase().includes('archived_at');
+}
+
 export async function fetchCrmBoard(trainerId: string, isDemoMode: boolean): Promise<CrmBoardData> {
   if (isDemoMode || !isSupabaseConfigured) {
-    return { stages: getLocalStages(trainerId), positions: getLocalPositions(trainerId), persistent: isDemoMode };
+    return localBoard(trainerId, isDemoMode);
   }
 
   const supabase = getSupabase();
   if (!supabase) {
-    return { stages: getLocalStages(trainerId), positions: getLocalPositions(trainerId), persistent: false };
+    return localBoard(trainerId, false);
   }
 
   const { data: stageRows, error: stageError } = await supabase
     .from(STAGES_TABLE)
-    .select('id, name, position')
+    .select('id, name, position, role_slug')
     .eq('trainer_id', trainerId)
     .order('position', { ascending: true });
 
   if (isMissingTableError(stageError)) {
-    return { stages: getLocalStages(trainerId), positions: getLocalPositions(trainerId), persistent: false };
+    return localBoard(trainerId, false);
   }
 
-  let stages: CrmStage[] = (stageRows ?? []).map((row) => ({
-    id: row.id as string,
-    name: row.name as string,
-    position: row.position as number,
-  }));
+  let stages: CrmStage[] = (stageRows ?? []).map(mapStageRow);
 
   if (stages.length === 0) {
     stages = await createDefaultCrmStages(trainerId);
   }
 
-  const { data: leadRows, error: leadError } = await supabase
-    .from(LEADS_TABLE)
-    .select('athlete_id, stage_id, position')
-    .eq('trainer_id', trainerId);
+  // La columna archived_at es opcional: si falta la migración, se lee sin ella.
+  const selectLeads = (select: string) =>
+    supabase.from(LEADS_TABLE).select(select).eq('trainer_id', trainerId);
+
+  let leadResult = await selectLeads('athlete_id, stage_id, position, archived_at');
+  if (leadResult.error && isMissingArchivedColumnError(leadResult.error)) {
+    leadResult = await selectLeads('athlete_id, stage_id, position');
+  }
+
+  const leadRows = leadResult.data as Array<Record<string, unknown>> | null;
+  const leadError = leadResult.error;
 
   const positions = new Map<string, CrmLeadPosition>();
+  const archivedLeadIds = new Set<string>();
+
   if (!leadError && leadRows) {
     for (const row of leadRows) {
+      const athleteId = row.athlete_id as string;
+
+      if (row.archived_at) {
+        archivedLeadIds.add(athleteId);
+        continue;
+      }
+
       if (!row.stage_id) continue;
-      positions.set(row.athlete_id as string, {
+      positions.set(athleteId, {
         stageId: row.stage_id as string,
         position: (row.position as number) ?? 0,
       });
     }
   }
 
-  return { stages, positions, persistent: true };
+  const promotedLeads = await fetchNonAthleteProfiles(Array.from(positions.keys()));
+
+  return { stages, positions, promotedLeads, archivedLeadIds, persistent: true };
+}
+
+/** Quita la ficha del tablero del entrenador sin tocar la cuenta del atleta. */
+export async function archiveCrmLead(
+  trainerId: string,
+  athleteId: string,
+  useLocalStore: boolean,
+): Promise<{ error?: string }> {
+  if (useLocalStore) {
+    getLocalArchived(trainerId).add(athleteId);
+    getLocalPositions(trainerId).delete(athleteId);
+    return {};
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) return { error: 'Supabase no está disponible.' };
+
+  const { error } = await supabase.from(LEADS_TABLE).upsert(
+    {
+      trainer_id: trainerId,
+      athlete_id: athleteId,
+      stage_id: null,
+      position: 0,
+      archived_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'trainer_id,athlete_id' },
+  );
+
+  if (error) {
+    if (isMissingArchivedColumnError(error)) {
+      return { error: 'Falta la migración del CRM en Supabase: ejecuta npm run supabase:crm-archived-leads' };
+    }
+    if (isMissingTableError(error)) {
+      getLocalArchived(trainerId).add(athleteId);
+      return {};
+    }
+    return { error: error.message };
+  }
+
+  return {};
+}
+
+/** Devuelve la ficha al tablero, a la primera columna. */
+export async function restoreCrmLead(
+  trainerId: string,
+  athleteId: string,
+  useLocalStore: boolean,
+): Promise<{ error?: string }> {
+  if (useLocalStore) {
+    getLocalArchived(trainerId).delete(athleteId);
+    return {};
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) return { error: 'Supabase no está disponible.' };
+
+  const { error } = await supabase
+    .from(LEADS_TABLE)
+    .delete()
+    .eq('trainer_id', trainerId)
+    .eq('athlete_id', athleteId);
+
+  if (error) return { error: error.message };
+  return {};
+}
+
+export async function setCrmLeadRole(
+  athleteId: string,
+  role: UserRole,
+  useLocalStore: boolean,
+): Promise<{ error?: string }> {
+  if (useLocalStore) {
+    localRolesByAthlete.set(athleteId, role);
+    return {};
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) return { error: 'Supabase no está disponible.' };
+
+  const { error } = await supabase.rpc('set_crm_lead_role', { target_id: athleteId, new_role: role });
+
+  if (error) {
+    if (isMissingTableError(error)) {
+      return { error: 'Falta la migración del CRM en Supabase: ejecuta npm run supabase:crm-role-stage' };
+    }
+    return { error: error.message };
+  }
+
+  return {};
 }
 
 async function createDefaultCrmStages(trainerId: string): Promise<CrmStage[]> {
@@ -116,16 +275,21 @@ async function createDefaultCrmStages(trainerId: string): Promise<CrmStage[]> {
 
   const { data, error } = await supabase
     .from(STAGES_TABLE)
-    .insert(defaults.map((stage) => ({ trainer_id: trainerId, name: stage.name, position: stage.position })))
-    .select('id, name, position');
+    .insert(
+      defaults.map((stage) => ({
+        trainer_id: trainerId,
+        name: stage.name,
+        position: stage.position,
+        role_slug: stage.roleSlug ?? null,
+      })),
+    )
+    .select('id, name, position, role_slug');
 
   if (error || !data) {
     return defaults;
   }
 
-  return data
-    .map((row) => ({ id: row.id as string, name: row.name as string, position: row.position as number }))
-    .sort((a, b) => a.position - b.position);
+  return data.map(mapStageRow).sort((a, b) => a.position - b.position);
 }
 
 export async function createCrmStage(
@@ -147,11 +311,11 @@ export async function createCrmStage(
     const { data, error } = await supabase
       .from(STAGES_TABLE)
       .insert({ trainer_id: trainerId, name: trimmed, position })
-      .select('id, name, position')
+      .select('id, name, position, role_slug')
       .single();
 
     if (!error && data) {
-      return { id: data.id as string, name: data.name as string, position: data.position as number };
+      return mapStageRow(data);
     }
   }
 

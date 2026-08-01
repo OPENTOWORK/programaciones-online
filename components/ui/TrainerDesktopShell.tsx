@@ -10,7 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 type NavItem = {
   label: string;
-  href: '/tabs/programs' | '/tabs/trainer' | '/tabs/profile';
+  href: '/tabs/programs' | '/tabs/trainer' | '/library' | '/tabs/profile';
   icon: AppIconName;
   match: (pathname: string) => boolean;
 };
@@ -35,6 +35,12 @@ const NAV_ITEMS: NavItem[] = [
       pathname.startsWith('/trainer/athlete/') ||
       pathname.startsWith('/trainer/chat/') ||
       pathname.startsWith('/trainer/plan/'),
+  },
+  {
+    label: 'Biblioteca',
+    href: '/library',
+    icon: 'video',
+    match: (pathname) => pathname.startsWith('/library'),
   },
   {
     label: 'Perfil',

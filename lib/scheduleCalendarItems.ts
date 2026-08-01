@@ -14,7 +14,9 @@ export interface ScheduleCalendarSource {
   draft: SessionDraft;
   editingWorkoutId?: string | null;
   isNewSession: boolean;
-  additionalDrafts?: Array<{ id: string; draft: SessionDraft; isCurrent?: boolean }>;
+  additionalDrafts?: Array<{ id: string; draft: SessionDraft; isCurrent?: boolean; isDraft?: boolean }>;
+  /** La sesión en edición ya existe: no se etiqueta como borrador. */
+  currentSessionSaved?: boolean;
   overrideItems?: SchedulePreviewItem[];
   athleteSchedule?: {
     plans: AthletePlan[];
@@ -42,7 +44,7 @@ export function buildScheduleCalendarItems(
     isNewSession: source.isNewSession,
     focusDate,
     viewMode,
-  });
+  }).map((item) => (source.currentSessionSaved && item.isDraft ? { ...item, isDraft: false } : item));
 
   const queued = (source.additionalDrafts ?? []).flatMap((entry) =>
     buildSchedulePreviewItems({
@@ -58,7 +60,7 @@ export function buildScheduleCalendarItems(
       id: schedulePreviewItemKey(entry.id, item.date),
       name: entry.draft.name.trim() || item.name,
       isCurrent: entry.isCurrent ?? false,
-      isDraft: true,
+      isDraft: entry.isDraft ?? true,
     })),
   );
 

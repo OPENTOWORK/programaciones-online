@@ -49,7 +49,7 @@ export default function TrainerSessionTemplateScreen() {
       return;
     }
     if (hasPendingBlocks) {
-      setFormError('Confirma los bloques pendientes con el botón verde antes de guardar.');
+      setFormError('Completa o elimina el bloque que estás editando antes de guardar.');
       return;
     }
     if (!canSaveSessionAsTemplate(draft)) {

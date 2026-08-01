@@ -124,7 +124,13 @@ export async function fetchAthleteById(athleteId: string): Promise<AthleteSummar
       .maybeSingle(),
   ]);
 
-  if (error || !profile) return null;
+  if (error) return null;
+
+  if (!profile) {
+    // Puede ser un lead promocionado a entrenador: sigue siendo visible en el tablero.
+    const [promoted] = await fetchNonAthleteProfiles([athleteId]);
+    return promoted ?? null;
+  }
 
   const program = Array.isArray(activeProgram?.programas)
     ? activeProgram?.programas[0]
@@ -139,6 +145,33 @@ export async function fetchAthleteById(athleteId: string): Promise<AthleteSummar
     alerts,
     unansweredCount: alerts?.total ?? 0,
   };
+}
+
+/**
+ * Perfiles de los leads del CRM que ya no tienen rol atleta (promocionados a entrenador),
+ * porque `fetchAthletes` los deja fuera por definición.
+ */
+export async function fetchNonAthleteProfiles(profileIds: string[]): Promise<AthleteSummary[]> {
+  if (profileIds.length === 0 || !isSupabaseConfigured) return [];
+
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from(PERFIL_TABLE)
+    .select('id, name, email, nivel, objetivo, altura, peso, lesiones, roles(slug)')
+    .in('id', profileIds);
+
+  if (error || !data) return [];
+
+  return data
+    .map((row) => {
+      const roles = row.roles as { slug?: string } | { slug?: string }[] | null | undefined;
+      const roleData = Array.isArray(roles) ? roles[0] : roles;
+      return { row, slug: roleData?.slug };
+    })
+    .filter((entry) => entry.slug === 'entrenador')
+    .map((entry) => ({ ...mapAthleteRow(entry.row), role: 'entrenador' as UserRole }));
 }
 
 export function isTrainerRole(role?: UserRole) {

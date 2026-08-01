@@ -1,7 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ComponentProps, MutableRefObject, ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type GestureResponderHandlers,
+} from 'react-native';
 
+import type { PopoverAnchor } from '@/components/ui/PopoverMenu';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import {
   formatDayLabel,
@@ -20,6 +31,13 @@ import {
 
 export type ScheduleCalendarSize = 'compact' | 'large';
 
+export interface CalendarSessionActions {
+  onEdit?: (item: SchedulePreviewItem) => void;
+  onCopy?: (item: SchedulePreviewItem) => void;
+  onDelete?: (item: SchedulePreviewItem) => void;
+  onMoveToDate?: (item: SchedulePreviewItem, date: Date) => void;
+}
+
 interface ScheduleCalendarGridProps {
   items: SchedulePreviewItem[];
   viewMode: ScheduleViewMode;
@@ -35,10 +53,13 @@ interface ScheduleCalendarGridProps {
   onVisiblePeriodsChange?: (value: number) => void;
   /** Estira el calendario para ocupar todo el alto disponible. */
   fill?: boolean;
-  /** Sesión desplegada dentro del calendario para ver su entrenamiento completo. */
-  expandedItemId?: string | null;
+  /** Sesiones desplegadas dentro del calendario para ver su entrenamiento completo. */
+  expandedItemIds?: readonly string[];
   onToggleItemExpanded?: (item: SchedulePreviewItem) => void;
   renderItemDetail?: (item: SchedulePreviewItem) => ReactNode;
+  sessionActions?: CalendarSessionActions;
+  /** Abre el menú de acciones de una sesión (editar, copiar, eliminar) junto a su botón. */
+  onSessionMenuPress?: (item: SchedulePreviewItem, anchor: PopoverAnchor) => void;
 }
 
 const VIEW_MODES: Array<{ id: ScheduleViewMode; label: string }> = [
@@ -97,27 +118,94 @@ function ExpandToggle({ expanded, onPress }: { expanded: boolean; onPress: () =>
   );
 }
 
+/** El asa no puede ser un Pressable: se quedaría con el gesto y el arrastre nunca empezaría. */
+function ChipDragHandle({ dragHandlers }: { dragHandlers: GestureResponderHandlers }) {
+  return (
+    <View
+      {...dragHandlers}
+      accessibilityLabel="Arrastrar sesión a otro día"
+      style={[styles.chipIconBtn, styles.chipDragHandle]}
+    >
+      <Ionicons name="reorder-three" size={14} color={colors.textSecondary} />
+    </View>
+  );
+}
+
+/** Mide su posición para que el menú se abra pegado al botón. */
+function ChipMenuButton({ onPress }: { onPress: (anchor: PopoverAnchor) => void }) {
+  const nodeRef = useRef<View | null>(null);
+
+  const handlePress = () => {
+    nodeRef.current?.measureInWindow((x, y, width, height) => onPress({ x, y, width, height }));
+  };
+
+  return (
+    <View ref={nodeRef} collapsable={false}>
+      <Pressable
+        onPress={handlePress}
+        accessibilityLabel="Opciones de la sesión"
+        hitSlop={4}
+        style={({ pressed }) => [styles.chipIconBtn, pressed && styles.chipIconBtnPressed]}
+      >
+        <Ionicons name="ellipsis-vertical" size={14} color={colors.textSecondary} />
+      </Pressable>
+    </View>
+  );
+}
+
 function SessionChip({
   item,
   onPress,
   expanded = false,
   onToggleExpanded,
+  onMenuPress,
+  dragHandlers,
   detail,
+  isDragging = false,
 }: {
   item: SchedulePreviewItem;
   onPress?: (item: SchedulePreviewItem) => void;
   expanded?: boolean;
   onToggleExpanded?: () => void;
+  onMenuPress?: (anchor: PopoverAnchor) => void;
+  dragHandlers?: GestureResponderHandlers;
   detail?: ReactNode;
+  isDragging?: boolean;
 }) {
-  const body = (
-    <>
+  const title = (
+    <Text style={styles.sessionChipName} numberOfLines={expanded ? 2 : 1}>
+      {item.name}
+    </Text>
+  );
+
+  const chipStyle = [
+    styles.sessionChip,
+    item.isCurrent && styles.sessionChipCurrent,
+    item.isDraft && styles.sessionChipDraft,
+    expanded && styles.sessionChipExpanded,
+    isDragging && styles.sessionChipDragging,
+  ];
+
+  return (
+    <View style={chipStyle}>
       <View style={styles.sessionChipHeader}>
-        <Text style={styles.sessionChipName} numberOfLines={expanded ? 2 : 1}>
-          {item.name}
-        </Text>
-        {onToggleExpanded ? <ExpandToggle expanded={expanded} onPress={onToggleExpanded} /> : null}
+        {dragHandlers ? <ChipDragHandle dragHandlers={dragHandlers} /> : null}
+        {onPress ? (
+          <Pressable
+            onPress={() => onPress(item)}
+            style={({ pressed }) => [styles.sessionChipTitleBtn, pressed && styles.sessionChipPressed]}
+          >
+            {title}
+          </Pressable>
+        ) : (
+          title
+        )}
+        <View style={styles.sessionChipActions}>
+          {onMenuPress ? <ChipMenuButton onPress={onMenuPress} /> : null}
+          {onToggleExpanded ? <ExpandToggle expanded={expanded} onPress={onToggleExpanded} /> : null}
+        </View>
       </View>
+
       <Text style={styles.sessionChipMeta} numberOfLines={expanded ? 3 : 1}>
         {item.estimatedDuration}
         {item.blockCount > 0 ? ` · ${item.blockCount} bloque${item.blockCount === 1 ? '' : 's'}` : ''}
@@ -126,27 +214,74 @@ function SessionChip({
           : ''}
       </Text>
       {item.isDraft ? <Text style={styles.sessionChipDraftLabel}>Borrador</Text> : null}
-    </>
-  );
 
-  const chipStyle = [
-    styles.sessionChip,
-    item.isCurrent && styles.sessionChipCurrent,
-    item.isDraft && styles.sessionChipDraft,
-    expanded && styles.sessionChipExpanded,
-  ];
-
-  return (
-    <View style={chipStyle}>
-      {onPress ? (
-        <Pressable onPress={() => onPress(item)} style={({ pressed }) => [pressed && styles.sessionChipPressed]}>
-          {body}
-        </Pressable>
-      ) : (
-        body
-      )}
       {expanded && detail ? <View style={styles.sessionChipDetail}>{detail}</View> : null}
     </View>
+  );
+}
+
+function DraggableSessionChip({
+  item,
+  columnBoundsRef,
+  onMoveEnd,
+  onDragStart,
+  ...chipProps
+}: Omit<ComponentProps<typeof SessionChip>, 'dragHandlers' | 'isDragging'> & {
+  columnBoundsRef: MutableRefObject<Array<{ date: Date; x: number; width: number }>>;
+  onMoveEnd: (item: SchedulePreviewItem, date: Date) => void;
+  onDragStart?: () => void;
+}) {
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const [dragging, setDragging] = useState(false);
+
+  // El PanResponder se crea una sola vez: si cambiara a mitad del gesto se perdería el arrastre.
+  const handlers = useRef({ item, onMoveEnd, onDragStart, columnBoundsRef });
+  handlers.current = { item, onMoveEnd, onDragStart, columnBoundsRef };
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: () => {
+          setDragging(true);
+          handlers.current.onDragStart?.();
+        },
+        onPanResponderMove: (_event, gesture) => {
+          pan.setValue({ x: gesture.dx, y: gesture.dy });
+        },
+        onPanResponderRelease: (event, gesture) => {
+          const { item: current, onMoveEnd: move, columnBoundsRef: boundsRef } = handlers.current;
+          const dropX = gesture.moveX || event.nativeEvent.pageX;
+          const target = boundsRef.current.find(
+            (bounds) => dropX >= bounds.x && dropX <= bounds.x + bounds.width,
+          );
+
+          setDragging(false);
+          pan.setValue({ x: 0, y: 0 });
+
+          if (target && target.date.toDateString() !== current.date.toDateString()) {
+            move(current, target.date);
+          }
+        },
+        onPanResponderTerminate: () => {
+          setDragging(false);
+          pan.setValue({ x: 0, y: 0 });
+        },
+      }),
+    [pan],
+  );
+
+  return (
+    <Animated.View
+      style={[
+        { transform: pan.getTranslateTransform() },
+        dragging && styles.sessionChipDragLayer,
+      ]}
+    >
+      <SessionChip {...chipProps} item={item} isDragging={dragging} dragHandlers={panResponder.panHandlers} />
+    </Animated.View>
   );
 }
 
@@ -163,9 +298,11 @@ export function ScheduleCalendarGrid({
   visiblePeriods = 1,
   onVisiblePeriodsChange,
   fill = false,
-  expandedItemId,
+  expandedItemIds,
   onToggleItemExpanded,
   renderItemDetail,
+  sessionActions,
+  onSessionMenuPress,
 }: ScheduleCalendarGridProps) {
   const navigate = (direction: -1 | 1) => {
     onFocusDateChange(shiftSchedulePeriod(focusDate, viewMode, direction));
@@ -234,9 +371,11 @@ export function ScheduleCalendarGrid({
               selectedDate={selectedDate}
               onDayPress={onDayPress}
               onSessionPress={onSessionPress}
-              expandedItemId={expandedItemId}
+              expandedItemIds={expandedItemIds}
               onToggleItemExpanded={onToggleItemExpanded}
               renderItemDetail={renderItemDetail}
+              sessionActions={sessionActions}
+              onSessionMenuPress={onSessionMenuPress}
             />
           ) : null}
           {viewMode === 'day' ? (
@@ -244,9 +383,10 @@ export function ScheduleCalendarGrid({
               focusDate={periodDate}
               items={items}
               onSessionPress={onSessionPress}
-              expandedItemId={expandedItemId}
+              expandedItemIds={expandedItemIds}
               onToggleItemExpanded={onToggleItemExpanded}
               renderItemDetail={renderItemDetail}
+              onSessionMenuPress={onSessionMenuPress}
             />
           ) : null}
         </View>
@@ -372,9 +512,11 @@ function WeekView({
   selectedDate,
   onDayPress,
   onSessionPress,
-  expandedItemId,
+  expandedItemIds,
   onToggleItemExpanded,
   renderItemDetail,
+  sessionActions,
+  onSessionMenuPress,
 }: {
   focusDate: Date;
   items: SchedulePreviewItem[];
@@ -383,14 +525,77 @@ function WeekView({
   selectedDate?: Date;
   onDayPress?: (date: Date, dayItems: SchedulePreviewItem[]) => void;
   onSessionPress?: (item: SchedulePreviewItem) => void;
-  expandedItemId?: string | null;
+  expandedItemIds?: readonly string[];
   onToggleItemExpanded?: (item: SchedulePreviewItem) => void;
   renderItemDetail?: (item: SchedulePreviewItem) => ReactNode;
+  sessionActions?: CalendarSessionActions;
+  onSessionMenuPress?: (item: SchedulePreviewItem, anchor: PopoverAnchor) => void;
 }) {
   const days = getWeekDays(focusDate);
+  const columnNodesRef = useRef(new Map<string, View | null>());
+  const columnRefCallbacksRef = useRef(new Map<string, (node: View | null) => void>());
+  const columnBoundsRef = useRef<Array<{ date: Date; x: number; width: number }>>([]);
+  const canDrag = Boolean(sessionActions?.onMoveToDate);
+
+  const measureColumns = useCallback(() => {
+    const entries = Array.from(columnNodesRef.current.entries()).filter(([, node]) => Boolean(node));
+    if (entries.length === 0) return;
+
+    const bounds: Array<{ date: Date; x: number; width: number }> = [];
+    let pending = entries.length;
+
+    entries.forEach(([dayKey, node]) => {
+      node?.measureInWindow((x, _y, width) => {
+        bounds.push({ date: new Date(dayKey), x, width });
+        pending -= 1;
+        if (pending <= 0) columnBoundsRef.current = bounds;
+      });
+    });
+  }, []);
+
+  /** La callback debe ser estable: si cambia en cada render, React la limpia y se pierde la medida. */
+  const registerColumnRef = useCallback((day: Date) => {
+    const dayKey = day.toISOString();
+    const cached = columnRefCallbacksRef.current.get(dayKey);
+    if (cached) return cached;
+
+    const callback = (node: View | null) => {
+      columnNodesRef.current.set(dayKey, node);
+    };
+    columnRefCallbacksRef.current.set(dayKey, callback);
+    return callback;
+  }, []);
+
+  const renderChip = (item: SchedulePreviewItem) => {
+    const expanded = expandedItemIds?.includes(scheduleItemKey(item)) ?? false;
+    const chipProps = {
+      item,
+      onPress: onSessionPress,
+      expanded,
+      onToggleExpanded: onToggleItemExpanded ? () => onToggleItemExpanded(item) : undefined,
+      onMenuPress: onSessionMenuPress
+        ? (anchor: PopoverAnchor) => onSessionMenuPress(item, anchor)
+        : undefined,
+      detail: renderItemDetail && expanded ? renderItemDetail(item) : undefined,
+    };
+
+    if (canDrag && sessionActions?.onMoveToDate) {
+      return (
+        <DraggableSessionChip
+          key={scheduleItemKey(item)}
+          {...chipProps}
+          columnBoundsRef={columnBoundsRef}
+          onMoveEnd={sessionActions.onMoveToDate}
+          onDragStart={measureColumns}
+        />
+      );
+    }
+
+    return <SessionChip key={scheduleItemKey(item)} {...chipProps} />;
+  };
 
   return (
-    <View style={[styles.weekGrid, fill && styles.weekGridFill]}>
+    <View style={[styles.weekGrid, fill && styles.weekGridFill]} onLayout={canDrag ? measureColumns : undefined}>
       {days.map((day) => {
         const dayItems = itemsForDate(items, day);
         const weekday = WEEKDAY_SHORT_LABELS[day.getDay() === 0 ? 6 : day.getDay() - 1];
@@ -399,6 +604,8 @@ function WeekView({
         return (
           <Wrapper
             key={day.toISOString()}
+            ref={canDrag ? registerColumnRef(day) : undefined}
+            collapsable={false}
             onPress={onDayPress ? () => onDayPress(day, dayItems) : undefined}
             style={[
               styles.weekColumn,
@@ -414,19 +621,7 @@ function WeekView({
             {dayItems.length === 0 ? (
               <Text style={styles.weekEmpty}>Sin sesión</Text>
             ) : (
-              dayItems.map((item) => {
-                const expanded = expandedItemId === scheduleItemKey(item);
-                return (
-                  <SessionChip
-                    key={item.id}
-                    item={item}
-                    onPress={onSessionPress}
-                    expanded={expanded}
-                    onToggleExpanded={onToggleItemExpanded ? () => onToggleItemExpanded(item) : undefined}
-                    detail={renderItemDetail && expanded ? renderItemDetail(item) : undefined}
-                  />
-                );
-              })
+              dayItems.map((item) => renderChip(item))
             )}
           </Wrapper>
         );
@@ -439,16 +634,18 @@ function DayView({
   focusDate,
   items,
   onSessionPress,
-  expandedItemId,
+  expandedItemIds,
   onToggleItemExpanded,
   renderItemDetail,
+  onSessionMenuPress,
 }: {
   focusDate: Date;
   items: SchedulePreviewItem[];
   onSessionPress?: (item: SchedulePreviewItem) => void;
-  expandedItemId?: string | null;
+  expandedItemIds?: readonly string[];
   onToggleItemExpanded?: (item: SchedulePreviewItem) => void;
   renderItemDetail?: (item: SchedulePreviewItem) => ReactNode;
+  onSessionMenuPress?: (item: SchedulePreviewItem, anchor: PopoverAnchor) => void;
 }) {
   const dayItems = itemsForDate(items, focusDate);
 
@@ -461,21 +658,26 @@ function DayView({
         </View>
       ) : (
         dayItems.map((item) => {
-          const expanded = expandedItemId === scheduleItemKey(item);
+          const expanded = expandedItemIds?.includes(scheduleItemKey(item)) ?? false;
           return (
             <View key={item.id} style={styles.dayCard}>
+              <View style={styles.dayCardHeader}>
+                <Text style={styles.dayCardTitle}>{item.name}</Text>
+                {item.isDraft ? <Text style={styles.dayCardDraft}>Borrador</Text> : null}
+                <View style={styles.sessionChipActions}>
+                  {onSessionMenuPress ? (
+                    <ChipMenuButton onPress={(anchor) => onSessionMenuPress(item, anchor)} />
+                  ) : null}
+                  {onToggleItemExpanded ? (
+                    <ExpandToggle expanded={expanded} onPress={() => onToggleItemExpanded(item)} />
+                  ) : null}
+                </View>
+              </View>
               <Pressable
                 onPress={onSessionPress ? () => onSessionPress(item) : undefined}
                 disabled={!onSessionPress}
                 style={({ pressed }) => [onSessionPress && pressed && styles.dayCardPressed]}
               >
-                <View style={styles.dayCardHeader}>
-                  <Text style={styles.dayCardTitle}>{item.name}</Text>
-                  {item.isDraft ? <Text style={styles.dayCardDraft}>Borrador</Text> : null}
-                  {onToggleItemExpanded ? (
-                    <ExpandToggle expanded={expanded} onPress={() => onToggleItemExpanded(item)} />
-                  ) : null}
-                </View>
                 <Text style={styles.dayCardMeta}>
                   {item.dayLabel} · {item.estimatedDuration}
                 </Text>
@@ -741,6 +943,41 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 4,
   },
+  sessionChipActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  chipIconBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  chipIconBtnPressed: {
+    opacity: 0.7,
+    backgroundColor: colors.surfaceLight,
+  },
+  chipDragHandle: Platform.select({
+    web: { cursor: 'grab', userSelect: 'none' } as object,
+    default: {},
+  }),
+  sessionChipDragging: {
+    borderColor: colors.accent,
+    opacity: 0.92,
+  },
+  sessionChipDragLayer: {
+    zIndex: 20,
+    elevation: 20,
+  },
+  sessionChipTitleBtn: {
+    flex: 1,
+    minWidth: 0,
+  },
   sessionChipExpanded: {
     borderColor: colors.accent,
     backgroundColor: colors.background,
@@ -778,6 +1015,8 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text,
     fontWeight: '700',
+    flex: 1,
+    minWidth: 0,
   },
   sessionChipMeta: {
     ...typography.caption,

@@ -80,6 +80,28 @@ export function searchExerciseCatalog(
   return matches.slice(0, limit);
 }
 
+export async function fetchExerciseVideoEntries(): Promise<ExerciseVideoEntry[]> {
+  if (!isSupabaseConfigured) return [];
+
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('ejercicios_videos')
+    .select('aimharder_ejer_id, name, youtube_video_id')
+    .order('name');
+
+  if (error || !data) return [];
+
+  return data
+    .filter((row) => Boolean(row.youtube_video_id))
+    .map((row) => ({
+      aimharderEjerId: row.aimharder_ejer_id ?? undefined,
+      name: row.name,
+      youtubeVideoId: row.youtube_video_id,
+    }));
+}
+
 export async function fetchExerciseVideoCatalog(): Promise<ExerciseVideoCatalog> {
   if (!isSupabaseConfigured) {
     return { byEjerId: new Map(), byNameKey: new Map() };

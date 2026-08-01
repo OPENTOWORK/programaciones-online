@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing, typography } from '@/constants/theme';
-import { normalizeExerciseName } from '@/lib/exerciseName';
+import { formatSessionSectionTitle } from '@/lib/personalizedPlanContent';
 import type { SessionWorkoutContent } from '@/hooks/useSessionRunner';
 import type { ChecklistItem } from '@/lib/sessionChecklist';
 
@@ -120,7 +120,7 @@ export function SessionWorkoutView({
 
       <WorkoutSection title="Calentamiento" content={workout.warmup} icon="warmup" {...sectionProps('warmup')} />
       <WorkoutSection
-        title="Parte principal"
+        title={formatSessionSectionTitle(workout.sessionNumber, workout.name)}
         content={workout.main}
         icon="main"
         variant="featured"

@@ -18,6 +18,8 @@ export interface QueuedPlanSession {
   id: string;
   sessionNumber: number;
   draft: SessionDraft;
+  /** Las sesiones ya guardadas se pintan en el calendario sin la etiqueta de borrador. */
+  isSaved?: boolean;
 }
 
 interface PersonalizedPlanSessionLayoutProps {
@@ -30,6 +32,8 @@ interface PersonalizedPlanSessionLayoutProps {
   sessionNumber?: number;
   onSessionNumberChange?: (value: number) => void;
   queuedSessions?: QueuedPlanSession[];
+  /** La sesión que se edita ya está guardada, así que no es un borrador en el calendario. */
+  currentSessionSaved?: boolean;
   onConfirmSession?: () => void;
   canConfirmSession?: boolean;
   onPendingBlocksChange?: (hasPending: boolean) => void;
@@ -51,6 +55,7 @@ export function PersonalizedPlanSessionLayout({
   sessionNumber,
   onSessionNumberChange,
   queuedSessions = [],
+  currentSessionSaved = false,
   onConfirmSession,
   canConfirmSession = false,
   onPendingBlocksChange,
@@ -76,6 +81,7 @@ export function PersonalizedPlanSessionLayout({
         id: session.id,
         draft: session.draft,
         isCurrent: false,
+        isDraft: !session.isSaved,
       })),
     [queuedSessions],
   );
@@ -104,8 +110,9 @@ export function PersonalizedPlanSessionLayout({
       editingWorkoutId: null,
       isNewSession: true,
       additionalDrafts,
+      currentSessionSaved,
     }),
-    [previewProgram, previewDraft, additionalDrafts],
+    [previewProgram, previewDraft, additionalDrafts, currentSessionSaved],
   );
 
   return (
@@ -133,6 +140,7 @@ export function PersonalizedPlanSessionLayout({
             workouts={[]}
             draft={previewDraft}
             additionalDrafts={additionalDrafts}
+            currentSessionSaved={currentSessionSaved}
             editingWorkoutId={null}
             isNewSession
             onDayPress={(date) => openTrainerPreviewDay(router, date, previewState)}

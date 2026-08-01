@@ -18,6 +18,16 @@ function itemsFromSection(section: string, content: string): ChecklistItem[] {
   const items: ChecklistItem[] = [];
 
   blocks.forEach((block, blockIndex) => {
+    if (block.text !== undefined) {
+      const firstLine = block.text.split('\n').find((line) => line.trim())?.trim();
+      items.push({
+        key: `${section}:b${blockIndex}:text`,
+        label: block.label.trim() || firstLine || '',
+        section,
+      });
+      return;
+    }
+
     block.items.forEach((item, itemIndex) => {
       items.push({
         key: `${section}:b${blockIndex}:i${itemIndex}`,

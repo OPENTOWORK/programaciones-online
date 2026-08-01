@@ -53,6 +53,7 @@ export function groupPersonalizedPlans(plans: AthletePlan[]): PersonalizedPlanGr
 
     groups.set(id, {
       id,
+      planGroupId: plan.planGroupId ?? plan.id,
       title: plan.title,
       athleteId: plan.athleteId,
       trainerId: plan.trainerId,
@@ -78,6 +79,31 @@ export function groupPersonalizedPlans(plans: AthletePlan[]): PersonalizedPlanGr
       };
     })
     .sort((left, right) => left.title.localeCompare(right.title, 'es'));
+}
+
+/**
+ * El identificador del grupo puede llegar como uuid, como clave derivada del título
+ * o como id de una de sus sesiones, así que se aceptan las tres formas.
+ */
+export function findPlanGroup(
+  groups: PersonalizedPlanGroup[],
+  groupIdOrPlan: string | AthletePlan,
+): PersonalizedPlanGroup | undefined {
+  if (typeof groupIdOrPlan !== 'string') {
+    const plan = groupIdOrPlan;
+    return (
+      groups.find((group) => group.sessions.some((session) => session.id === plan.id)) ??
+      findPlanGroup(groups, getPlanGroupId(plan))
+    );
+  }
+
+  const id = groupIdOrPlan;
+  return groups.find(
+    (group) =>
+      group.id === id ||
+      group.planGroupId === id ||
+      group.sessions.some((session) => session.id === id || getPlanGroupId(session) === id),
+  );
 }
 
 export function getNextSessionNumber(sessions: AthletePlan[]) {

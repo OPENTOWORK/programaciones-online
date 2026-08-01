@@ -1,33 +1,53 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { NutritionPlanContent } from '@/components/program/NutritionPlanContent';
 import { PersonalizedPlanContent } from '@/components/program/PersonalizedPlanContent';
 import { NutritionPlanBuilder } from '@/components/trainer/NutritionPlanBuilder';
-import { PersonalizedPlanSessionLayout } from '@/components/trainer/PersonalizedPlanSessionLayout';
-import type { CalendarSessionSaveInput } from '@/components/trainer/ScheduleCalendarModal';
+import {
+  PersonalizedPlanSessionLayout,
+  type QueuedPlanSession,
+} from '@/components/trainer/PersonalizedPlanSessionLayout';
+import {
+  ScheduleCalendarModal,
+  type CalendarSessionSaveInput,
+} from '@/components/trainer/ScheduleCalendarModal';
 import { AppIcon, IconBadge } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
-import { colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import { useAthletePlan, useTrainerAthletePlans } from '@/hooks/useAthletePlans';
 import { fetchAthletePlansForAthlete } from '@/lib/athletePlanService';
+import {
+  parseSchedulePreviewItemKey,
+  type SchedulePreviewItem,
+} from '@/lib/programSchedulePreview';
 import { normalizeRouteParam } from '@/lib/routeParams';
 import { safeGoBack } from '@/lib/navigation';
-import { getPlanGroupId, getSessionLabel, groupPersonalizedPlans } from '@/lib/personalizedPlanGroups';
+import {
+  findPlanGroup,
+  getNextSessionNumber,
+  getPlanGroupId,
+  getSessionLabel,
+  groupPersonalizedPlans,
+} from '@/lib/personalizedPlanGroups';
 import { createEmptyNutritionPlan } from '@/lib/nutritionPlanContent';
 import { openPlanPdf } from '@/lib/openPlanPdf';
 import { pickPlanPdf, type PickedPlanPdf } from '@/lib/planPdfPicker';
 import {
+  createPersonalizedPlanPreviewProgram,
   isStructuredPersonalizedPlanContent,
   parsePersonalizedPlanContent,
   serializePersonalizedPlanContent,
   validatePersonalizedPlanDraft,
 } from '@/lib/personalizedPlanContent';
+import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
+import { formatScheduleSummary, toWeekdayIndex } from '@/lib/sessionSchedule';
 import { collectExerciseNamesFromSessionDraft } from '@/lib/exerciseTextParser';
 import { syncExerciseVideosForNames } from '@/lib/exerciseVideoSyncService';
 import { createEmptySessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
@@ -56,7 +76,7 @@ export default function TrainerPlanDetailScreen() {
   const wantsGroupEdit = editParam === 'group';
 
   const { plan, isLoading, error: loadError, refresh } = useAthletePlan(planId);
-  const { updatePlan, removePlan } = useTrainerAthletePlans();
+  const { createPlan, updatePlan, removePlan } = useTrainerAthletePlans();
 
   const [mode, setMode] = useState<'view' | 'edit' | 'editGroup'>('view');
   const [title, setTitle] = useState('');
@@ -70,6 +90,7 @@ export default function TrainerPlanDetailScreen() {
   const [pickingPdf, setPickingPdf] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [groupSessions, setGroupSessions] = useState<AthletePlan[]>([]);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const isNutrition = plan?.planType === 'nutrition';
   const hasStructuredNutrition = Boolean(plan?.nutritionData && plan.nutritionData.meals.length > 0);
@@ -116,9 +137,7 @@ export default function TrainerPlanDetailScreen() {
     void fetchAthletePlansForAthlete(plan.athleteId, plan.trainerId)
       .then((plans) => {
         if (cancelled) return;
-        const group = groupPersonalizedPlans(plans).find(
-          (entry) => entry.id === getPlanGroupId(plan) || entry.planGroupId === plan.planGroupId,
-        );
+        const group = findPlanGroup(groupPersonalizedPlans(plans), plan);
         setGroupSessions(group?.sessions ?? [plan]);
       })
       .catch(() => {
@@ -129,6 +148,135 @@ export default function TrainerPlanDetailScreen() {
       cancelled = true;
     };
   }, [plan]);
+
+  // El calendario debe enseñar todas las sesiones del plan, no solo la que se está editando.
+  const otherGroupSessions = useMemo<QueuedPlanSession[]>(() => {
+    if (!plan || plan.planType !== 'personalized') return [];
+
+    return groupSessions
+      .filter((session) => session.id !== plan.id)
+      .map((session, index) => {
+        const number = session.sessionNumber ?? index + 1;
+        return {
+          id: session.id,
+          sessionNumber: number,
+          draft: parsePersonalizedPlanContent(session.content, number - 1),
+          isSaved: true,
+        };
+      });
+  }, [groupSessions, plan]);
+
+  const findGroupSession = (item: SchedulePreviewItem) => {
+    const { sourceId } = parseSchedulePreviewItemKey(item.id);
+    return groupSessions.find((session) => session.id === sourceId);
+  };
+
+  const loadCalendarSessionDraft = (item: SchedulePreviewItem) => {
+    const sibling = otherGroupSessions.find((session) => session.id === findGroupSession(item)?.id);
+    if (sibling) return sibling.draft;
+    return item.isCurrent ? sessionDraft : null;
+  };
+
+  const viewCalendarSource = useMemo<ScheduleCalendarSource>(
+    () => ({
+      program: createPersonalizedPlanPreviewProgram(plan?.title ?? 'Plan personalizado'),
+      workouts: [],
+      draft: createEmptySessionDraft(0),
+      isNewSession: false,
+      athleteSchedule: { plans: groupSessions, workouts: [] },
+    }),
+    [groupSessions, plan?.title],
+  );
+
+  const planIdFromCalendarItem = (item: SchedulePreviewItem) =>
+    item.id.startsWith('plan:') ? item.id.split(':')[1] : parseSchedulePreviewItemKey(item.id).sourceId;
+
+  const refreshGroupSessions = useCallback(async () => {
+    if (!plan || plan.planType !== 'personalized') return;
+    const plans = await fetchAthletePlansForAthlete(plan.athleteId, plan.trainerId);
+    const group = findPlanGroup(groupPersonalizedPlans(plans), plan);
+    setGroupSessions(group?.sessions ?? [plan]);
+    await refresh();
+  }, [plan, refresh]);
+
+  const loadViewCalendarSessionDraft = (item: SchedulePreviewItem) => {
+    const sessionId = planIdFromCalendarItem(item);
+    const session = groupSessions.find((entry) => entry.id === sessionId);
+    if (!session) return null;
+    return parsePersonalizedPlanContent(session.content, (session.sessionNumber ?? 1) - 1);
+  };
+
+  const handleViewCalendarDelete = async (item: SchedulePreviewItem) => {
+    const sessionId = planIdFromCalendarItem(item);
+    if (!sessionId) return 'No se pudo identificar la sesión.';
+
+    const result = await removePlan(sessionId);
+    if (result.error) return result.error;
+
+    if (sessionId === plan?.id) {
+      setCalendarOpen(false);
+      safeGoBack(router, { pathname: '/trainer/athlete/[id]', params: { id: plan.athleteId } });
+      return null;
+    }
+
+    await refreshGroupSessions();
+    return null;
+  };
+
+  const handleViewCalendarCopy = async (item: SchedulePreviewItem) => {
+    if (!plan) return 'No se pudo copiar la sesión.';
+    const sessionId = planIdFromCalendarItem(item);
+    const source = groupSessions.find((session) => session.id === sessionId);
+    if (!source) return 'No se pudo copiar la sesión.';
+
+    const nextNumber = getNextSessionNumber(groupSessions);
+    const draft = parsePersonalizedPlanContent(source.content, (source.sessionNumber ?? 1) - 1);
+    const result = await createPlan({
+      athleteId: source.athleteId,
+      planType: 'personalized',
+      title: plan.title,
+      content: serializePersonalizedPlanContent({ ...draft, name: `Sesión ${nextNumber}` }, nextNumber),
+      planGroupId: getPlanGroupId(plan),
+      sessionNumber: nextNumber,
+      athleteName: plan.athleteName,
+    });
+
+    if (result.error) return result.error;
+    await refreshGroupSessions();
+    return null;
+  };
+
+  const handleViewCalendarMoveToDate = async (item: SchedulePreviewItem, date: Date) => {
+    const sessionId = planIdFromCalendarItem(item);
+    const source = groupSessions.find((session) => session.id === sessionId);
+    if (!source) return 'No se pudo mover la sesión.';
+
+    const draft = parsePersonalizedPlanContent(source.content, (source.sessionNumber ?? 1) - 1);
+    const schedule = { ...draft.schedule, weekdays: [toWeekdayIndex(date)] };
+    const updatedDraft = {
+      ...draft,
+      schedule,
+      dayLabel: formatScheduleSummary(schedule),
+    };
+
+    const result = await updatePlan(source.id, {
+      athleteId: source.athleteId,
+      planType: 'personalized',
+      title: source.title,
+      content: serializePersonalizedPlanContent(updatedDraft, source.sessionNumber ?? 1),
+    });
+
+    if (result.error) return result.error;
+    await refreshGroupSessions();
+    return null;
+  };
+
+  const openCalendarSessionEditor = (item: SchedulePreviewItem) => {
+    const sessionId = planIdFromCalendarItem(item);
+    if (!sessionId) return;
+    setCalendarOpen(false);
+    router.push({ pathname: '/trainer/plan/[id]', params: { id: sessionId, edit: '1' } });
+  };
 
   const enterEditMode = () => {
     resetFormFromPlan();
@@ -225,6 +373,36 @@ export default function TrainerPlanDetailScreen() {
     return null;
   };
 
+  /** Guarda una sesión hermana editada desde el calendario, sin tocar la que está abierta. */
+  const persistOtherSessionDraft = async (
+    target: AthletePlan,
+    draftToSave: SessionDraft,
+  ): Promise<string | null> => {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) return 'El título del plan es obligatorio';
+
+    const draftError = validatePersonalizedPlanDraft(draftToSave);
+    if (draftError) return draftError;
+
+    const videoSync = await syncExerciseVideosForNames(collectExerciseNamesFromSessionDraft(draftToSave));
+    if (videoSync.error) return videoSync.error;
+
+    const content = serializePersonalizedPlanContent(draftToSave, target.sessionNumber ?? 1);
+    const result = await updatePlan(target.id, {
+      athleteId: target.athleteId,
+      planType: target.planType,
+      title: trimmedTitle,
+      content,
+    });
+
+    if (result.error) return result.error;
+
+    setGroupSessions((current) =>
+      current.map((session) => (session.id === target.id ? { ...session, content } : session)),
+    );
+    return null;
+  };
+
   const handleSave = async () => {
     if (!plan) return;
 
@@ -273,7 +451,12 @@ export default function TrainerPlanDetailScreen() {
     }
   };
 
-  const handleCalendarSave = async ({ draft }: CalendarSessionSaveInput) => {
+  const handleCalendarSave = async ({ draft, item }: CalendarSessionSaveInput) => {
+    const target = item ? findGroupSession(item) : undefined;
+    if (target && target.id !== plan?.id) {
+      return persistOtherSessionDraft(target, draft);
+    }
+
     setSessionDraft(draft);
     return persistSessionDraft(draft);
   };
@@ -352,20 +535,47 @@ export default function TrainerPlanDetailScreen() {
           {groupSessions.map((session, index) => {
             const active = session.id === plan.id;
             return (
-              <Pressable
+              <View
                 key={session.id}
-                onPress={() =>
-                  active
-                    ? undefined
-                    : router.replace({ pathname: '/trainer/plan/[id]', params: { id: session.id } })
-                }
                 style={[styles.sessionRow, active && styles.sessionRowActive]}
               >
-                <Text style={[styles.sessionRowText, active && styles.sessionRowTextActive]}>
-                  {getSessionLabel(session, index)}
-                </Text>
-                {active ? <Text style={styles.sessionCurrent}>Actual</Text> : <Text style={styles.planChevron}>›</Text>}
-              </Pressable>
+                <Pressable
+                  onPress={() =>
+                    active
+                      ? undefined
+                      : router.replace({ pathname: '/trainer/plan/[id]', params: { id: session.id } })
+                  }
+                  style={styles.sessionRowMain}
+                  disabled={active}
+                >
+                  <Text style={[styles.sessionRowText, active && styles.sessionRowTextActive]}>
+                    {getSessionLabel(session, index)}
+                  </Text>
+                </Pressable>
+                <View style={styles.sessionRowActions}>
+                  <Pressable
+                    onPress={() => setCalendarOpen(true)}
+                    accessibilityLabel="Ver en el calendario"
+                    hitSlop={6}
+                    style={({ pressed }) => [styles.calendarBtn, pressed && styles.calendarBtnPressed]}
+                  >
+                    <Ionicons name="calendar-outline" size={14} color={colors.accent} />
+                    <Text style={styles.calendarBtnText}>Calendario</Text>
+                  </Pressable>
+                  {active ? (
+                    <Text style={styles.sessionCurrent}>Actual</Text>
+                  ) : (
+                    <Pressable
+                      onPress={() =>
+                        router.replace({ pathname: '/trainer/plan/[id]', params: { id: session.id } })
+                      }
+                      hitSlop={6}
+                    >
+                      <Text style={styles.planChevron}>›</Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
             );
           })}
           <Button
@@ -466,7 +676,7 @@ export default function TrainerPlanDetailScreen() {
             {hasStructuredNutrition ? (
               <NutritionPlanContent data={plan.nutritionData!} />
             ) : hasStructuredPersonalized ? (
-              <PersonalizedPlanContent content={plan.content} />
+              <PersonalizedPlanContent content={plan.content} sessionNumber={plan.sessionNumber ?? undefined} />
             ) : plan.content ? (
               <Text style={styles.contentText}>{plan.content}</Text>
             ) : null}
@@ -563,7 +773,9 @@ export default function TrainerPlanDetailScreen() {
               onDraftChange={setSessionDraft}
               showSessionName
               sessionNumber={plan.sessionNumber ?? 1}
-              onLoadCalendarSessionDraft={(item) => (item.isCurrent ? sessionDraft : null)}
+              queuedSessions={otherGroupSessions}
+              currentSessionSaved
+              onLoadCalendarSessionDraft={loadCalendarSessionDraft}
               onSaveCalendarSession={handleCalendarSave}
               footer={
                 <View style={styles.footer}>
@@ -610,6 +822,21 @@ export default function TrainerPlanDetailScreen() {
         </View>
       )}
       </View>
+
+      {!isNutrition ? (
+        <ScheduleCalendarModal
+          visible={calendarOpen}
+          onClose={() => setCalendarOpen(false)}
+          title={plan.title}
+          subtitle={`Sesiones programadas de ${plan.athleteName ?? 'este atleta'}. Despliega una sesión para ver su contenido.`}
+          source={viewCalendarSource}
+          loadSessionDraft={loadViewCalendarSessionDraft}
+          onSessionEdit={openCalendarSessionEditor}
+          onSessionCopy={handleViewCalendarCopy}
+          onSessionDelete={handleViewCalendarDelete}
+          onSessionMoveToDate={handleViewCalendarMoveToDate}
+        />
+      ) : null}
     </ScreenWrapper>
   );
 }
@@ -668,6 +895,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
     borderWidth: 1,
@@ -679,6 +907,10 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
     backgroundColor: `${colors.accent}10`,
   },
+  sessionRowMain: {
+    flex: 1,
+    minWidth: 0,
+  },
   sessionRowText: {
     ...typography.bodySmall,
     color: colors.text,
@@ -686,6 +918,30 @@ const styles = StyleSheet.create({
   },
   sessionRowTextActive: {
     color: colors.accent,
+  },
+  sessionRowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  calendarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: `${colors.accent}55`,
+    backgroundColor: `${colors.accent}14`,
+  },
+  calendarBtnPressed: {
+    backgroundColor: `${colors.accent}26`,
+  },
+  calendarBtnText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
   },
   sessionCurrent: {
     ...typography.caption,
