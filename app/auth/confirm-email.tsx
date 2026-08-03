@@ -98,8 +98,15 @@ export default function ConfirmEmailScreen() {
         return;
       }
 
+      /* Un intento fallido no significa que la confirmación fallara: otro proceso puede haber
+       * canjeado el enlace y dejado la sesión lista. Solo es error si no hay sesión. */
+      const hasSession = async () => {
+        const { data } = await supabase.auth.getSession();
+        return Boolean(data.session?.user);
+      };
+
       const existingFlow = getAuthCallbackSnapshot(callbackUrl);
-      if (existingFlow.status === 'error') {
+      if (existingFlow.status === 'error' && !(await hasSession())) {
         if (!cancelled) {
           setErrorUi(resolveConfirmEmailErrorUi(existingFlow.errorCode, existingFlow.sanitizedMessage));
           setChecking(false);
@@ -132,7 +139,8 @@ export default function ConfirmEmailScreen() {
         const result = await ensureAuthCallbackProcessed(supabase, callbackUrl);
         if (cancelled) return;
 
-        if (!result.ok) {
+        if (!result.ok && !(await hasSession())) {
+          if (cancelled) return;
           setErrorUi(resolveConfirmEmailErrorUi(result.errorCode ?? null, result.sanitizedMessage ?? result.error));
           setChecking(false);
           return;

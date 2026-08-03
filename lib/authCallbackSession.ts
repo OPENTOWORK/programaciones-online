@@ -42,18 +42,19 @@ export async function runAuthCallbackSession(
     };
   }
 
+  /* El enlace solo se puede canjear una vez, y en web `detectSessionInUrl` de supabase-js lo
+   * canjea por su cuenta en paralelo. Si el canje falla puede ser porque el otro proceso ya lo
+   * consumió y la sesión es válida, así que el error se guarda y solo se devuelve si al final
+   * no aparece ninguna sesión. */
+  let deferredError: { message: string; errorCode: string | null } | null = null;
+
   if (parsed.status === 'pending') {
     if (parsed.code) {
       const { error } = await supabase.auth.exchangeCodeForSession(parsed.code);
       if (error) {
-        const message = mapAuthCallbackErrorMessage(error.code ?? null, error.message);
-        logAuthEvent('callback_failed', { errorCode: error.code }, 'warn');
-        return {
-          ok: false,
-          error: message,
+        deferredError = {
+          message: mapAuthCallbackErrorMessage(error.code ?? null, error.message),
           errorCode: error.code ?? null,
-          callbackType: parsed.callbackType,
-          status: 'error',
         };
       }
     } else if (parsed.accessToken && parsed.refreshToken) {
@@ -62,16 +63,19 @@ export async function runAuthCallbackSession(
         refresh_token: parsed.refreshToken,
       });
       if (error) {
-        const message = mapAuthCallbackErrorMessage(error.code ?? null, error.message);
-        logAuthEvent('callback_failed', { errorCode: error.code }, 'warn');
-        return {
-          ok: false,
-          error: message,
+        deferredError = {
+          message: mapAuthCallbackErrorMessage(error.code ?? null, error.message),
           errorCode: error.code ?? null,
-          callbackType: parsed.callbackType,
-          status: 'error',
         };
       }
+    }
+
+    if (deferredError) {
+      logAuthEvent(
+        'callback_exchange_conflict',
+        { errorCode: deferredError.errorCode ?? undefined },
+        'warn',
+      );
     }
   }
 
@@ -93,6 +97,14 @@ export async function runAuthCallbackSession(
       status: 'error',
     };
   }
+
+  const failure = (fallbackMessage: string): CompleteAuthCallbackResult => ({
+    ok: false,
+    error: deferredError?.message ?? fallbackMessage,
+    errorCode: deferredError?.errorCode ?? null,
+    callbackType: parsed.callbackType,
+    status: 'error',
+  });
 
   return new Promise((resolve) => {
     let settled = false;
@@ -122,8 +134,12 @@ export async function runAuthCallbackSession(
       }
     });
 
+    /* Si el canje ya falló solo esperamos a que termine el proceso paralelo, que tarda poco.
+     * Alargarlo hasta el máximo dejaría al usuario mirando el spinner en enlaces caducados. */
+    const maxAttempts = deferredError ? 8 : 24;
+
     const poll = async () => {
-      for (let attempt = 0; attempt < 24; attempt += 1) {
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const { data } = await supabase.auth.getSession();
         if (data.session) {
           finish({
@@ -137,24 +153,13 @@ export async function runAuthCallbackSession(
         await new Promise((r) => setTimeout(r, 250));
       }
 
-      finish({
-        ok: false,
-        error: 'No se pudo validar el enlace. Puede haber caducado o ya haber sido utilizado.',
-        callbackType: parsed.callbackType,
-        status: 'error',
-      });
+      finish(failure('No se pudo validar el enlace. Puede haber caducado o ya haber sido utilizado.'));
     };
 
     void poll();
 
     const timer = setTimeout(
-      () =>
-        finish({
-          ok: false,
-          error: 'Tiempo de espera agotado al procesar el enlace.',
-          callbackType: parsed.callbackType,
-          status: 'error',
-        }),
+      () => finish(failure('Tiempo de espera agotado al procesar el enlace.')),
       timeoutMs,
     );
   });
