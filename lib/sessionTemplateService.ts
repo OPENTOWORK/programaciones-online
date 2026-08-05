@@ -77,7 +77,6 @@ export async function fetchSessionTemplates(
   const { data, error } = await supabase
     .from(TABLE)
     .select('id, trainer_id, name, content, created_at, updated_at')
-    .eq('trainer_id', trainerId)
     .order('name', { ascending: true });
 
   if (error || !data) {
@@ -105,7 +104,7 @@ export async function createSessionTemplate(input: {
   if (input.useLocalStore || !isSupabaseConfigured) {
     const templates = localList(input.trainerId);
     if (templates.some((template) => template.name.toLowerCase() === name.toLowerCase())) {
-      return { error: 'Ya tienes una plantilla con ese nombre.' };
+      return { error: 'Ya hay una plantilla con ese nombre.' };
     }
 
     const now = new Date().toISOString();
@@ -131,7 +130,7 @@ export async function createSessionTemplate(input: {
     .single();
 
   if (error || !data) {
-    if (isDuplicateNameError(error)) return { error: 'Ya tienes una plantilla con ese nombre.' };
+    if (isDuplicateNameError(error)) return { error: 'Ya hay una plantilla con ese nombre.' };
     return {
       error: isMissingTableError(error)
         ? 'Falta aplicar la tabla de plantillas: npm run supabase:session-templates'
@@ -162,7 +161,7 @@ export async function updateSessionTemplate(input: {
     const duplicated = templates.some(
       (entry) => entry.id !== template.id && entry.name.toLowerCase() === name.toLowerCase(),
     );
-    if (duplicated) return { error: 'Ya tienes una plantilla con ese nombre.' };
+    if (duplicated) return { error: 'Ya hay una plantilla con ese nombre.' };
 
     const index = templates.findIndex((entry) => entry.id === template.id);
     const updated: SessionTemplate = { ...template, name, content, updatedAt };
@@ -177,12 +176,11 @@ export async function updateSessionTemplate(input: {
     .from(TABLE)
     .update({ name, content, updated_at: updatedAt })
     .eq('id', template.id)
-    .eq('trainer_id', template.trainerId)
     .select('id, trainer_id, name, content, created_at, updated_at')
     .single();
 
   if (error || !data) {
-    if (isDuplicateNameError(error)) return { error: 'Ya tienes una plantilla con ese nombre.' };
+    if (isDuplicateNameError(error)) return { error: 'Ya hay una plantilla con ese nombre.' };
     return { error: error?.message ?? 'No se pudo actualizar la plantilla.' };
   }
 
@@ -203,11 +201,7 @@ export async function deleteSessionTemplate(
   const supabase = getSupabase();
   if (!supabase) return { error: 'Supabase no está disponible.' };
 
-  const { error } = await supabase
-    .from(TABLE)
-    .delete()
-    .eq('id', template.id)
-    .eq('trainer_id', template.trainerId);
+  const { error } = await supabase.from(TABLE).delete().eq('id', template.id);
 
   return error ? { error: error.message } : {};
 }

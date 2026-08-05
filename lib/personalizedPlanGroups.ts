@@ -1,4 +1,5 @@
 import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
+import { ACTIVATION_SESSION_NAME } from '@/lib/trainerSessionDraft';
 import type { AthletePlan } from '@/lib/types';
 
 export interface PersonalizedPlanGroup {
@@ -23,6 +24,7 @@ export function getSessionNumber(plan: AthletePlan, fallbackIndex = 0) {
 
 export function getSessionLabel(plan: AthletePlan, fallbackIndex = 0) {
   const draft = parsePersonalizedPlanContent(plan.content, getSessionNumber(plan, fallbackIndex) - 1);
+  if (draft.kind === 'activation') return ACTIVATION_SESSION_NAME;
   const name = draft.name.trim();
   if (name && name.toLowerCase() !== plan.title.trim().toLowerCase()) {
     return name;
@@ -34,6 +36,11 @@ export function sortPlansBySession(plans: AthletePlan[]) {
   return [...plans].sort((left, right) => {
     const bySession = getSessionNumber(left) - getSessionNumber(right);
     if (bySession !== 0) return bySession;
+
+    const leftKind = parsePersonalizedPlanContent(left.content).kind === 'activation' ? 0 : 1;
+    const rightKind = parsePersonalizedPlanContent(right.content).kind === 'activation' ? 0 : 1;
+    if (leftKind !== rightKind) return leftKind - rightKind;
+
     return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
   });
 }

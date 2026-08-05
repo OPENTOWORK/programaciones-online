@@ -30,6 +30,7 @@ import {
   validatePersonalizedPlanDraft,
 } from '@/lib/personalizedPlanContent';
 import { hasSessionBlockContent } from '@/lib/sessionBlockSections';
+import { needsActivationForDraft } from '@/lib/planActivation';
 import { parseSchedulePreviewItemKey, type SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import {
   formatScheduleSummary,
@@ -39,7 +40,11 @@ import {
 } from '@/lib/sessionSchedule';
 import { collectExerciseNamesFromSessionDraft } from '@/lib/exerciseTextParser';
 import { syncExerciseVideosForNames } from '@/lib/exerciseVideoSyncService';
-import { createEmptySessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
+import {
+  createActivationDraftFor,
+  createEmptySessionDraft,
+  type SessionDraft,
+} from '@/lib/trainerSessionDraft';
 import { ATHLETE_PLAN_TYPE_LABELS, type AthletePlanType } from '@/lib/trainerConstants';
 import type { NutritionPlanData } from '@/lib/types';
 
@@ -111,7 +116,7 @@ export default function CreateAthletePlanScreen() {
     let cancelled = false;
     setGroupsLoading(true);
 
-    void fetchAthletePlansForAthlete(selectedAthleteId, user.id)
+    void fetchAthletePlansForAthlete(selectedAthleteId)
       .then((plans) => {
         if (cancelled) return;
         setExistingGroups(groupPersonalizedPlans(plans));
@@ -251,20 +256,35 @@ export default function CreateAthletePlanScreen() {
     return { plan: result.plan };
   };
 
+  /** Añade la sesión a la cola junto a su activación cuando ese día aún no tiene una. */
+  const queueSessionWithActivation = (session: QueuedPlanSession) => {
+    setQueuedSessions((current) => {
+      const next = [...current, session];
+      const existing = [...savedGroupSessions, ...next].map((entry) => entry.draft);
+      if (!needsActivationForDraft(session.draft, existing)) return next;
+
+      return [
+        ...next,
+        {
+          id: `queued-activation-${session.sessionNumber}-${Date.now()}`,
+          sessionNumber: session.sessionNumber,
+          draft: createActivationDraftFor(session.draft),
+        },
+      ];
+    });
+  };
+
   const handleConfirmSession = () => {
     if (!canConfirmCurrentSession) {
       setError('Completa o elimina el bloque que estás editando antes de añadir otra sesión.');
       return;
     }
 
-    setQueuedSessions((current) => [
-      ...current,
-      {
-        id: `queued-${sessionNumber}-${Date.now()}`,
-        sessionNumber,
-        draft: sessionDraft,
-      },
-    ]);
+    queueSessionWithActivation({
+      id: `queued-${sessionNumber}-${Date.now()}`,
+      sessionNumber,
+      draft: sessionDraft,
+    });
 
     const nextSessionNumber = sessionNumber + 1;
     setSessionNumber(nextSessionNumber);
@@ -328,10 +348,7 @@ export default function CreateAthletePlanScreen() {
     }
 
     const number = nextCalendarSessionNumber();
-    setQueuedSessions((sessions) => [
-      ...sessions,
-      { id: `queued-${number}-${Date.now()}`, sessionNumber: number, draft },
-    ]);
+    queueSessionWithActivation({ id: `queued-${number}-${Date.now()}`, sessionNumber: number, draft });
     setError(null);
     return null;
   };
@@ -372,6 +389,12 @@ export default function CreateAthletePlanScreen() {
           return;
         }
         sessionsToSave.push({ sessionNumber, draft: sessionDraft });
+
+        // Las sesiones ya encoladas traen su activación; la del formulario se añade aquí.
+        const existing = [...savedGroupSessions, ...sessionsToSave].map((entry) => entry.draft);
+        if (needsActivationForDraft(sessionDraft, existing)) {
+          sessionsToSave.push({ sessionNumber, draft: createActivationDraftFor(sessionDraft) });
+        }
       }
 
       if (sessionsToSave.length === 0) {

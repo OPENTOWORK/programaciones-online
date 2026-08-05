@@ -6,7 +6,7 @@ import {
   type SessionSchedule,
 } from '@/lib/sessionSchedule';
 import type { Program, Workout } from '@/lib/types';
-import type { SessionDraft } from '@/lib/trainerSessionDraft';
+import type { SessionDraft, SessionKind } from '@/lib/trainerSessionDraft';
 
 export type ScheduleViewMode = 'month' | 'week' | 'day';
 
@@ -20,6 +20,8 @@ export interface SchedulePreviewItem {
   exerciseCount: number;
   isCurrent: boolean;
   isDraft: boolean;
+  /** Sin valor equivale a una sesión normal. */
+  kind?: SessionKind;
 }
 
 const WEEKDAY_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -98,6 +100,7 @@ function draftPreviewItem(
     exerciseCount: extractExercisesFromSessionDraft(draft).length,
     isCurrent: options.isCurrent,
     isDraft: options.isDraft,
+    kind: draft.kind,
   };
 }
 
@@ -241,7 +244,10 @@ export function buildSchedulePreviewItems({
   return items.sort((left, right) => {
     const byDate = left.date.getTime() - right.date.getTime();
     if (byDate !== 0) return byDate;
-    return left.name.localeCompare(right.name);
+    const leftKind = left.kind === 'activation' ? 0 : 1;
+    const rightKind = right.kind === 'activation' ? 0 : 1;
+    if (leftKind !== rightKind) return leftKind - rightKind;
+    return left.name.localeCompare(right.name, 'es');
   });
 }
 

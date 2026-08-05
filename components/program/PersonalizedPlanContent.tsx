@@ -27,6 +27,7 @@ export function PersonalizedPlanContent({ content, sessionNumber }: Personalized
   const mainSectionTitle = formatSessionSectionTitle(
     sessionNumber ?? parseSessionNumberFromPlanContent(content),
     draft.name,
+    draft.kind,
   );
 
   return (

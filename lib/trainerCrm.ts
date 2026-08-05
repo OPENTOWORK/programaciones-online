@@ -2,6 +2,8 @@ import { fetchNonAthleteProfiles } from '@/lib/athleteService';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { AthleteSummary, CrmLeadPosition, CrmStage, UserRole } from '@/lib/types';
 
+/* El tablero es común a todos los entrenadores: no se filtra por `trainer_id`, que en estas
+ * tablas solo deja constancia de quién tocó la ficha por última vez. */
 const STAGES_TABLE = 'trainer_crm_stages';
 const LEADS_TABLE = 'trainer_crm_leads';
 
@@ -20,7 +22,7 @@ export interface CrmBoardData {
   positions: Map<string, CrmLeadPosition>;
   /** Leads del tablero que ya no son atletas (promocionados a entrenador). */
   promotedLeads: AthleteSummary[];
-  /** Fichas que el entrenador ha quitado del tablero. */
+  /** Fichas que se han quitado del tablero. */
   archivedLeadIds: Set<string>;
   /** false si la tabla real aún no existe en Supabase (falta ejecutar la migración) */
   persistent: boolean;
@@ -128,7 +130,6 @@ export async function fetchCrmBoard(trainerId: string, isDemoMode: boolean): Pro
   const { data: stageRows, error: stageError } = await supabase
     .from(STAGES_TABLE)
     .select('id, name, position, role_slug')
-    .eq('trainer_id', trainerId)
     .order('position', { ascending: true });
 
   if (isMissingTableError(stageError)) {
@@ -142,8 +143,7 @@ export async function fetchCrmBoard(trainerId: string, isDemoMode: boolean): Pro
   }
 
   // La columna archived_at es opcional: si falta la migración, se lee sin ella.
-  const selectLeads = (select: string) =>
-    supabase.from(LEADS_TABLE).select(select).eq('trainer_id', trainerId);
+  const selectLeads = (select: string) => supabase.from(LEADS_TABLE).select(select);
 
   let leadResult = await selectLeads('athlete_id, stage_id, position, archived_at');
   if (leadResult.error && isMissingArchivedColumnError(leadResult.error)) {
@@ -178,7 +178,7 @@ export async function fetchCrmBoard(trainerId: string, isDemoMode: boolean): Pro
   return { stages, positions, promotedLeads, archivedLeadIds, persistent: true };
 }
 
-/** Quita la ficha del tablero del entrenador sin tocar la cuenta del atleta. */
+/** Quita la ficha del tablero sin tocar la cuenta del atleta. */
 export async function archiveCrmLead(
   trainerId: string,
   athleteId: string,
@@ -202,7 +202,7 @@ export async function archiveCrmLead(
       archived_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
-    { onConflict: 'trainer_id,athlete_id' },
+    { onConflict: 'athlete_id' },
   );
 
   if (error) {
@@ -233,11 +233,7 @@ export async function restoreCrmLead(
   const supabase = getSupabase();
   if (!supabase) return { error: 'Supabase no está disponible.' };
 
-  const { error } = await supabase
-    .from(LEADS_TABLE)
-    .delete()
-    .eq('trainer_id', trainerId)
-    .eq('athlete_id', athleteId);
+  const { error } = await supabase.from(LEADS_TABLE).delete().eq('athlete_id', athleteId);
 
   if (error) return { error: error.message };
   return {};
@@ -367,11 +363,7 @@ export async function deleteCrmStage(
   const supabase = getSupabase();
   if (!supabase) return;
 
-  await supabase
-    .from(LEADS_TABLE)
-    .update({ stage_id: fallbackStageId })
-    .eq('trainer_id', trainerId)
-    .eq('stage_id', stageId);
+  await supabase.from(LEADS_TABLE).update({ stage_id: fallbackStageId }).eq('stage_id', stageId);
 
   await supabase.from(STAGES_TABLE).delete().eq('id', stageId);
 }
@@ -425,7 +417,7 @@ export async function saveCrmColumnOrder(
     updated_at: new Date().toISOString(),
   }));
 
-  const { error } = await supabase.from(LEADS_TABLE).upsert(rows, { onConflict: 'trainer_id,athlete_id' });
+  const { error } = await supabase.from(LEADS_TABLE).upsert(rows, { onConflict: 'athlete_id' });
 
   if (isMissingTableError(error)) {
     const positions = getLocalPositions(trainerId);

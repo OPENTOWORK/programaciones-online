@@ -163,6 +163,12 @@ export function formatScheduleWeekdays(schedule: SessionSchedule) {
     .join(', ');
 }
 
+/** Identifica los días exactos de un calendario. A diferencia del resumen legible, distingue
+ * dos sesiones puntuales que caen en el mismo día de la semana pero en fechas distintas. */
+export function scheduleDayKey(schedule: SessionSchedule) {
+  return [schedule.weekdays.join(','), schedule.recurrence, schedule.startDate ?? ''].join('|');
+}
+
 export function formatScheduleSummary(schedule: SessionSchedule) {
   const days = formatScheduleWeekdays(schedule);
   const recurrence = RECURRENCE_OPTIONS.find((entry) => entry.value === schedule.recurrence)?.label ?? '';

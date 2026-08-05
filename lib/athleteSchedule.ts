@@ -3,6 +3,7 @@ import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import { buildSchedulePreviewItems, itemsForDate, type SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import { createPersonalizedPlanPreviewProgram } from '@/lib/personalizedPlanContent';
 import { fetchWorkoutsByProgram } from '@/lib/workoutService';
+import { ACTIVATION_SESSION_NAME } from '@/lib/trainerSessionDraft';
 import type { AthletePlan, Program, Workout } from '@/lib/types';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
 
@@ -89,7 +90,10 @@ export function buildAthleteCalendarItems({
 
   for (const plan of plans) {
     const draft = planToDraft(plan);
-    const sessionLabel = draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
+    const sessionLabel =
+      draft.kind === 'activation'
+        ? ACTIVATION_SESSION_NAME
+        : draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
     const previewProgram = createPersonalizedPlanPreviewProgram(plan.title);
     items.push(
       ...buildSchedulePreviewItems({

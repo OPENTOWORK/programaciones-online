@@ -83,6 +83,7 @@ export function draftToPreviewWorkout(draft: SessionDraft, title?: string): Sess
   return {
     name: title?.trim() || draft.name,
     sessionNumber: sessionMatch ? Number(sessionMatch[1]) : 1,
+    kind: draft.kind,
     estimatedDuration: draft.estimatedDuration,
     warmup: draft.warmup,
     main: combineMainPartsForSave(draft.main, draft.metcon),

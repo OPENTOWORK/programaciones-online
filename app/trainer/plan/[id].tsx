@@ -40,6 +40,11 @@ import { createEmptyNutritionPlan } from '@/lib/nutritionPlanContent';
 import { openPlanPdf } from '@/lib/openPlanPdf';
 import { pickPlanPdf, type PickedPlanPdf } from '@/lib/planPdfPicker';
 import {
+  createActivationAfterSession,
+  ensureActivationsForSessions,
+  getMissingActivations,
+} from '@/lib/planActivation';
+import {
   createPersonalizedPlanPreviewProgram,
   isStructuredPersonalizedPlanContent,
   parsePersonalizedPlanContent,
@@ -50,7 +55,7 @@ import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
 import { formatScheduleSummary, toWeekdayIndex } from '@/lib/sessionSchedule';
 import { collectExerciseNamesFromSessionDraft } from '@/lib/exerciseTextParser';
 import { syncExerciseVideosForNames } from '@/lib/exerciseVideoSyncService';
-import { createEmptySessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
+import { createEmptySessionDraft, renameSessionCopy, type SessionDraft } from '@/lib/trainerSessionDraft';
 import { ATHLETE_PLAN_TYPE_LABELS } from '@/lib/trainerConstants';
 import type { AthletePlan, NutritionPlanData } from '@/lib/types';
 
@@ -134,7 +139,7 @@ export default function TrainerPlanDetailScreen() {
 
     let cancelled = false;
 
-    void fetchAthletePlansForAthlete(plan.athleteId, plan.trainerId)
+    void fetchAthletePlansForAthlete(plan.athleteId)
       .then((plans) => {
         if (cancelled) return;
         const group = findPlanGroup(groupPersonalizedPlans(plans), plan);
@@ -193,11 +198,41 @@ export default function TrainerPlanDetailScreen() {
 
   const refreshGroupSessions = useCallback(async () => {
     if (!plan || plan.planType !== 'personalized') return;
-    const plans = await fetchAthletePlansForAthlete(plan.athleteId, plan.trainerId);
+    const plans = await fetchAthletePlansForAthlete(plan.athleteId);
     const group = findPlanGroup(groupPersonalizedPlans(plans), plan);
     setGroupSessions(group?.sessions ?? [plan]);
     await refresh();
   }, [plan, refresh]);
+
+  useEffect(() => {
+    if (!calendarOpen || !plan || plan.planType !== 'personalized') return;
+
+    let cancelled = false;
+    void (async () => {
+      if (getMissingActivations(groupSessions).length === 0) return;
+
+      const error = await ensureActivationsForSessions(groupSessions, async (input) => {
+        const result = await createPlan({
+          athleteId: input.athleteId,
+          planType: 'personalized',
+          title: input.title,
+          content: input.content,
+          planGroupId: input.planGroupId,
+          sessionNumber: input.sessionNumber,
+          athleteName: plan.athleteName,
+        });
+        return { error: result.error };
+      });
+
+      if (!cancelled && !error) {
+        await refreshGroupSessions();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [calendarOpen, createPlan, groupSessions, plan, refreshGroupSessions]);
 
   const loadViewCalendarSessionDraft = (item: SchedulePreviewItem) => {
     const sessionId = planIdFromCalendarItem(item);
@@ -231,17 +266,43 @@ export default function TrainerPlanDetailScreen() {
 
     const nextNumber = getNextSessionNumber(groupSessions);
     const draft = parsePersonalizedPlanContent(source.content, (source.sessionNumber ?? 1) - 1);
+    const copiedDraft = renameSessionCopy(draft, nextNumber);
     const result = await createPlan({
       athleteId: source.athleteId,
       planType: 'personalized',
       title: plan.title,
-      content: serializePersonalizedPlanContent({ ...draft, name: `Sesión ${nextNumber}` }, nextNumber),
+      content: serializePersonalizedPlanContent(copiedDraft, nextNumber),
       planGroupId: getPlanGroupId(plan),
       sessionNumber: nextNumber,
       athleteName: plan.athleteName,
     });
 
     if (result.error) return result.error;
+
+    const activationError = await createActivationAfterSession(
+      copiedDraft,
+      nextNumber,
+      {
+        athleteId: source.athleteId,
+        title: plan.title,
+        planGroupId: getPlanGroupId(plan),
+        existingSessions: groupSessions,
+      },
+      async (input) => {
+        const activationResult = await createPlan({
+          athleteId: input.athleteId,
+          planType: 'personalized',
+          title: input.title,
+          content: input.content,
+          planGroupId: input.planGroupId,
+          sessionNumber: input.sessionNumber,
+          athleteName: plan.athleteName,
+        });
+        return { error: activationResult.error };
+      },
+    );
+    if (activationError) return activationError;
+
     await refreshGroupSessions();
     return null;
   };

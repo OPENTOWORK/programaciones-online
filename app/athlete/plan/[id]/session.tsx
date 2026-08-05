@@ -31,6 +31,7 @@ export default function AthletePlanSessionScreen() {
     return {
       name: sessionName,
       sessionNumber: plan.sessionNumber ?? 1,
+      kind: draft.kind,
       estimatedDuration: draft.estimatedDuration,
       warmup: draft.warmup,
       main: combineMainPartsForSave(draft.main, draft.metcon),

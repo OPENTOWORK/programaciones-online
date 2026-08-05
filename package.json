@@ -62,6 +62,7 @@
     "supabase:session-templates": "node scripts/apply-session-templates.mjs",
     "supabase:crm-role-stage": "node scripts/apply-trainer-crm-role-stage.mjs",
     "supabase:crm-archived-leads": "node scripts/apply-trainer-crm-archived-leads.mjs",
+    "supabase:trainer-team": "node scripts/apply-trainer-team.mjs",
     "supabase:auth-urls": "node scripts/update-auth-urls.mjs",
     "aimharder:fetch": "node scripts/fetch-aimharder-calendar.mjs",
     "aimharder:sync": "node scripts/sync-aimharder.mjs",

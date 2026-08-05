@@ -27,6 +27,7 @@ export async function loadWorkoutForSessionLog(log: SessionLogRecord): Promise<S
 
     return {
       name: log.workoutName || sessionName,
+      kind: draft.kind,
       estimatedDuration: draft.estimatedDuration,
       warmup: draft.warmup,
       main: combineMainPartsForSave(draft.main, draft.metcon),

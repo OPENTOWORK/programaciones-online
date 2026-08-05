@@ -200,25 +200,17 @@ export async function fetchAthletePlansForUser(
   return attachPdfUrls(plans, rows);
 }
 
-export async function fetchTrainerAthletePlans(
-  trainerId: string,
-  planType?: AthletePlanType,
-): Promise<AthletePlan[]> {
+/** Los entrenadores trabajan en equipo, así que la lista incluye las de todos. */
+export async function fetchTrainerAthletePlans(planType?: AthletePlanType): Promise<AthletePlan[]> {
   if (!isSupabaseConfigured) {
-    return demoPlans.filter(
-      (plan) => plan.trainerId === trainerId && (!planType || plan.planType === planType),
-    );
+    return demoPlans.filter((plan) => !planType || plan.planType === planType);
   }
 
   const supabase = getSupabase();
   if (!supabase) return [];
 
   const { data, error } = await selectPlanRows((select) => {
-    let query = supabase
-      .from(TABLE)
-      .select(select)
-      .eq('trainer_id', trainerId)
-      .order('created_at', { ascending: false });
+    let query = supabase.from(TABLE).select(select).order('created_at', { ascending: false });
 
     if (planType) {
       query = query.eq('plan_type', planType);
@@ -262,12 +254,9 @@ export async function fetchAthletePlanById(planId: string): Promise<AthletePlan 
   return withPdf;
 }
 
-export async function fetchAthletePlansForAthlete(
-  athleteId: string,
-  trainerId: string,
-): Promise<AthletePlan[]> {
+export async function fetchAthletePlansForAthlete(athleteId: string): Promise<AthletePlan[]> {
   if (!isSupabaseConfigured) {
-    return demoPlans.filter((plan) => plan.athleteId === athleteId && plan.trainerId === trainerId);
+    return demoPlans.filter((plan) => plan.athleteId === athleteId);
   }
 
   const supabase = getSupabase();
@@ -278,7 +267,6 @@ export async function fetchAthletePlansForAthlete(
       .from(TABLE)
       .select(select)
       .eq('athlete_id', athleteId)
-      .eq('trainer_id', trainerId)
       .order('created_at', { ascending: false }),
   );
 

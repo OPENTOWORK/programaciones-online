@@ -16,6 +16,11 @@ import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
 import { useTrainerCrmActivity } from '@/hooks/useTrainerCrmActivity';
 import { fetchAthletePlansForAthlete } from '@/lib/athletePlanService';
 import {
+  createActivationAfterSession,
+  ensureActivationsForSessions,
+  getMissingActivations,
+} from '@/lib/planActivation';
+import {
   createPersonalizedPlanPreviewProgram,
   parsePersonalizedPlanContent,
   serializePersonalizedPlanContent,
@@ -24,7 +29,7 @@ import { getNextSessionNumber, groupPersonalizedPlans, splitAssignedPlans, type 
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
 import { formatScheduleSummary, toWeekdayIndex } from '@/lib/sessionSchedule';
-import { createEmptySessionDraft } from '@/lib/trainerSessionDraft';
+import { createEmptySessionDraft, renameSessionCopy } from '@/lib/trainerSessionDraft';
 import { fetchAthleteSessionLogs } from '@/lib/sessionLogService';
 import { markAthleteDetailAlertsRead } from '@/lib/trainerAthleteAlerts';
 import type { AthletePlan } from '@/lib/types';
@@ -93,7 +98,7 @@ export default function AthleteDetailScreen() {
     setPlanActionError(null);
 
     try {
-      const data = await fetchAthletePlansForAthlete(id, user.id);
+      const data = await fetchAthletePlansForAthlete(id);
       setAssignedPlans(data);
     } catch {
       setAssignedPlans([]);
@@ -222,7 +227,7 @@ export default function AthleteDetailScreen() {
   const refreshCalendarGroup = useCallback(async () => {
     if (!calendarGroup || !id || !user?.id) return;
 
-    const plans = await fetchAthletePlansForAthlete(id, user.id);
+    const plans = await fetchAthletePlansForAthlete(id);
     setAssignedPlans(plans);
 
     const group = groupPersonalizedPlans(plans).find(
@@ -231,6 +236,36 @@ export default function AthleteDetailScreen() {
     if (group) setCalendarGroup(group);
     else setCalendarGroup(null);
   }, [calendarGroup, id, user?.id]);
+
+  useEffect(() => {
+    if (!calendarGroup || !user?.id) return;
+
+    let cancelled = false;
+    void (async () => {
+      if (getMissingActivations(calendarGroup.sessions).length === 0) return;
+
+      const error = await ensureActivationsForSessions(calendarGroup.sessions, async (input) => {
+        const result = await createPlan({
+          athleteId: input.athleteId,
+          planType: 'personalized',
+          title: input.title,
+          content: input.content,
+          planGroupId: input.planGroupId,
+          sessionNumber: input.sessionNumber,
+          athleteName: athlete?.name,
+        });
+        return { error: result.error };
+      });
+
+      if (!cancelled && !error) {
+        await refreshCalendarGroup();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [athlete?.name, calendarGroup, createPlan, refreshCalendarGroup, user?.id]);
 
   const handleCalendarDelete = async (item: SchedulePreviewItem) => {
     const planId = planIdFromCalendarItem(item);
@@ -250,17 +285,43 @@ export default function AthleteDetailScreen() {
 
     const nextNumber = getNextSessionNumber(calendarGroup.sessions);
     const draft = parsePersonalizedPlanContent(source.content, (source.sessionNumber ?? 1) - 1);
+    const copiedDraft = renameSessionCopy(draft, nextNumber);
     const result = await createPlan({
       athleteId: source.athleteId,
       planType: 'personalized',
       title: calendarGroup.title,
-      content: serializePersonalizedPlanContent({ ...draft, name: `Sesión ${nextNumber}` }, nextNumber),
+      content: serializePersonalizedPlanContent(copiedDraft, nextNumber),
       planGroupId: calendarGroup.planGroupId,
       sessionNumber: nextNumber,
       athleteName: athlete?.name,
     });
 
     if (result.error) return result.error;
+
+    const activationError = await createActivationAfterSession(
+      copiedDraft,
+      nextNumber,
+      {
+        athleteId: source.athleteId,
+        title: calendarGroup.title,
+        planGroupId: calendarGroup.planGroupId,
+        existingSessions: calendarGroup.sessions,
+      },
+      async (input) => {
+        const activationResult = await createPlan({
+          athleteId: input.athleteId,
+          planType: 'personalized',
+          title: input.title,
+          content: input.content,
+          planGroupId: input.planGroupId,
+          sessionNumber: input.sessionNumber,
+          athleteName: athlete?.name,
+        });
+        return { error: activationResult.error };
+      },
+    );
+    if (activationError) return activationError;
+
     await refreshCalendarGroup();
     return null;
   };
@@ -445,7 +506,10 @@ export default function AthleteDetailScreen() {
           activityEntries.map((entry) => (
             <View key={entry.id} style={styles.activityRow}>
               <View style={styles.activityCopy}>
-                <Text style={styles.activityDate}>{formatActivityDate(entry.createdAt)}</Text>
+                <Text style={styles.activityDate}>
+                  {formatActivityDate(entry.createdAt)}
+                  {entry.trainerName ? ` · ${entry.trainerName}` : ''}
+                </Text>
                 <Text style={styles.activityMessage}>{entry.message}</Text>
               </View>
               <Pressable onPress={() => handleDeleteActivityEntry(entry.id)} hitSlop={8}>

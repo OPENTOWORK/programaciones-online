@@ -49,11 +49,7 @@ export function useTrainerMessages(options: UseTrainerMessagesOptions = {}) {
     let cancelled = false;
 
     async function loadFeedback() {
-      const { entries } = await fetchTrainerAthleteFeedback(
-        conversationUserId!,
-        asTrainer ? user?.id : undefined,
-        isDemoMode,
-      );
+      const { entries } = await fetchTrainerAthleteFeedback(conversationUserId!, isDemoMode);
       if (!cancelled) {
         setFeedbackMessages(entries.map(feedbackToMessage));
       }
@@ -64,7 +60,7 @@ export function useTrainerMessages(options: UseTrainerMessagesOptions = {}) {
     return () => {
       cancelled = true;
     };
-  }, [asTrainer, conversationUserId, isDemoMode, user?.id]);
+  }, [conversationUserId, isDemoMode]);
 
   useEffect(() => {
     if (isDemoMode) {

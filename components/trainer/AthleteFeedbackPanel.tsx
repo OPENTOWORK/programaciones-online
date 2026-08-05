@@ -213,12 +213,15 @@ export function AthleteFeedbackPanel({ athleteId }: { athleteId: string }) {
       {isLoading ? (
         <ActivityIndicator color={colors.accent} />
       ) : entries.length === 0 ? (
-        <Text style={styles.empty}>Todavía no has enviado feedback a este atleta.</Text>
+        <Text style={styles.empty}>Todavía no se ha enviado feedback a este atleta.</Text>
       ) : (
         entries.map((entry) => (
           <View key={entry.id} style={styles.entry}>
             <View style={styles.entryCopy}>
-              <Text style={styles.entryDate}>{formatDate(entry.createdAt)}</Text>
+              <Text style={styles.entryDate}>
+                {formatDate(entry.createdAt)}
+                {entry.trainerName ? ` · ${entry.trainerName}` : ''}
+              </Text>
               {entry.message ? <Text style={styles.entryMessage}>{entry.message}</Text> : null}
               <FeedbackAttachmentList attachments={entry.attachments} />
             </View>

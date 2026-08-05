@@ -9,6 +9,8 @@ export const colors = {
   accent: '#FF7373',
   accentDark: '#E85F5F',
   accentBlue: '#00B8D4',
+  /** Naranja suave para las sesiones de activación. */
+  activation: '#FFB27A',
   warning: '#FFB300',
   danger: '#FF5252',
   success: '#FF7373',

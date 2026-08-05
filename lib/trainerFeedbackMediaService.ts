@@ -213,7 +213,6 @@ export async function uploadFeedbackAttachment(input: {
 
 export async function deleteFeedbackAttachments(
   feedbackId: string,
-  trainerId: string,
   useLocalStore: boolean,
 ): Promise<void> {
   if (useLocalStore || !isSupabaseConfigured || feedbackId.startsWith('local-feedback-')) {
@@ -224,16 +223,12 @@ export async function deleteFeedbackAttachments(
   const supabase = getSupabase();
   if (!supabase) return;
 
-  const { data } = await supabase
-    .from(TABLE)
-    .select('storage_path')
-    .eq('feedback_id', feedbackId)
-    .eq('trainer_id', trainerId);
+  const { data } = await supabase.from(TABLE).select('storage_path').eq('feedback_id', feedbackId);
 
   const paths = (data ?? []).map((row) => (row as Record<string, unknown>).storage_path as string);
   if (paths.length > 0) {
     await supabase.storage.from(BUCKET).remove(paths);
   }
 
-  await supabase.from(TABLE).delete().eq('feedback_id', feedbackId).eq('trainer_id', trainerId);
+  await supabase.from(TABLE).delete().eq('feedback_id', feedbackId);
 }

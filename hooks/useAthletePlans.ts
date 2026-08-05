@@ -92,7 +92,7 @@ export function useTrainerAthletePlans(planType?: AthletePlanType) {
       setError((current) => (current === null ? current : null));
 
       try {
-        const data = await fetchTrainerAthletePlans(user.id, planType);
+        const data = await fetchTrainerAthletePlans(planType);
         setPlans(data);
         refreshGate.current.markFetched();
       } catch (loadError) {

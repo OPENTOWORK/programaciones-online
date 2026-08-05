@@ -7,6 +7,7 @@ import {
   completedMapFromKeys,
 } from '@/lib/sessionChecklist';
 import { fetchSessionLog, saveSessionLog, type SessionLogLookup } from '@/lib/sessionLogService';
+import type { SessionKind } from '@/lib/trainerSessionDraft';
 import type { Exercise } from '@/lib/types';
 
 export interface SessionWorkoutContent {
@@ -19,6 +20,7 @@ export interface SessionWorkoutContent {
   exercises: Exercise[];
   programId?: string;
   sessionNumber?: number;
+  kind?: SessionKind;
 }
 
 interface UseSessionRunnerOptions {

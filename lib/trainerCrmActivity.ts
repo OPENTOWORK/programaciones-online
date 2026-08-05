@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { fetchTrainerNames } from '@/lib/trainerNames';
 import type { AthletePlanType, CrmActivityEntry, CrmActivityKind } from '@/lib/types';
 
 const MESSAGE_PREVIEW_MAX = 100;
@@ -78,8 +79,7 @@ export async function fetchCrmActivity(
 
   const { data, error } = await supabase
     .from(TABLE)
-    .select('id, kind, message, created_at')
-    .eq('trainer_id', trainerId)
+    .select('id, trainer_id, kind, message, created_at')
     .eq('athlete_id', athleteId)
     .order('created_at', { ascending: false });
 
@@ -91,11 +91,14 @@ export async function fetchCrmActivity(
     return { entries: [], persistent: true };
   }
 
+  const names = await fetchTrainerNames(data.map((row) => row.trainer_id as string));
+
   const entries: CrmActivityEntry[] = data.map((row) => ({
     id: row.id as string,
     kind: (row.kind as CrmActivityKind) ?? 'note',
     message: row.message as string,
     createdAt: row.created_at as string,
+    trainerName: names.get(row.trainer_id as string),
   }));
 
   return { entries, persistent: true };
@@ -165,5 +168,5 @@ export async function deleteCrmActivity(
   const supabase = getSupabase();
   if (!supabase) return;
 
-  await supabase.from(TABLE).delete().eq('id', entryId).eq('trainer_id', trainerId);
+  await supabase.from(TABLE).delete().eq('id', entryId);
 }

@@ -36,17 +36,13 @@ export function useTrainerAthleteFeedback(targetAthleteId?: string) {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchTrainerAthleteFeedback(
-        athleteId,
-        trainerId,
-        isDemoMode,
-      );
+      const result = await fetchTrainerAthleteFeedback(athleteId, isDemoMode);
       setEntries(result.entries);
       setPersistent(result.persistent);
     } finally {
       setIsLoading(false);
     }
-  }, [athleteId, trainerId, isDemoMode]);
+  }, [athleteId, isDemoMode]);
 
   useEffect(() => {
     void load();

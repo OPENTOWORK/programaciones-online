@@ -13,6 +13,13 @@ import {
   serializeWorkoutBlocks,
 } from '@/lib/workoutBlockBuilder';
 
+/** Una activación es la sesión corta que acompaña al entreno del mismo día. */
+export type SessionKind = 'session' | 'activation';
+
+export const ACTIVATION_SESSION_NAME = 'Activación';
+
+const ACTIVATION_DEFAULT_DURATION = '15 min';
+
 export type SessionDraft = {
   name: string;
   estimatedDuration: string;
@@ -24,7 +31,35 @@ export type SessionDraft = {
   exercises: Exercise[];
   dayLabel: string;
   schedule: SessionSchedule;
+  /** Sin valor equivale a una sesión normal. */
+  kind?: SessionKind;
 };
+
+export function isActivationSessionDraft(draft: Pick<SessionDraft, 'kind'>) {
+  return draft.kind === 'activation';
+}
+
+/** Una copia de sesión pasa a llevar el número siguiente, pero una activación mantiene su nombre. */
+export function renameSessionCopy(draft: SessionDraft, sessionNumber: number): SessionDraft {
+  if (isActivationSessionDraft(draft)) return draft;
+  return { ...draft, name: `Sesión ${sessionNumber}` };
+}
+
+/** Hereda el calendario de su sesión y nace sin bloques para rellenarla más tarde. */
+export function createActivationDraftFor(session: SessionDraft): SessionDraft {
+  return {
+    ...session,
+    kind: 'activation',
+    name: ACTIVATION_SESSION_NAME,
+    estimatedDuration: ACTIVATION_DEFAULT_DURATION,
+    warmup: '',
+    main: '',
+    metcon: '',
+    core: '',
+    cooldown: '',
+    exercises: [],
+  };
+}
 
 export function createEmptyExercise(): Exercise {
   return {

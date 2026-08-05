@@ -4,6 +4,7 @@ import {
   fetchFeedbackAttachments,
   localFeedbackAttachments,
 } from '@/lib/trainerFeedbackMediaService';
+import { fetchTrainerNames } from '@/lib/trainerNames';
 import type { TrainerAthleteFeedback } from '@/lib/types';
 
 const TABLE = 'trainer_athlete_feedback';
@@ -45,30 +46,24 @@ function withLocalAttachments(entries: TrainerAthleteFeedback[]) {
   return entries.map((entry) => ({ ...entry, attachments: localFeedbackAttachments(entry.id) }));
 }
 
+/** El atleta ve su propio feedback y los entrenadores el de todo el equipo. */
 export async function fetchTrainerAthleteFeedback(
   athleteId: string,
-  trainerId?: string,
   useLocalStore = false,
 ): Promise<{ entries: TrainerAthleteFeedback[]; persistent: boolean }> {
   if (useLocalStore || !isSupabaseConfigured) {
-    const entries = localEntries(athleteId).filter(
-      (entry) => !trainerId || entry.trainerId === trainerId,
-    );
-    return { entries: withLocalAttachments(entries), persistent: false };
+    return { entries: withLocalAttachments(localEntries(athleteId)), persistent: false };
   }
 
   const supabase = getSupabase();
   if (!supabase) return { entries: [], persistent: false };
 
-  let query = supabase
+  const { data, error } = await supabase
     .from(TABLE)
     .select('id, trainer_id, athlete_id, message, created_at, updated_at')
     .eq('athlete_id', athleteId)
     .order('created_at', { ascending: false });
 
-  if (trainerId) query = query.eq('trainer_id', trainerId);
-
-  const { data, error } = await query;
   if (isMissingTableError(error)) {
     return { entries: withLocalAttachments(localEntries(athleteId)), persistent: false };
   }
@@ -76,10 +71,12 @@ export async function fetchTrainerAthleteFeedback(
 
   const entries = data.map((row) => mapRow(row as Record<string, unknown>));
   const attachmentsByFeedback = await fetchFeedbackAttachments(entries.map((entry) => entry.id));
+  const names = await fetchTrainerNames(entries.map((entry) => entry.trainerId));
 
   return {
     entries: entries.map((entry) => ({
       ...entry,
+      trainerName: names.get(entry.trainerId),
       attachments: attachmentsByFeedback[entry.id] ?? [],
     })),
     persistent: true,
@@ -146,20 +143,16 @@ export async function deleteTrainerAthleteFeedback(
     const entries = localEntries(entry.athleteId);
     const index = entries.findIndex((item) => item.id === entry.id);
     if (index >= 0) entries.splice(index, 1);
-    await deleteFeedbackAttachments(entry.id, entry.trainerId, true);
+    await deleteFeedbackAttachments(entry.id, true);
     return {};
   }
 
   const supabase = getSupabase();
   if (!supabase) return { error: 'Supabase no está disponible.' };
 
-  await deleteFeedbackAttachments(entry.id, entry.trainerId, false);
+  await deleteFeedbackAttachments(entry.id, false);
 
-  const { error } = await supabase
-    .from(TABLE)
-    .delete()
-    .eq('id', entry.id)
-    .eq('trainer_id', entry.trainerId);
+  const { error } = await supabase.from(TABLE).delete().eq('id', entry.id);
 
   return error ? { error: error.message } : {};
 }

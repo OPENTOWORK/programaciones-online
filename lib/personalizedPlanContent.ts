@@ -5,7 +5,12 @@ import {
   normalizeSessionSchedule,
   parseScheduleFromSummaryLabel,
 } from '@/lib/sessionSchedule';
-import { createEmptySessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
+import {
+  ACTIVATION_SESSION_NAME,
+  createEmptySessionDraft,
+  type SessionDraft,
+  type SessionKind,
+} from '@/lib/trainerSessionDraft';
 import { isStructuredWorkoutContent } from '@/lib/workoutContentParser';
 import type { Program } from '@/lib/types';
 
@@ -42,14 +47,18 @@ export function isStructuredPersonalizedPlanContent(content: string) {
 }
 
 export function serializePersonalizedPlanContent(draft: SessionDraft, sessionNumber?: number): string {
-  const meta = [
-    META_START,
+  const metaLines = [
     `duration=${draft.estimatedDuration.trim() || '60 min'}`,
     `session=${sessionNumber ?? draft.name.match(/(\d+)/)?.[1] ?? '1'}`,
     `sessionName=${draft.name.trim() || 'Sesión 1'}`,
     `schedule=${formatScheduleSummary(draft.schedule)}`,
-    META_END,
-  ].join('\n');
+  ];
+
+  if (draft.kind === 'activation') {
+    metaLines.push('kind=activation');
+  }
+
+  const meta = [META_START, ...metaLines, META_END].join('\n');
 
   const chunks = [meta];
   for (const key of SECTION_KEYS) {
@@ -81,6 +90,7 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
   let estimatedDuration = base.estimatedDuration;
   let schedule = base.schedule;
   let sessionName = base.name;
+  let kind = base.kind;
 
   for (const line of metaBlock.split('\n')) {
     if (line.startsWith('duration=')) {
@@ -88,6 +98,9 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
     }
     if (line.startsWith('sessionName=')) {
       sessionName = line.slice('sessionName='.length).trim() || sessionName;
+    }
+    if (line.startsWith('kind=')) {
+      kind = line.slice('kind='.length).trim() === 'activation' ? 'activation' : kind;
     }
     if (line.startsWith('schedule=')) {
       const summary = line.slice('schedule='.length).trim();
@@ -98,6 +111,7 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
   const draft: SessionDraft = {
     ...base,
     name: sessionName,
+    kind,
     estimatedDuration,
     schedule: normalizeSessionSchedule(schedule, defaultScheduleForSession(sessionIndex)),
     dayLabel: formatScheduleSummary(normalizeSessionSchedule(schedule, defaultScheduleForSession(sessionIndex))),
@@ -170,7 +184,14 @@ export function parseSessionNumberFromPlanContent(content: string, fallback = 1)
   return nameMatch ? Number(nameMatch[1]) : fallback;
 }
 
-export function formatSessionSectionTitle(sessionNumber?: number, sessionName?: string) {
+export function formatSessionSectionTitle(
+  sessionNumber?: number,
+  sessionName?: string,
+  kind?: SessionKind,
+) {
+  // La activación comparte número con su sesión, así que se distingue por el tipo.
+  if (kind === 'activation') return ACTIVATION_SESSION_NAME;
+
   if (sessionNumber && sessionNumber > 0) return `Sesión ${sessionNumber}`;
 
   const nameMatch = sessionName?.match(/sesi[oó]n\s*(\d+)/i) ?? sessionName?.match(/(\d+)/);

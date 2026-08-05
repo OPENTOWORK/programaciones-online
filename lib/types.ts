@@ -146,6 +146,8 @@ export interface TrainerFeedbackAttachment {
 export interface TrainerAthleteFeedback {
   id: string;
   trainerId: string;
+  /** Entrenador que lo envió. El feedback es común a todo el equipo. */
+  trainerName?: string;
   athleteId: string;
   message: string;
   createdAt: string;
@@ -248,6 +250,8 @@ export interface CrmActivityEntry {
   kind: CrmActivityKind;
   message: string;
   createdAt: string;
+  /** Entrenador que la registró. El historial es común a todo el equipo. */
+  trainerName?: string;
 }
 
 export type IntakeTrainingPlace = 'gimnasio' | 'casa' | 'ambas';

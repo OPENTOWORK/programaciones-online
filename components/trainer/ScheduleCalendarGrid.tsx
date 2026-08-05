@@ -172,8 +172,13 @@ function SessionChip({
   detail?: ReactNode;
   isDragging?: boolean;
 }) {
+  const isActivation = item.kind === 'activation';
+
   const title = (
-    <Text style={styles.sessionChipName} numberOfLines={expanded ? 2 : 1}>
+    <Text
+      style={[styles.sessionChipName, isActivation && styles.sessionChipNameActivation]}
+      numberOfLines={expanded ? 2 : 1}
+    >
       {item.name}
     </Text>
   );
@@ -182,6 +187,7 @@ function SessionChip({
     styles.sessionChip,
     item.isCurrent && styles.sessionChipCurrent,
     item.isDraft && styles.sessionChipDraft,
+    isActivation && styles.sessionChipActivation,
     expanded && styles.sessionChipExpanded,
     isDragging && styles.sessionChipDragging,
   ];
@@ -473,6 +479,7 @@ function MonthView({
                         styles.monthSessionDot,
                         size === 'large' && styles.monthSessionDotLarge,
                         item.isCurrent && styles.monthSessionDotCurrent,
+                        item.kind === 'activation' && styles.monthSessionDotActivation,
                       ]}
                       numberOfLines={1}
                     >
@@ -486,6 +493,7 @@ function MonthView({
                       styles.monthSessionDot,
                       size === 'large' && styles.monthSessionDotLarge,
                       item.isCurrent && styles.monthSessionDotCurrent,
+                      item.kind === 'activation' && styles.monthSessionDotActivation,
                     ]}
                     numberOfLines={1}
                   >
@@ -872,6 +880,10 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '700',
   },
+  monthSessionDotActivation: {
+    color: colors.activation,
+    fontWeight: '700',
+  },
   monthMore: {
     ...typography.caption,
     color: colors.textMuted,
@@ -1008,6 +1020,10 @@ const styles = StyleSheet.create({
   sessionChipDraft: {
     borderStyle: 'dashed',
   },
+  sessionChipActivation: {
+    borderColor: `${colors.activation}66`,
+    backgroundColor: `${colors.activation}1A`,
+  },
   sessionChipPressed: {
     opacity: 0.85,
   },
@@ -1017,6 +1033,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flex: 1,
     minWidth: 0,
+  },
+  sessionChipNameActivation: {
+    color: colors.activation,
   },
   sessionChipMeta: {
     ...typography.caption,
