@@ -6,7 +6,7 @@ import {
   type SessionSchedule,
 } from '@/lib/sessionSchedule';
 import type { Program, Workout } from '@/lib/types';
-import type { SessionDraft, SessionKind } from '@/lib/trainerSessionDraft';
+import { defaultDayOrder, type SessionDraft, type SessionKind } from '@/lib/trainerSessionDraft';
 
 export type ScheduleViewMode = 'month' | 'week' | 'day';
 
@@ -22,6 +22,8 @@ export interface SchedulePreviewItem {
   isDraft: boolean;
   /** Sin valor equivale a una sesión normal. */
   kind?: SessionKind;
+  /** Posición elegida dentro del día. Sin valor, la activación encabeza el día. */
+  dayOrder?: number;
 }
 
 const WEEKDAY_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -101,6 +103,7 @@ function draftPreviewItem(
     isCurrent: options.isCurrent,
     isDraft: options.isDraft,
     kind: draft.kind,
+    dayOrder: draft.dayOrder,
   };
 }
 
@@ -244,9 +247,8 @@ export function buildSchedulePreviewItems({
   return items.sort((left, right) => {
     const byDate = left.date.getTime() - right.date.getTime();
     if (byDate !== 0) return byDate;
-    const leftKind = left.kind === 'activation' ? 0 : 1;
-    const rightKind = right.kind === 'activation' ? 0 : 1;
-    if (leftKind !== rightKind) return leftKind - rightKind;
+    const byOrder = defaultDayOrder(left) - defaultDayOrder(right);
+    if (byOrder !== 0) return byOrder;
     return left.name.localeCompare(right.name, 'es');
   });
 }

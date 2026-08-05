@@ -30,17 +30,30 @@ export interface WorkoutBlockItemDraft {
   weightKg?: string;
   calories?: string;
   distance?: string;
+  /** Repeticiones en reserva. */
+  rir?: string;
+  /** Porcentaje del máximo del atleta. */
+  percent?: string;
   loadMetric?: MovementLoadMetric;
 }
 
-export type MovementLoadMetric = 'none' | 'kg' | 'cal' | 'distance';
+export type MovementLoadMetric = 'none' | 'kg' | 'cal' | 'distance' | 'rir' | 'percent';
 
-export const MOVEMENT_LOAD_METRICS: MovementLoadMetric[] = ['none', 'kg', 'cal', 'distance'];
+export const MOVEMENT_LOAD_METRICS: MovementLoadMetric[] = [
+  'none',
+  'kg',
+  'cal',
+  'distance',
+  'rir',
+  'percent',
+];
 
 export function getMovementLoadMetricLabel(metric: MovementLoadMetric) {
   if (metric === 'kg') return 'Kg';
   if (metric === 'cal') return 'Cal';
   if (metric === 'distance') return 'Distancia';
+  if (metric === 'rir') return 'RIR';
+  if (metric === 'percent') return '%';
   return 'Sin carga';
 }
 
@@ -49,6 +62,8 @@ export function getMovementLoadMetric(item: WorkoutBlockItemDraft): MovementLoad
   if (item.weightKg?.trim()) return 'kg';
   if (item.calories?.trim()) return 'cal';
   if (item.distance?.trim()) return 'distance';
+  if (item.rir?.trim()) return 'rir';
+  if (item.percent?.trim()) return 'percent';
   return 'none';
 }
 
@@ -57,6 +72,8 @@ export function getMovementLoadValue(item: WorkoutBlockItemDraft): string {
   if (metric === 'kg') return item.weightKg ?? '';
   if (metric === 'cal') return item.calories ?? '';
   if (metric === 'distance') return item.distance ?? '';
+  if (metric === 'rir') return item.rir ?? '';
+  if (metric === 'percent') return item.percent ?? '';
   return '';
 }
 
@@ -64,7 +81,21 @@ export function movementLoadPlaceholder(metric: MovementLoadMetric) {
   if (metric === 'kg') return '60';
   if (metric === 'cal') return '15';
   if (metric === 'distance') return '400 m';
+  if (metric === 'rir') return '2';
+  if (metric === 'percent') return '80';
   return '';
+}
+
+/** Cómo se escribe la carga dentro de la línea del ejercicio. */
+export function formatMovementLoad(metric: MovementLoadMetric, value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || metric === 'none') return '';
+
+  if (metric === 'kg') return `${trimmed} kg`;
+  if (metric === 'cal') return `${trimmed} cal`;
+  if (metric === 'rir') return `RIR ${trimmed}`;
+  if (metric === 'percent') return `${trimmed}%`;
+  return trimmed;
 }
 
 export interface WorkoutBlockDraft {
@@ -147,18 +178,15 @@ export function createEmptyBlockItem(): WorkoutBlockItemDraft {
     weightKg: '',
     calories: '',
     distance: '',
+    rir: '',
+    percent: '',
     loadMetric: 'none',
   };
 }
 
 function formatLoadSuffix(item: WorkoutBlockItemDraft) {
-  const metric = getMovementLoadMetric(item);
-  const value = getMovementLoadValue(item).trim();
-  if (!value || metric === 'none') return '';
-
-  if (metric === 'kg') return ` · ${value} kg`;
-  if (metric === 'cal') return ` · ${value} cal`;
-  return ` · ${value}`;
+  const load = formatMovementLoad(getMovementLoadMetric(item), getMovementLoadValue(item));
+  return load ? ` · ${load}` : '';
 }
 
 export function formatBlockItemLine(item: WorkoutBlockItemDraft, blockType?: WorkoutBlockType): string {
@@ -171,20 +199,19 @@ export function formatBlockItemLine(item: WorkoutBlockItemDraft, blockType?: Wor
   const metric = getMovementLoadMetric(item);
   const quantity = getMovementLoadValue(item).trim();
 
+  // Sin repeticiones la carga pasa a ser la propia prescripción, así que no se repite como sufijo.
+  const loadOnly = formatMovementLoad(metric, quantity);
+
   if (blockType && blockUsesSeries(blockType)) {
     if (sets && reps) return `${name}: ${sets} × ${reps}${load}`;
     if (sets) return `${name}: ${sets} series${load}`;
     if (reps) return `${name}: ${reps} reps${load}`;
-    return load ? `${name}${load}` : name;
+    return loadOnly ? `${name}: ${loadOnly}` : name;
   }
 
   if (reps) return `${name}: ${reps} reps${load}`;
 
-  if (metric === 'cal' && quantity) return `${name}: ${quantity} cal${load}`;
-  if (metric === 'distance' && quantity) return `${name}: ${quantity}${load}`;
-  if (metric === 'kg' && quantity && !reps) return `${name}: ${quantity} kg${load}`;
-
-  return load ? `${name}${load}` : name;
+  return loadOnly ? `${name}: ${loadOnly}` : name;
 }
 
 export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft, 'id'> {
@@ -195,6 +222,8 @@ export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft
     weightKg: '',
     calories: '',
     distance: '',
+    rir: '',
+    percent: '',
     loadMetric: 'none' as MovementLoadMetric,
   };
   const trimmed = line.trim();
@@ -207,8 +236,19 @@ export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft
 
   if (!prescription) return result;
 
+  /* El RIR y el porcentaje se buscan antes que la carga genérica: «80%» sin más se leería como kilos.
+   * Los tres admiten ir solos en la prescripción o detrás de las repeticiones. */
+  const rirMatch = prescription.match(/(?:^|@|·)\s*rir\s*(\d+[\d.,]*)/i);
+  const percentMatch = prescription.match(/(?:^|@|·)\s*(\d+[\d.,]*)\s*%/);
   const loadMatch = prescription.match(/(?:@|·)\s*(\d+[\d.,]*)\s*(kg|cal)?/i);
-  if (loadMatch) {
+
+  if (rirMatch) {
+    result.rir = rirMatch[1];
+    result.loadMetric = 'rir';
+  } else if (percentMatch) {
+    result.percent = percentMatch[1];
+    result.loadMetric = 'percent';
+  } else if (loadMatch) {
     const value = loadMatch[1];
     const unit = (loadMatch[2] ?? 'kg').toLowerCase();
     if (unit === 'cal') {
@@ -220,7 +260,10 @@ export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft
     }
   }
 
-  const withoutLoad = prescription.replace(/(?:@|·)\s*[^@·]+$/i, '').trim();
+  const matched = rirMatch ?? percentMatch ?? loadMatch;
+  const withoutLoad = (matched ? prescription.replace(matched[0], ' ') : prescription)
+    .replace(/[·@]/g, ' ')
+    .trim();
   const setsRepsMatch = withoutLoad.match(/^(\d+)\s*[×x]\s*(\d+[\d\-]*)/i);
   if (setsRepsMatch) {
     result.sets = setsRepsMatch[1];
@@ -231,6 +274,13 @@ export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft
   const repsMatch = withoutLoad.match(/^(\d+[\d\-×x]*)\s*reps?/i);
   if (repsMatch) {
     result.reps = repsMatch[1].replace(/×/g, 'x');
+    return result;
+  }
+
+  const kgMatch = withoutLoad.match(/^(\d+[\d.,]*)\s*kg/i);
+  if (kgMatch) {
+    result.weightKg = kgMatch[1];
+    result.loadMetric = 'kg';
     return result;
   }
 
@@ -482,6 +532,8 @@ export function sanitizeWorkoutBlock(block: WorkoutBlockDraft): WorkoutBlockDraf
         weightKg: item.weightKg?.trim() ?? '',
         calories: item.calories?.trim() ?? '',
         distance: item.distance?.trim() ?? '',
+        rir: item.rir?.trim() ?? '',
+        percent: item.percent?.trim() ?? '',
         loadMetric: getMovementLoadMetric(item),
       }))
       .filter((item) => item.text),

@@ -28,6 +28,7 @@ import {
 import { getNextSessionNumber, groupPersonalizedPlans, splitAssignedPlans, type PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
+import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
 import { formatScheduleSummary, toWeekdayIndex } from '@/lib/sessionSchedule';
 import { createEmptySessionDraft, renameSessionCopy } from '@/lib/trainerSessionDraft';
 import { fetchAthleteSessionLogs } from '@/lib/sessionLogService';
@@ -351,6 +352,30 @@ export default function AthleteDetailScreen() {
     return null;
   };
 
+  const handleCalendarReorderDay = async (_date: Date, orderedItems: SchedulePreviewItem[]) => {
+    const sessions = calendarGroup?.sessions;
+    if (!sessions) return 'No se pudo reordenar el día.';
+
+    const orderedIds = orderedItems
+      .map((item) => planIdFromCalendarItem(item))
+      .filter((planId): planId is string => Boolean(planId));
+    const updates = buildDayOrderUpdates(orderedIds, sessions);
+    if (updates.length === 0) return null;
+
+    for (const update of updates) {
+      const result = await updatePlan(update.id, {
+        athleteId: update.athleteId,
+        planType: 'personalized',
+        title: update.title,
+        content: update.content,
+      });
+      if (result.error) return result.error;
+    }
+
+    await refreshCalendarGroup();
+    return null;
+  };
+
   const openCalendarSession = (item: SchedulePreviewItem) => {
     const planId = item.id.startsWith('plan:') ? item.id.split(':')[1] : undefined;
     if (!planId) return;
@@ -646,6 +671,7 @@ export default function AthleteDetailScreen() {
         onSessionCopy={handleCalendarCopy}
         onSessionDelete={handleCalendarDelete}
         onSessionMoveToDate={handleCalendarMoveToDate}
+        onSessionReorderDay={handleCalendarReorderDay}
       />
     </ScreenWrapper>
   );

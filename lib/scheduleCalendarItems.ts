@@ -5,7 +5,7 @@ import {
   type SchedulePreviewItem,
   type ScheduleViewMode,
 } from '@/lib/programSchedulePreview';
-import type { SessionDraft } from '@/lib/trainerSessionDraft';
+import { defaultDayOrder, type SessionDraft } from '@/lib/trainerSessionDraft';
 import type { AthletePlan, Program, Workout } from '@/lib/types';
 
 export interface ScheduleCalendarSource {
@@ -64,5 +64,11 @@ export function buildScheduleCalendarItems(
     })),
   );
 
-  return base.concat(queued);
+  /* Las sesiones en cola llegan detrás de las guardadas, así que el día se recompone aquí para que
+   * la vista previa muestre ya el orden definitivo. */
+  return base.concat(queued).sort((left, right) => {
+    const byDate = left.date.getTime() - right.date.getTime();
+    if (byDate !== 0) return byDate;
+    return defaultDayOrder(left) - defaultDayOrder(right);
+  });
 }

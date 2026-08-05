@@ -3,7 +3,7 @@ import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import { buildSchedulePreviewItems, itemsForDate, type SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import { createPersonalizedPlanPreviewProgram } from '@/lib/personalizedPlanContent';
 import { fetchWorkoutsByProgram } from '@/lib/workoutService';
-import { ACTIVATION_SESSION_NAME } from '@/lib/trainerSessionDraft';
+import { ACTIVATION_SESSION_NAME, defaultDayOrder } from '@/lib/trainerSessionDraft';
 import type { AthletePlan, Program, Workout } from '@/lib/types';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
 
@@ -113,7 +113,13 @@ export function buildAthleteCalendarItems({
     );
   }
 
-  return items;
+  /* Cada plan aporta sus fechas por separado, así que el día queda mezclado hasta ordenarlo aquí.
+   * El orden es estable, de modo que dos sesiones sin posición elegida mantienen la del plan. */
+  return items.sort((left, right) => {
+    const byDate = left.date.getTime() - right.date.getTime();
+    if (byDate !== 0) return byDate;
+    return defaultDayOrder(left) - defaultDayOrder(right);
+  });
 }
 
 export function calendarItemToAthleteSession(item: SchedulePreviewItem): AthleteCalendarSession {

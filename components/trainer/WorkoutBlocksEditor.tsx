@@ -197,6 +197,8 @@ function MovementRow({
       weightKg: metric === 'kg' ? item.weightKg ?? '' : '',
       calories: metric === 'cal' ? item.calories ?? '' : '',
       distance: metric === 'distance' ? item.distance ?? '' : '',
+      rir: metric === 'rir' ? item.rir ?? '' : '',
+      percent: metric === 'percent' ? item.percent ?? '' : '',
     });
   };
 
@@ -206,6 +208,8 @@ function MovementRow({
       weightKg: metric === 'kg' ? value : '',
       calories: metric === 'cal' ? value : '',
       distance: metric === 'distance' ? value : '',
+      rir: metric === 'rir' ? value : '',
+      percent: metric === 'percent' ? value : '',
     });
   };
 
@@ -285,9 +289,7 @@ function MovementRow({
 
         {loadMetric !== 'none' ? (
           <View style={styles.loadValueField}>
-            <Text style={styles.metricLabel}>
-              {loadMetric === 'kg' ? 'Kg' : loadMetric === 'cal' ? 'Cal' : 'Distancia'}
-            </Text>
+            <Text style={styles.metricLabel}>{getMovementLoadMetricLabel(loadMetric)}</Text>
             <TextInput
               value={getMovementLoadValue(item)}
               onChangeText={setLoadValue}

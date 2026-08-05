@@ -1,5 +1,5 @@
 import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
-import { ACTIVATION_SESSION_NAME } from '@/lib/trainerSessionDraft';
+import { ACTIVATION_SESSION_NAME, defaultDayOrder } from '@/lib/trainerSessionDraft';
 import type { AthletePlan } from '@/lib/types';
 
 export interface PersonalizedPlanGroup {
@@ -37,9 +37,10 @@ export function sortPlansBySession(plans: AthletePlan[]) {
     const bySession = getSessionNumber(left) - getSessionNumber(right);
     if (bySession !== 0) return bySession;
 
-    const leftKind = parsePersonalizedPlanContent(left.content).kind === 'activation' ? 0 : 1;
-    const rightKind = parsePersonalizedPlanContent(right.content).kind === 'activation' ? 0 : 1;
-    if (leftKind !== rightKind) return leftKind - rightKind;
+    const byDayOrder =
+      defaultDayOrder(parsePersonalizedPlanContent(left.content)) -
+      defaultDayOrder(parsePersonalizedPlanContent(right.content));
+    if (byDayOrder !== 0) return byDayOrder;
 
     return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
   });

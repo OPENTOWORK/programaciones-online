@@ -52,6 +52,7 @@ import {
   validatePersonalizedPlanDraft,
 } from '@/lib/personalizedPlanContent';
 import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
+import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
 import { formatScheduleSummary, toWeekdayIndex } from '@/lib/sessionSchedule';
 import { collectExerciseNamesFromSessionDraft } from '@/lib/exerciseTextParser';
 import { syncExerciseVideosForNames } from '@/lib/exerciseVideoSyncService';
@@ -328,6 +329,27 @@ export default function TrainerPlanDetailScreen() {
     });
 
     if (result.error) return result.error;
+    await refreshGroupSessions();
+    return null;
+  };
+
+  const handleViewCalendarReorderDay = async (_date: Date, orderedItems: SchedulePreviewItem[]) => {
+    const orderedIds = orderedItems
+      .map((item) => planIdFromCalendarItem(item))
+      .filter((sessionId): sessionId is string => Boolean(sessionId));
+    const updates = buildDayOrderUpdates(orderedIds, groupSessions);
+    if (updates.length === 0) return null;
+
+    for (const update of updates) {
+      const result = await updatePlan(update.id, {
+        athleteId: update.athleteId,
+        planType: 'personalized',
+        title: update.title,
+        content: update.content,
+      });
+      if (result.error) return result.error;
+    }
+
     await refreshGroupSessions();
     return null;
   };
@@ -896,6 +918,7 @@ export default function TrainerPlanDetailScreen() {
           onSessionCopy={handleViewCalendarCopy}
           onSessionDelete={handleViewCalendarDelete}
           onSessionMoveToDate={handleViewCalendarMoveToDate}
+          onSessionReorderDay={handleViewCalendarReorderDay}
         />
       ) : null}
     </ScreenWrapper>

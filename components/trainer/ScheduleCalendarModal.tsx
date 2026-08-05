@@ -64,6 +64,11 @@ interface ScheduleCalendarModalProps {
   onSessionDelete?: (item: SchedulePreviewItem) => Promise<string | null> | string | null;
   /** Mueve la sesión a otro día de la semana. Devuelve un mensaje de error o null. */
   onSessionMoveToDate?: (item: SchedulePreviewItem, date: Date) => Promise<string | null> | string | null;
+  /** Guarda el orden de las sesiones de un día. Devuelve un mensaje de error o null. */
+  onSessionReorderDay?: (
+    date: Date,
+    orderedItems: SchedulePreviewItem[],
+  ) => Promise<string | null> | string | null;
 }
 
 export function ScheduleCalendarModal({
@@ -80,6 +85,7 @@ export function ScheduleCalendarModal({
   onSessionCopy,
   onSessionDelete,
   onSessionMoveToDate,
+  onSessionReorderDay,
 }: ScheduleCalendarModalProps) {
   const { width } = useWindowDimensions();
   const isSplitLayout = width >= 960;
@@ -230,6 +236,12 @@ export function ScheduleCalendarModal({
     if (result) setFormError(result);
   };
 
+  const handleSessionReorderDay = async (date: Date, orderedItems: SchedulePreviewItem[]) => {
+    if (!onSessionReorderDay) return;
+    const result = await onSessionReorderDay(date, orderedItems);
+    if (result) setFormError(result);
+  };
+
   const handleSessionCopy = async (item: SchedulePreviewItem) => {
     if (!onSessionCopy) return;
     const result = await onSessionCopy(item);
@@ -245,9 +257,10 @@ export function ScheduleCalendarModal({
   const sessionActions = useMemo<CalendarSessionActions>(
     () => ({
       onMoveToDate: onSessionMoveToDate ? handleSessionMoveToDate : undefined,
+      onReorderDay: onSessionReorderDay ? handleSessionReorderDay : undefined,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onSessionMoveToDate],
+    [onSessionMoveToDate, onSessionReorderDay],
   );
 
   const menuActions: ActionSheetAction[] = [];

@@ -33,7 +33,14 @@ export type SessionDraft = {
   schedule: SessionSchedule;
   /** Sin valor equivale a una sesión normal. */
   kind?: SessionKind;
+  /** Posición dentro del día cuando ese día tiene varias sesiones. Sin valor, la activación va arriba. */
+  dayOrder?: number;
 };
+
+/** Orden por defecto de un día: la activación encabeza el día si nadie ha reordenado. */
+export function defaultDayOrder(draft: Pick<SessionDraft, 'kind' | 'dayOrder'>) {
+  return draft.dayOrder ?? (draft.kind === 'activation' ? 0 : 1);
+}
 
 export function isActivationSessionDraft(draft: Pick<SessionDraft, 'kind'>) {
   return draft.kind === 'activation';

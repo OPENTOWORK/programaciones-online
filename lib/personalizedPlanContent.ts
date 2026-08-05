@@ -58,6 +58,10 @@ export function serializePersonalizedPlanContent(draft: SessionDraft, sessionNum
     metaLines.push('kind=activation');
   }
 
+  if (typeof draft.dayOrder === 'number') {
+    metaLines.push(`dayOrder=${draft.dayOrder}`);
+  }
+
   const meta = [META_START, ...metaLines, META_END].join('\n');
 
   const chunks = [meta];
@@ -91,6 +95,7 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
   let schedule = base.schedule;
   let sessionName = base.name;
   let kind = base.kind;
+  let dayOrder = base.dayOrder;
 
   for (const line of metaBlock.split('\n')) {
     if (line.startsWith('duration=')) {
@@ -102,6 +107,10 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
     if (line.startsWith('kind=')) {
       kind = line.slice('kind='.length).trim() === 'activation' ? 'activation' : kind;
     }
+    if (line.startsWith('dayOrder=')) {
+      const parsed = Number.parseInt(line.slice('dayOrder='.length).trim(), 10);
+      dayOrder = Number.isFinite(parsed) ? parsed : dayOrder;
+    }
     if (line.startsWith('schedule=')) {
       const summary = line.slice('schedule='.length).trim();
       schedule = parseScheduleFromSummaryLabel(summary) ?? schedule;
@@ -112,6 +121,7 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
     ...base,
     name: sessionName,
     kind,
+    dayOrder,
     estimatedDuration,
     schedule: normalizeSessionSchedule(schedule, defaultScheduleForSession(sessionIndex)),
     dayLabel: formatScheduleSummary(normalizeSessionSchedule(schedule, defaultScheduleForSession(sessionIndex))),

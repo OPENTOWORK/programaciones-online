@@ -10,6 +10,7 @@ import {
   Text,
   View,
   type GestureResponderHandlers,
+  type PanResponderGestureState,
 } from 'react-native';
 
 import type { PopoverAnchor } from '@/components/ui/PopoverMenu';
@@ -28,14 +29,45 @@ import {
   type SchedulePreviewItem,
   type ScheduleViewMode,
 } from '@/lib/programSchedulePreview';
+import {
+  applyDropIndex,
+  dropIndexForDay,
+  dropLineOffset,
+  type ChipLayout,
+} from '@/lib/scheduleDayOrder';
 
 export type ScheduleCalendarSize = 'compact' | 'large';
+
+/** Franja horizontal que ocupa la columna de un día en pantalla. */
+interface ColumnBounds {
+  date: Date;
+  x: number;
+  width: number;
+}
+
+/** Dónde caería la sesión que se está arrastrando. Sin `index` es otro día, sin hueco elegido. */
+interface DropHint {
+  date: Date;
+  movedKey: string;
+  index: number | null;
+}
+
+function isSameDropHint(left: DropHint | null, right: DropHint | null) {
+  if (!left || !right) return left === right;
+  return (
+    left.index === right.index &&
+    left.movedKey === right.movedKey &&
+    left.date.toDateString() === right.date.toDateString()
+  );
+}
 
 export interface CalendarSessionActions {
   onEdit?: (item: SchedulePreviewItem) => void;
   onCopy?: (item: SchedulePreviewItem) => void;
   onDelete?: (item: SchedulePreviewItem) => void;
   onMoveToDate?: (item: SchedulePreviewItem, date: Date) => void;
+  /** Guarda el nuevo orden de un día después de arrastrar una sesión arriba o abajo. */
+  onReorderDay?: (date: Date, orderedItems: SchedulePreviewItem[]) => void;
 }
 
 interface ScheduleCalendarGridProps {
@@ -123,7 +155,7 @@ function ChipDragHandle({ dragHandlers }: { dragHandlers: GestureResponderHandle
   return (
     <View
       {...dragHandlers}
-      accessibilityLabel="Arrastrar sesión a otro día"
+      accessibilityLabel="Arrastrar sesión a otro día o a otra posición"
       style={[styles.chipIconBtn, styles.chipDragHandle]}
     >
       <Ionicons name="reorder-three" size={14} color={colors.textSecondary} />
@@ -228,59 +260,145 @@ function SessionChip({
 
 function DraggableSessionChip({
   item,
+  dayItems,
   columnBoundsRef,
+  chipLayoutsRef,
   onMoveEnd,
+  onReorderEnd,
   onDragStart,
+  onDropHintChange,
   ...chipProps
 }: Omit<ComponentProps<typeof SessionChip>, 'dragHandlers' | 'isDragging'> & {
-  columnBoundsRef: MutableRefObject<Array<{ date: Date; x: number; width: number }>>;
-  onMoveEnd: (item: SchedulePreviewItem, date: Date) => void;
+  /** Sesiones del mismo día, en el orden en el que se están pintando. */
+  dayItems: SchedulePreviewItem[];
+  columnBoundsRef: MutableRefObject<ColumnBounds[]>;
+  chipLayoutsRef: MutableRefObject<Map<string, ChipLayout>>;
+  onMoveEnd?: (item: SchedulePreviewItem, date: Date) => void;
+  onReorderEnd?: (date: Date, orderedItems: SchedulePreviewItem[]) => void;
   onDragStart?: () => void;
+  onDropHintChange?: (hint: DropHint | null) => void;
 }) {
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const [dragging, setDragging] = useState(false);
+  const hintRef = useRef<DropHint | null>(null);
 
   // El PanResponder se crea una sola vez: si cambiara a mitad del gesto se perdería el arrastre.
-  const handlers = useRef({ item, onMoveEnd, onDragStart, columnBoundsRef });
-  handlers.current = { item, onMoveEnd, onDragStart, columnBoundsRef };
+  const handlers = useRef({
+    item,
+    dayItems,
+    onMoveEnd,
+    onReorderEnd,
+    onDragStart,
+    onDropHintChange,
+    columnBoundsRef,
+    chipLayoutsRef,
+  });
+  handlers.current = {
+    item,
+    dayItems,
+    onMoveEnd,
+    onReorderEnd,
+    onDragStart,
+    onDropHintChange,
+    columnBoundsRef,
+    chipLayoutsRef,
+  };
 
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: () => {
-          setDragging(true);
-          handlers.current.onDragStart?.();
-        },
-        onPanResponderMove: (_event, gesture) => {
-          pan.setValue({ x: gesture.dx, y: gesture.dy });
-        },
-        onPanResponderRelease: (event, gesture) => {
-          const { item: current, onMoveEnd: move, columnBoundsRef: boundsRef } = handlers.current;
-          const dropX = gesture.moveX || event.nativeEvent.pageX;
-          const target = boundsRef.current.find(
-            (bounds) => dropX >= bounds.x && dropX <= bounds.x + bounds.width,
-          );
+  const panResponder = useMemo(() => {
+    /** Traduce la posición del gesto al hueco de destino, sin tocar nada todavía. */
+    const resolveHint = (gesture: PanResponderGestureState): DropHint | null => {
+      const {
+        item: current,
+        dayItems: siblings,
+        onMoveEnd: move,
+        onReorderEnd: reorder,
+        columnBoundsRef: boundsRef,
+        chipLayoutsRef: layoutsRef,
+      } = handlers.current;
 
-          setDragging(false);
-          pan.setValue({ x: 0, y: 0 });
+      const target = boundsRef.current.find(
+        (bounds) => gesture.moveX >= bounds.x && gesture.moveX <= bounds.x + bounds.width,
+      );
+      if (!target) return null;
 
-          if (target && target.date.toDateString() !== current.date.toDateString()) {
-            move(current, target.date);
-          }
-        },
-        onPanResponderTerminate: () => {
-          setDragging(false);
-          pan.setValue({ x: 0, y: 0 });
-        },
-      }),
-    [pan],
-  );
+      const movedKey = scheduleItemKey(current);
+      if (target.date.toDateString() !== current.date.toDateString()) {
+        return move ? { date: target.date, movedKey, index: null } : null;
+      }
+
+      if (!reorder || siblings.length < 2) return null;
+
+      const ownLayout = layoutsRef.current.get(movedKey);
+      if (!ownLayout) return null;
+
+      /* El desplazamiento del gesto evita mezclar coordenadas de pantalla con las de la columna:
+       * basta con saber dónde ha quedado el centro de la tarjeta arrastrada. */
+      const index = dropIndexForDay(
+        siblings.map((entry) => scheduleItemKey(entry)),
+        movedKey,
+        ownLayout.y + gesture.dy + ownLayout.height / 2,
+        layoutsRef.current,
+      );
+      return index === null ? null : { date: target.date, movedKey, index };
+    };
+
+    const publishHint = (hint: DropHint | null) => {
+      if (isSameDropHint(hintRef.current, hint)) return;
+      hintRef.current = hint;
+      handlers.current.onDropHintChange?.(hint);
+    };
+
+    const endGesture = () => {
+      setDragging(false);
+      pan.setValue({ x: 0, y: 0 });
+      publishHint(null);
+    };
+
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        setDragging(true);
+        handlers.current.onDragStart?.();
+      },
+      onPanResponderMove: (_event, gesture) => {
+        pan.setValue({ x: gesture.dx, y: gesture.dy });
+        publishHint(resolveHint(gesture));
+      },
+      onPanResponderRelease: (_event, gesture) => {
+        const { item: current, dayItems: siblings, onMoveEnd: move, onReorderEnd: reorder } = handlers.current;
+        const hint = resolveHint(gesture);
+        endGesture();
+
+        if (!hint) return;
+
+        if (hint.index === null) {
+          move?.(current, hint.date);
+          return;
+        }
+
+        const keys = siblings.map((entry) => scheduleItemKey(entry));
+        const ordered = applyDropIndex(keys, scheduleItemKey(current), hint.index);
+        if (!ordered || !reorder) return;
+
+        reorder(
+          current.date,
+          ordered
+            .map((key) => siblings.find((entry) => scheduleItemKey(entry) === key))
+            .filter((entry): entry is SchedulePreviewItem => Boolean(entry)),
+        );
+      },
+      onPanResponderTerminate: endGesture,
+    });
+  }, [pan]);
 
   return (
     <Animated.View
+      onLayout={(event) => {
+        const { y, height } = event.nativeEvent.layout;
+        chipLayoutsRef.current.set(scheduleItemKey(item), { y, height });
+      }}
       style={[
         { transform: pan.getTranslateTransform() },
         dragging && styles.sessionChipDragLayer,
@@ -542,14 +660,16 @@ function WeekView({
   const days = getWeekDays(focusDate);
   const columnNodesRef = useRef(new Map<string, View | null>());
   const columnRefCallbacksRef = useRef(new Map<string, (node: View | null) => void>());
-  const columnBoundsRef = useRef<Array<{ date: Date; x: number; width: number }>>([]);
-  const canDrag = Boolean(sessionActions?.onMoveToDate);
+  const columnBoundsRef = useRef<ColumnBounds[]>([]);
+  const chipLayoutsRef = useRef(new Map<string, ChipLayout>());
+  const [dropHint, setDropHint] = useState<DropHint | null>(null);
+  const canDrag = Boolean(sessionActions?.onMoveToDate || sessionActions?.onReorderDay);
 
   const measureColumns = useCallback(() => {
     const entries = Array.from(columnNodesRef.current.entries()).filter(([, node]) => Boolean(node));
     if (entries.length === 0) return;
 
-    const bounds: Array<{ date: Date; x: number; width: number }> = [];
+    const bounds: ColumnBounds[] = [];
     let pending = entries.length;
 
     entries.forEach(([dayKey, node]) => {
@@ -574,7 +694,7 @@ function WeekView({
     return callback;
   }, []);
 
-  const renderChip = (item: SchedulePreviewItem) => {
+  const renderChip = (item: SchedulePreviewItem, dayItems: SchedulePreviewItem[]) => {
     const expanded = expandedItemIds?.includes(scheduleItemKey(item)) ?? false;
     const chipProps = {
       item,
@@ -587,19 +707,35 @@ function WeekView({
       detail: renderItemDetail && expanded ? renderItemDetail(item) : undefined,
     };
 
-    if (canDrag && sessionActions?.onMoveToDate) {
+    if (canDrag) {
       return (
         <DraggableSessionChip
           key={scheduleItemKey(item)}
           {...chipProps}
+          dayItems={dayItems}
           columnBoundsRef={columnBoundsRef}
-          onMoveEnd={sessionActions.onMoveToDate}
+          chipLayoutsRef={chipLayoutsRef}
+          onMoveEnd={sessionActions?.onMoveToDate}
+          onReorderEnd={sessionActions?.onReorderDay}
           onDragStart={measureColumns}
+          onDropHintChange={setDropHint}
         />
       );
     }
 
     return <SessionChip key={scheduleItemKey(item)} {...chipProps} />;
+  };
+
+  /* La línea va en posición absoluta a propósito: si ocupara sitio movería las tarjetas y el hueco
+   * calculado cambiaría solo con dibujarla. */
+  const dropLineTopFor = (dayItems: SchedulePreviewItem[], hint: DropHint) => {
+    if (hint.index === null) return null;
+    return dropLineOffset(
+      dayItems.map((item) => scheduleItemKey(item)),
+      hint.movedKey,
+      hint.index,
+      chipLayoutsRef.current,
+    );
   };
 
   return (
@@ -608,6 +744,8 @@ function WeekView({
         const dayItems = itemsForDate(items, day);
         const weekday = WEEKDAY_SHORT_LABELS[day.getDay() === 0 ? 6 : day.getDay() - 1];
         const selected = isSameDate(day, selectedDate);
+        const hint = dropHint && isSameDate(day, dropHint.date) ? dropHint : null;
+        const dropLineTop = hint ? dropLineTopFor(dayItems, hint) : null;
         const Wrapper = onDayPress ? Pressable : View;
         return (
           <Wrapper
@@ -620,6 +758,7 @@ function WeekView({
               size === 'large' && styles.weekColumnLarge,
               onDayPress && styles.weekColumnPressable,
               selected && styles.weekColumnSelected,
+              hint && styles.weekColumnDropTarget,
             ]}
           >
             <View style={styles.weekColumnHeader}>
@@ -627,10 +766,15 @@ function WeekView({
               <Text style={styles.weekColumnDate}>{day.getDate()}</Text>
             </View>
             {dayItems.length === 0 ? (
-              <Text style={styles.weekEmpty}>Sin sesión</Text>
+              <Text style={[styles.weekEmpty, hint && styles.weekEmptyDropTarget]}>
+                {hint ? 'Soltar aquí' : 'Sin sesión'}
+              </Text>
             ) : (
-              dayItems.map((item) => renderChip(item))
+              dayItems.map((item) => renderChip(item, dayItems))
             )}
+            {dropLineTop !== null ? (
+              <View pointerEvents="none" style={[styles.dropLine, { top: dropLineTop }]} />
+            ) : null}
           </Wrapper>
         );
       })}
@@ -936,11 +1080,29 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
   },
+  weekColumnDropTarget: {
+    borderColor: colors.accent,
+    backgroundColor: `${colors.accent}14`,
+  },
   weekEmpty: {
     ...typography.caption,
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  weekEmptyDropTarget: {
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  dropLine: {
+    position: 'absolute',
+    left: spacing.xs,
+    right: spacing.xs,
+    height: 3,
+    marginTop: -1.5,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.accent,
+    zIndex: 10,
   },
   sessionChip: {
     backgroundColor: colors.surfaceLight,
