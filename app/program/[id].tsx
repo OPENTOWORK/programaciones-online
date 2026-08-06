@@ -92,7 +92,7 @@ export default function ProgramDetailScreen() {
         <Card>
           <Text style={styles.description}>{program.description}</Text>
           {program.duration !== 'Por definir' ? <InfoRow label="Duración" value={program.duration} /> : null}
-          <InfoRow label="Objetivo" value={goalLabels[program.goal]} />
+          {program.goal ? <InfoRow label="Objetivo" value={goalLabels[program.goal]} /> : null}
           {program.sessionsPerWeek > 0 ? (
             <InfoRow label="Sesiones/semana" value={`${program.sessionsPerWeek}`} />
           ) : null}

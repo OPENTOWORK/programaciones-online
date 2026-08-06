@@ -8,6 +8,8 @@ import {
 import { isStructuredTimingPart, dedupeTimingTokens } from '@/lib/workoutDisplayFormat';
 
 export type WorkoutBlockType =
+  | 'activation'
+  | 'strength'
   | 'free_training'
   | 'for_time'
   | 'rounds_for_time'
@@ -30,30 +32,50 @@ export interface WorkoutBlockItemDraft {
   weightKg?: string;
   calories?: string;
   distance?: string;
+  /** Trabajo por tiempo: minutos y segundos van aparte para no tener que escribir la unidad. */
+  minutes?: string;
+  seconds?: string;
   /** Repeticiones en reserva. */
   rir?: string;
   /** Porcentaje del máximo del atleta. */
   percent?: string;
+  /** Repeticiones máximas: un 3 aquí es un 3RM. */
+  rm?: string;
   loadMetric?: MovementLoadMetric;
 }
 
-export type MovementLoadMetric = 'none' | 'kg' | 'cal' | 'distance' | 'rir' | 'percent';
+export type MovementLoadMetric =
+  | 'none'
+  | 'kg'
+  | 'cal'
+  | 'distance'
+  | 'min'
+  | 'sec'
+  | 'rir'
+  | 'percent'
+  | 'rm';
 
 export const MOVEMENT_LOAD_METRICS: MovementLoadMetric[] = [
   'none',
   'kg',
   'cal',
   'distance',
+  'min',
+  'sec',
   'rir',
   'percent',
+  'rm',
 ];
 
 export function getMovementLoadMetricLabel(metric: MovementLoadMetric) {
   if (metric === 'kg') return 'Kg';
   if (metric === 'cal') return 'Cal';
   if (metric === 'distance') return 'Distancia';
+  if (metric === 'min') return 'Min';
+  if (metric === 'sec') return 'Seg';
   if (metric === 'rir') return 'RIR';
   if (metric === 'percent') return '%';
+  if (metric === 'rm') return 'RM';
   return 'Sin carga';
 }
 
@@ -62,8 +84,11 @@ export function getMovementLoadMetric(item: WorkoutBlockItemDraft): MovementLoad
   if (item.weightKg?.trim()) return 'kg';
   if (item.calories?.trim()) return 'cal';
   if (item.distance?.trim()) return 'distance';
+  if (item.minutes?.trim()) return 'min';
+  if (item.seconds?.trim()) return 'sec';
   if (item.rir?.trim()) return 'rir';
   if (item.percent?.trim()) return 'percent';
+  if (item.rm?.trim()) return 'rm';
   return 'none';
 }
 
@@ -72,8 +97,11 @@ export function getMovementLoadValue(item: WorkoutBlockItemDraft): string {
   if (metric === 'kg') return item.weightKg ?? '';
   if (metric === 'cal') return item.calories ?? '';
   if (metric === 'distance') return item.distance ?? '';
+  if (metric === 'min') return item.minutes ?? '';
+  if (metric === 'sec') return item.seconds ?? '';
   if (metric === 'rir') return item.rir ?? '';
   if (metric === 'percent') return item.percent ?? '';
+  if (metric === 'rm') return item.rm ?? '';
   return '';
 }
 
@@ -81,8 +109,11 @@ export function movementLoadPlaceholder(metric: MovementLoadMetric) {
   if (metric === 'kg') return '60';
   if (metric === 'cal') return '15';
   if (metric === 'distance') return '400 m';
+  if (metric === 'min') return '1';
+  if (metric === 'sec') return '30';
   if (metric === 'rir') return '2';
   if (metric === 'percent') return '80';
+  if (metric === 'rm') return '1';
   return '';
 }
 
@@ -93,8 +124,11 @@ export function formatMovementLoad(metric: MovementLoadMetric, value: string) {
 
   if (metric === 'kg') return `${trimmed} kg`;
   if (metric === 'cal') return `${trimmed} cal`;
+  if (metric === 'min') return `${trimmed} min`;
+  if (metric === 'sec') return `${trimmed} s`;
   if (metric === 'rir') return `RIR ${trimmed}`;
   if (metric === 'percent') return `${trimmed}%`;
+  if (metric === 'rm') return `${trimmed}RM`;
   return trimmed;
 }
 
@@ -108,7 +142,7 @@ export interface WorkoutBlockDraft {
   items: WorkoutBlockItemDraft[];
 }
 
-const STRENGTH_BLOCK_TYPES = new Set<WorkoutBlockType>(['free_training', 'technique']);
+const STRENGTH_BLOCK_TYPES = new Set<WorkoutBlockType>(['free_training', 'technique', 'strength']);
 
 export function blockUsesSeries(type: WorkoutBlockType) {
   return STRENGTH_BLOCK_TYPES.has(type);
@@ -119,17 +153,40 @@ export const WORKOUT_BLOCK_TYPES: Array<{
   label: string;
   timingLabel: string;
   timingPlaceholder: string;
+  /** El tiempo del bloque se edita con selector de minutos/segundos en vez de texto libre. */
+  timingIsDuration?: boolean;
   subtitleLabel?: string;
   subtitlePlaceholder?: string;
 }> = [
-  { type: 'free_training', label: 'Entrenamiento libre', timingLabel: 'Duración', timingPlaceholder: 'Opcional' },
+  {
+    type: 'activation',
+    label: 'Activación',
+    timingLabel: 'Duración',
+    timingPlaceholder: '10',
+    timingIsDuration: true,
+  },
+  {
+    type: 'strength',
+    label: 'Fuerza',
+    timingLabel: 'Duración',
+    timingPlaceholder: 'Opcional',
+    timingIsDuration: true,
+  },
+  {
+    type: 'free_training',
+    label: 'Entrenamiento libre',
+    timingLabel: 'Duración',
+    timingPlaceholder: 'Opcional',
+    timingIsDuration: true,
+  },
   { type: 'for_time', label: 'For Time', timingLabel: 'Cap / tiempo', timingPlaceholder: 'Cap 15 min' },
   { type: 'rounds_for_time', label: 'Rounds For Time', timingLabel: 'Rondas', timingPlaceholder: '5 rondas' },
   {
     type: 'emom',
     label: 'EMOM',
     timingLabel: 'Duración',
-    timingPlaceholder: '20 min',
+    timingPlaceholder: '20',
+    timingIsDuration: true,
     subtitleLabel: 'Rondas',
     subtitlePlaceholder: '5 rondas',
   },
@@ -137,20 +194,47 @@ export const WORKOUT_BLOCK_TYPES: Array<{
     type: 'time_stations',
     label: 'Estaciones de tiempo',
     timingLabel: 'Duración',
-    timingPlaceholder: '20 min',
+    timingPlaceholder: '20',
+    timingIsDuration: true,
     subtitleLabel: 'Estaciones',
     subtitlePlaceholder: '4 estaciones',
   },
-  { type: 'technique', label: 'Entrenamiento de Técnica', timingLabel: 'Duración', timingPlaceholder: '15 min' },
-  { type: 'mobility', label: 'Movilidad', timingLabel: 'Duración', timingPlaceholder: '10 min' },
+  {
+    type: 'technique',
+    label: 'Entrenamiento de Técnica',
+    timingLabel: 'Duración',
+    timingPlaceholder: '15',
+    timingIsDuration: true,
+  },
+  {
+    type: 'mobility',
+    label: 'Movilidad',
+    timingLabel: 'Duración',
+    timingPlaceholder: '10',
+    timingIsDuration: true,
+  },
   { type: 'reps_ladder', label: 'Reps For Time / Ladder', timingLabel: 'Esquema', timingPlaceholder: '10-9-8…' },
-  { type: 'amrap', label: 'AMRAP', timingLabel: 'Duración', timingPlaceholder: '12 min' },
+  {
+    type: 'amrap',
+    label: 'AMRAP',
+    timingLabel: 'Duración',
+    timingPlaceholder: '12',
+    timingIsDuration: true,
+  },
   { type: 'tabata', label: 'Tabata', timingLabel: 'Rondas', timingPlaceholder: '8 rondas' },
-  { type: 'unbroken', label: 'Unbroken', timingLabel: 'Duración', timingPlaceholder: '10 min' },
+  {
+    type: 'unbroken',
+    label: 'Unbroken',
+    timingLabel: 'Duración',
+    timingPlaceholder: '10',
+    timingIsDuration: true,
+  },
   { type: 'free_text', label: 'Texto libre', timingLabel: 'Detalle', timingPlaceholder: 'Opcional' },
 ];
 
 const BLOCK_LABELS: Record<WorkoutBlockType, string> = {
+  activation: 'Activación',
+  strength: 'Fuerza',
   free_training: 'Entrenamiento libre',
   for_time: 'For Time',
   rounds_for_time: 'Rounds For Time',
@@ -165,6 +249,38 @@ const BLOCK_LABELS: Record<WorkoutBlockType, string> = {
   free_text: 'Texto libre',
 };
 
+export type TimingUnit = 'min' | 'sec';
+
+/**
+ * Lee la duración de un bloque cuando es solo número + unidad. Devuelve null con textos libres
+ * ("Cap 15 min", "10-9-8…") para que el editor los siga tratando como texto.
+ */
+export function parseTimingDuration(timing: string | undefined): { value: string; unit: TimingUnit } | null {
+  const trimmed = timing?.trim() ?? '';
+  if (!trimmed) return null;
+
+  const match = trimmed.match(
+    /^(\d+(?:[.,]\d+)?)\s*(minutos|mins|min|m|'|\u2032|segundos|segs|seg|s|"|\u2033)?$/i,
+  );
+  if (!match) return null;
+
+  const unit = match[2]?.toLowerCase();
+  const isSeconds = unit === 's' || unit === 'seg' || unit === 'segs' || unit === 'segundos' || unit === '"' || unit === '\u2033';
+
+  return { value: match[1], unit: isSeconds ? 'sec' : 'min' };
+}
+
+export function formatTimingDuration(value: string, unit: TimingUnit) {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return unit === 'sec' ? `${trimmed} s` : `${trimmed} min`;
+}
+
+/** Un campo vacío también admite el selector: es el punto de partida de un bloque nuevo. */
+export function usesTimingDurationPicker(timing: string | undefined) {
+  return !timing?.trim() || parseTimingDuration(timing) != null;
+}
+
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 }
@@ -178,8 +294,11 @@ export function createEmptyBlockItem(): WorkoutBlockItemDraft {
     weightKg: '',
     calories: '',
     distance: '',
+    minutes: '',
+    seconds: '',
     rir: '',
     percent: '',
+    rm: '',
     loadMetric: 'none',
   };
 }
@@ -222,8 +341,11 @@ export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft
     weightKg: '',
     calories: '',
     distance: '',
+    minutes: '',
+    seconds: '',
     rir: '',
     percent: '',
+    rm: '',
     loadMetric: 'none' as MovementLoadMetric,
   };
   const trimmed = line.trim();
@@ -236,10 +358,16 @@ export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft
 
   if (!prescription) return result;
 
-  /* El RIR y el porcentaje se buscan antes que la carga genérica: «80%» sin más se leería como kilos.
-   * Los tres admiten ir solos en la prescripción o detrás de las repeticiones. */
+  /* El RIR, el porcentaje y el RM se buscan antes que la carga genérica: «80%» o «3RM» sin más se
+   * leerían como kilos. Todos admiten ir solos en la prescripción o detrás de las repeticiones.
+   * El porcentaje va antes que el RM para que «80% del 1RM» se guarde como porcentaje. */
   const rirMatch = prescription.match(/(?:^|@|·)\s*rir\s*(\d+[\d.,]*)/i);
   const percentMatch = prescription.match(/(?:^|@|·)\s*(\d+[\d.,]*)\s*%/);
+  const rmMatch = prescription.match(/(?:^|@|·)\s*(\d+[\d.,]*)\s*rm\b/i);
+  /* Los minutos no admiten una «m» suelta porque ahí son metros, y los segundos necesitan el corte de
+   * palabra para no comerse la «s» de «series». */
+  const minMatch = prescription.match(/(?:^|@|·)\s*(\d+[\d.,]*)\s*(?:minutos|mins|min)\b/i);
+  const secMatch = prescription.match(/(?:^|@|·)\s*(\d+[\d.,]*)\s*(?:segundos|segs|seg|s)\b/i);
   const loadMatch = prescription.match(/(?:@|·)\s*(\d+[\d.,]*)\s*(kg|cal)?/i);
 
   if (rirMatch) {
@@ -248,6 +376,15 @@ export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft
   } else if (percentMatch) {
     result.percent = percentMatch[1];
     result.loadMetric = 'percent';
+  } else if (rmMatch) {
+    result.rm = rmMatch[1];
+    result.loadMetric = 'rm';
+  } else if (minMatch) {
+    result.minutes = minMatch[1];
+    result.loadMetric = 'min';
+  } else if (secMatch) {
+    result.seconds = secMatch[1];
+    result.loadMetric = 'sec';
   } else if (loadMatch) {
     const value = loadMatch[1];
     const unit = (loadMatch[2] ?? 'kg').toLowerCase();
@@ -260,7 +397,7 @@ export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft
     }
   }
 
-  const matched = rirMatch ?? percentMatch ?? loadMatch;
+  const matched = rirMatch ?? percentMatch ?? rmMatch ?? minMatch ?? secMatch ?? loadMatch;
   const withoutLoad = (matched ? prescription.replace(matched[0], ' ') : prescription)
     .replace(/[·@]/g, ' ')
     .trim();
@@ -326,6 +463,7 @@ export function createEmptyBlock(type: WorkoutBlockType = 'amrap'): WorkoutBlock
 function guessBlockType(label: string): WorkoutBlockType {
   const normalized = label.toLowerCase();
 
+  if (normalized.includes('activacion') || normalized.includes('activación')) return 'activation';
   if (normalized.includes('entrenamiento libre')) return 'free_training';
   if (normalized.includes('rounds for time')) return 'rounds_for_time';
   if (normalized.includes('estaciones de tiempo')) return 'time_stations';
@@ -341,9 +479,8 @@ function guessBlockType(label: string): WorkoutBlockType {
   if (normalized.includes('for time') || normalized.includes('for-time')) return 'for_time';
   if (normalized.includes('tabata')) return 'tabata';
   if (normalized.includes('chipper')) return 'for_time';
-  if (normalized.includes('fuerza') || normalized.includes('técnica') || normalized.includes('tecnica')) {
-    return 'technique';
-  }
+  if (normalized.includes('fuerza')) return 'strength';
+  if (normalized.includes('técnica') || normalized.includes('tecnica')) return 'technique';
   if (normalized.includes('rondas')) return 'rounds_for_time';
   if (normalized.includes('libre') || normalized.includes('bloque')) return 'free_text';
 
@@ -532,8 +669,11 @@ export function sanitizeWorkoutBlock(block: WorkoutBlockDraft): WorkoutBlockDraf
         weightKg: item.weightKg?.trim() ?? '',
         calories: item.calories?.trim() ?? '',
         distance: item.distance?.trim() ?? '',
+        minutes: item.minutes?.trim() ?? '',
+        seconds: item.seconds?.trim() ?? '',
         rir: item.rir?.trim() ?? '',
         percent: item.percent?.trim() ?? '',
+        rm: item.rm?.trim() ?? '',
         loadMetric: getMovementLoadMetric(item),
       }))
       .filter((item) => item.text),

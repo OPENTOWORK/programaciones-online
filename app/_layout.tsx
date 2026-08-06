@@ -64,6 +64,7 @@ function RootNavigator() {
           <Stack.Screen name="athlete/plan/[id]/session" options={{ title: 'Sesión del plan' }} />
           <Stack.Screen name="profile/edit" options={{ title: 'Editar perfil' }} />
           <Stack.Screen name="profile/intake-form" options={{ title: 'Formulario de bienvenida' }} />
+          <Stack.Screen name="profile/appointments" options={{ title: 'Citas' }} />
           <Stack.Screen name="legal/privacy" options={{ title: 'Política de privacidad' }} />
           <Stack.Screen name="trainer/athlete/[id]" options={{ title: 'Ficha del atleta' }} />
           <Stack.Screen name="trainer/athlete/[id]/log/[logId]" options={{ title: 'Registro de sesión' }} />

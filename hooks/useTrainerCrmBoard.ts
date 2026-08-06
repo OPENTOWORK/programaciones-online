@@ -157,8 +157,9 @@ export function useTrainerCrmBoard() {
     async (athleteId: string, targetStageId: string, targetIndex?: number) => {
       if (!trainerId) return;
 
-      const previousStageId = positions.get(athleteId)?.stageId;
-      const previousStage = stages.find((stage) => stage.id === previousStageId);
+      // Por `columns`, no por `positions`: una ficha sin posición guardada vive en la primera columna.
+      const previousStage = columns.find((column) => column.leads.some((lead) => lead.id === athleteId))?.stage;
+      const sameStage = previousStage?.id === targetStageId;
       const targetColumn = columns.find((column) => column.stage.id === targetStageId);
       const targetLeadIds = (targetColumn?.leads ?? []).map((athlete) => athlete.id).filter((id) => id !== athleteId);
       const insertIndex = targetIndex ?? targetLeadIds.length;
@@ -176,6 +177,9 @@ export function useTrainerCrmBoard() {
 
       await saveCrmColumnOrder(trainerId, targetStageId, nextOrder, useLocalStore);
 
+      // Reordenar dentro de la misma columna no cambia de etapa: no es un hito ni toca el rol.
+      if (sameStage) return;
+
       const targetStageName = targetColumn?.stage.name;
       if (targetStageName) {
         void addCrmActivity(trainerId, athleteId, `Movido a "${targetStageName}"`, 'stage_change', useLocalStore);
@@ -187,7 +191,7 @@ export function useTrainerCrmBoard() {
         await applyRoleChange(athleteId, nextRole);
       }
     },
-    [columns, positions, stages, trainerId, useLocalStore, applyRoleChange],
+    [columns, trainerId, useLocalStore, applyRoleChange],
   );
 
   const moveLeadToAdjacentStage = useCallback(

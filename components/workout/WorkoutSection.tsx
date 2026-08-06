@@ -136,7 +136,7 @@ function BlockItems({
                     ) : null}
                     {display.load ? (
                       <View style={styles.itemMetricPill}>
-                        <Text style={styles.itemMetricLabel}>Carga</Text>
+                        <Text style={styles.itemMetricLabel}>{display.loadLabel ?? 'Carga'}</Text>
                         <Text style={styles.itemMetricValue}>{display.load}</Text>
                       </View>
                     ) : null}

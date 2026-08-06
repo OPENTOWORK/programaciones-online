@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder } from 'react-native';
+import { Animated, PanResponder, type View } from 'react-native';
 
 import { CrmLeadCard } from '@/components/trainer/CrmLeadCard';
 import type { AthleteSummary } from '@/lib/types';
@@ -12,6 +12,8 @@ interface DraggableLeadCardProps {
   onMovePrev: () => void;
   onMoveNext: () => void;
   onOpenActions: () => void;
+  /** El tablero mide la tarjeta al empezar un arrastre para saber dónde cae la que se mueve. */
+  cardRef?: (node: View | null) => void;
   onDragStart: (athleteId: string) => void;
   onDragMove: (athleteId: string, pageX: number, pageY: number) => void;
   onDragEnd: (athleteId: string, pageX: number, pageY: number) => void;
@@ -19,6 +21,7 @@ interface DraggableLeadCardProps {
 
 export function DraggableLeadCard({
   athlete,
+  cardRef,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -57,6 +60,8 @@ export function DraggableLeadCard({
 
   return (
     <Animated.View
+      ref={cardRef}
+      collapsable={false}
       style={[
         { transform: [{ translateX: pan.x }, { translateY: pan.y }] },
         isDragging && { zIndex: 50, elevation: 12 },

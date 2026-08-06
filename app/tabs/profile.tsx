@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ProfileAppointmentsCard } from '@/components/appointments/ProfileAppointmentsCard';
 import { IconBadge } from '@/components/ui/AppIcon';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -30,6 +31,16 @@ function planCategoryRoute(plans: { id: string; category: string }[], planType: 
   const match = plans.find((plan) => plan.category === planType);
   if (match) return match.id;
   return planType === 'nutrition' ? 'plan-nutrition' : 'personalized';
+}
+
+/** Las sesiones sueltas no tienen duración ni frecuencia, así que la línea se queda vacía. */
+function activeProgramMeta(program: { duration: string; sessionsPerWeek: number }) {
+  return [
+    program.duration && program.duration !== 'Por definir' ? program.duration : null,
+    program.sessionsPerWeek > 0 ? `${program.sessionsPerWeek}x/semana` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function formatOptionalValue(value: string | number | undefined, suffix = '') {
@@ -173,7 +184,9 @@ export default function ProfileScreen() {
         </Card>
       ) : null}
 
-      <Card>
+      <ProfileAppointmentsCard />
+
+      <Card style={styles.programCard}>
         <SectionHeader title="Datos físicos" />
         <InfoRow label="Altura" value={formatOptionalValue(user.height, ' cm')} />
         <InfoRow label="Peso" value={formatOptionalValue(user.weight, ' kg')} />
@@ -245,9 +258,9 @@ export default function ProfileScreen() {
                   <IconBadge name="programs" containerSize={32} size={16} />
                   <View style={styles.programInfo}>
                     <Text style={styles.programName}>{program.name}</Text>
-                    <Text style={styles.programMeta}>
-                      {program.duration} · {program.sessionsPerWeek}x/semana
-                    </Text>
+                    {activeProgramMeta(program) ? (
+                      <Text style={styles.programMeta}>{activeProgramMeta(program)}</Text>
+                    ) : null}
                   </View>
                   <View style={styles.programActions}>
                     <Pressable

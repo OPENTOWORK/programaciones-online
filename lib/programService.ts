@@ -68,9 +68,17 @@ function mapPlanCategory(descripcion: string): ProgramCategory {
   return 'standard';
 }
 
+/** Catálogos de sesiones sueltas ("¿Cuánto tiempo tienes?"): no son un ciclo semanal con objetivo. */
+function isLooseSessionCatalog(name: string) {
+  const normalized = name.toLowerCase();
+  return normalized.includes('cuánto tiempo') || normalized.includes('cuanto tiempo');
+}
+
 function inferIcon(name: string): AppIconName {
   const normalized = name.toLowerCase();
 
+  if (isLooseSessionCatalog(name)) return 'time';
+  if (normalized.includes('core')) return 'core';
   if (normalized.includes('athx') || normalized.includes('hype')) return 'intense';
   if (normalized.includes('hyrox')) return 'power';
   if (normalized.includes('calisten')) return 'strength';
@@ -86,16 +94,18 @@ function inferIcon(name: string): AppIconName {
   return 'programs';
 }
 
-function inferGoal(name: string): ProgramGoal {
+/** Sin pista en el nombre no se inventa objetivo: la ficha lo oculta. */
+function inferGoal(name: string): ProgramGoal | undefined {
   const normalized = name.toLowerCase();
 
-  if (normalized.includes('fuerza')) return 'fuerza';
+  if (normalized.includes('fuerza') || normalized.includes('core')) return 'fuerza';
   if (normalized.includes('movil')) return 'movilidad';
   if (normalized.includes('pliomet')) return 'rendimiento';
   if (normalized.includes('grasa') || normalized.includes('shred')) return 'pérdida de grasa';
   if (normalized.includes('rendimiento') || normalized.includes('engine')) return 'rendimiento';
+  if (normalized.includes('hypert') || normalized.includes('hipert')) return 'hipertrofia';
 
-  return 'hipertrofia';
+  return undefined;
 }
 
 function inferLevel(category: ProgramCategory): Program['level'] {
@@ -109,6 +119,7 @@ function mapPrograma(
   planLabel: string,
 ): Program {
   const category = mapPlanCategory(planLabel);
+  const looseSessions = isLooseSessionCatalog(row.name);
 
   return {
     id: row.id,
@@ -118,7 +129,7 @@ function mapPrograma(
     level: inferLevel(category),
     duration: 'Por definir' as Program['duration'],
     goal: inferGoal(row.name),
-    sessionsPerWeek: 3,
+    sessionsPerWeek: looseSessions ? 0 : 3,
     status: 'disponible',
     icon: inferIcon(row.name),
     description: row.descripcion?.trim() || `Programación del plan ${planLabel}.`,
@@ -126,6 +137,16 @@ function mapPrograma(
     trainingDays: [],
     weeks: [],
   };
+}
+
+/** Los catálogos de sesiones sueltas se listan al final del plan. */
+function compareCatalogPrograms(a: Program, b: Program) {
+  const aLoose = isLooseSessionCatalog(a.name);
+  const bLoose = isLooseSessionCatalog(b.name);
+
+  if (aLoose !== bLoose) return aLoose ? 1 : -1;
+
+  return a.name.localeCompare(b.name, 'es');
 }
 
 export function mapProgramFromJoin(
@@ -204,9 +225,9 @@ export async function fetchPlansAndPrograms(): Promise<{ plans: Plan[]; programs
     category: mapPlanCategory(plan.descripcion),
   }));
 
-  const programs: Program[] = (programas ?? []).map((programa) =>
-    mapPrograma(programa, planLabels.get(programa.id_planes) ?? ''),
-  );
+  const programs: Program[] = (programas ?? [])
+    .map((programa) => mapPrograma(programa, planLabels.get(programa.id_planes) ?? ''))
+    .sort(compareCatalogPrograms);
 
   return { plans, programs };
 }

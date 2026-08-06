@@ -25,6 +25,7 @@ import {
   createEmptyBlock,
   createEmptyBlockItem,
   formatBlockItemLine,
+  formatTimingDuration,
   getBlockTypeConfig,
   getMovementLoadMetric,
   getMovementLoadMetricLabel,
@@ -32,11 +33,13 @@ import {
   MOVEMENT_LOAD_METRICS,
   movementLoadPlaceholder,
   getWorkoutBlockSummary,
+  parseTimingDuration,
   sanitizeWorkoutBlock,
+  usesTimingDurationPicker,
   WORKOUT_BLOCK_TYPES,
   type WorkoutBlockType,
 } from '@/lib/workoutBlockBuilder';
-import type { MovementLoadMetric, WorkoutBlockItemDraft } from '@/lib/workoutBlockBuilder';
+import type { MovementLoadMetric, TimingUnit, WorkoutBlockItemDraft } from '@/lib/workoutBlockBuilder';
 import {
   draftSectionFingerprint,
   draftToTaggedBlocks,
@@ -46,6 +49,8 @@ import {
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
 
 const CONFIRM_GREEN = '#4ADE80';
+
+const TIMING_UNITS: TimingUnit[] = ['min', 'sec'];
 
 interface WorkoutBlocksEditorProps {
   draft: SessionDraft;
@@ -197,8 +202,11 @@ function MovementRow({
       weightKg: metric === 'kg' ? item.weightKg ?? '' : '',
       calories: metric === 'cal' ? item.calories ?? '' : '',
       distance: metric === 'distance' ? item.distance ?? '' : '',
+      minutes: metric === 'min' ? item.minutes ?? '' : '',
+      seconds: metric === 'sec' ? item.seconds ?? '' : '',
       rir: metric === 'rir' ? item.rir ?? '' : '',
       percent: metric === 'percent' ? item.percent ?? '' : '',
+      rm: metric === 'rm' ? item.rm ?? '' : '',
     });
   };
 
@@ -208,8 +216,11 @@ function MovementRow({
       weightKg: metric === 'kg' ? value : '',
       calories: metric === 'cal' ? value : '',
       distance: metric === 'distance' ? value : '',
+      minutes: metric === 'min' ? value : '',
+      seconds: metric === 'sec' ? value : '',
       rir: metric === 'rir' ? value : '',
       percent: metric === 'percent' ? value : '',
+      rm: metric === 'rm' ? value : '',
     });
   };
 
@@ -329,6 +340,17 @@ function EditingBlockCard({
   const config = getBlockTypeConfig(block.type);
   const accent = getBlockAccent(config.label);
 
+  const timingDuration = parseTimingDuration(block.timing);
+  const showTimingPicker = Boolean(config.timingIsDuration) && usesTimingDurationPicker(block.timing);
+  // Con el campo vacío no hay texto del que deducir la unidad, así que la recuerda el propio editor.
+  const [pendingTimingUnit, setPendingTimingUnit] = useState<TimingUnit>(timingDuration?.unit ?? 'min');
+  const timingUnit = timingDuration?.unit ?? pendingTimingUnit;
+
+  const selectTimingUnit = (unit: TimingUnit) => {
+    setPendingTimingUnit(unit);
+    onUpdate({ timing: formatTimingDuration(timingDuration?.value ?? '', unit) });
+  };
+
   const updateItem = (itemId: string, patch: Partial<WorkoutBlockItemDraft>) => {
     onUpdate({
       items: block.items.map((item) => (item.id === itemId ? { ...item, ...patch } : item)),
@@ -408,15 +430,46 @@ function EditingBlockCard({
                 style={styles.input}
               />
             </View>
-            <View style={styles.blockMetaField}>
+            <View style={[styles.blockMetaField, showTimingPicker && styles.timingField]}>
               <Text style={styles.fieldLabel}>{config.timingLabel}</Text>
-              <TextInput
-                value={block.timing}
-                onChangeText={(timing) => onUpdate({ timing })}
-                placeholder={config.timingPlaceholder}
-                placeholderTextColor={colors.textMuted}
-                style={styles.input}
-              />
+              {showTimingPicker ? (
+                <View style={styles.timingRow}>
+                  <TextInput
+                    value={timingDuration?.value ?? ''}
+                    onChangeText={(next) =>
+                      onUpdate({ timing: formatTimingDuration(next.replace(/[^\d.,]/g, ''), timingUnit) })
+                    }
+                    placeholder={config.timingPlaceholder}
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="decimal-pad"
+                    style={[styles.input, styles.timingValueInput]}
+                  />
+                  <View style={styles.loadMetricPicker}>
+                    {TIMING_UNITS.map((unit) => {
+                      const active = timingUnit === unit;
+                      return (
+                        <Pressable
+                          key={unit}
+                          onPress={() => selectTimingUnit(unit)}
+                          style={[styles.loadMetricBtn, active && styles.loadMetricBtnActive]}
+                        >
+                          <Text style={[styles.loadMetricBtnText, active && styles.loadMetricBtnTextActive]}>
+                            {unit === 'min' ? 'Min' : 'Seg'}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : (
+                <TextInput
+                  value={block.timing}
+                  onChangeText={(timing) => onUpdate({ timing })}
+                  placeholder={config.timingPlaceholder}
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.input}
+                />
+              )}
             </View>
             {config.subtitleLabel ? (
               <View style={styles.blockMetaField}>
@@ -1128,6 +1181,18 @@ const styles = StyleSheet.create({
   blockMetaField: {
     flex: 1,
     minWidth: 120,
+  },
+  timingField: {
+    minWidth: 180,
+  },
+  timingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  timingValueInput: {
+    flex: 1,
+    minWidth: 56,
   },
   notesField: {
     marginBottom: spacing.sm,

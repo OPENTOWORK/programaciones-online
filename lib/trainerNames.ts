@@ -4,7 +4,12 @@ const PERFIL_TABLE = 'Perfil';
 
 /** Nombres de los entrenadores del equipo, para firmar lo que crea cada uno. */
 export async function fetchTrainerNames(trainerIds: string[]): Promise<Map<string, string>> {
-  const unique = [...new Set(trainerIds.filter(Boolean))];
+  return fetchProfileNames(trainerIds);
+}
+
+/** Nombres de cualquier perfil por id, sea atleta o entrenador. */
+export async function fetchProfileNames(profileIds: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(profileIds.filter(Boolean))];
   if (unique.length === 0) return new Map();
 
   const supabase = getSupabase();

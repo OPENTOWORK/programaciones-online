@@ -23,11 +23,17 @@ import { PromptModal } from '@/components/ui/PromptModal';
 import { CrmColumn, CRM_COLUMN_WIDTH } from '@/components/trainer/CrmColumn';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useTrainerCrmBoard } from '@/hooks/useTrainerCrmBoard';
+import { dropIndexForPosition, dropLineOffsetForIndex } from '@/lib/dragDropList';
 
 type LeadActionsState = { athleteId: string; stageId: string } | null;
 type ColumnActionsState = { stageId: string } | null;
 type PromptState = { mode: 'create' } | { mode: 'rename'; stageId: string } | null;
 type DeleteLeadState = { athleteId: string; name: string } | null;
+
+type ColumnBounds = { stageId: string; x: number; y: number; width: number };
+type CardBounds = { athleteId: string; stageId: string; y: number; height: number };
+/** Columna y hueco donde caería la ficha que se está arrastrando. */
+type DropHint = { stageId: string; index: number; lineTop: number | null };
 
 const MIN_SCROLL_THUMB_WIDTH = 48;
 
@@ -57,10 +63,13 @@ export function CrmBoard() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [draggingAthleteId, setDraggingAthleteId] = useState<string | null>(null);
-  const [hoverStageId, setHoverStageId] = useState<string | null>(null);
+  const [dropHint, setDropHint] = useState<DropHint | null>(null);
   const columnNodesRef = useRef(new Map<string, View | null>());
-  const columnBoundsRef = useRef<Array<{ stageId: string; x: number; width: number }>>([]);
+  const columnBoundsRef = useRef<ColumnBounds[]>([]);
   const columnRefCallbacksRef = useRef(new Map<string, (node: View | null) => void>());
+  const cardNodesRef = useRef(new Map<string, View | null>());
+  const cardBoundsRef = useRef<CardBounds[]>([]);
+  const cardRefCallbacksRef = useRef(new Map<string, (node: View | null) => void>());
 
   const boardWrapperRef = useRef<View | null>(null);
   const boardScrollRef = useRef<ScrollView | null>(null);
@@ -120,9 +129,20 @@ export function CrmBoard() {
     return callback;
   }, []);
 
+  const registerCardRef = useCallback((athleteId: string) => {
+    const cached = cardRefCallbacksRef.current.get(athleteId);
+    if (cached) return cached;
+
+    const callback = (node: View | null) => {
+      cardNodesRef.current.set(athleteId, node);
+    };
+    cardRefCallbacksRef.current.set(athleteId, callback);
+    return callback;
+  }, []);
+
   const measureColumnBounds = useCallback(() => {
     const entries = Array.from(columnNodesRef.current.entries());
-    const bounds: Array<{ stageId: string; x: number; width: number }> = [];
+    const bounds: ColumnBounds[] = [];
     let pending = entries.length;
 
     if (pending === 0) {
@@ -130,44 +150,100 @@ export function CrmBoard() {
       return;
     }
 
+    // Las medidas se publican de golpe para que nadie lea una lista a medio hacer.
+    const settle = () => {
+      pending -= 1;
+      if (pending <= 0) columnBoundsRef.current = bounds;
+    };
+
     entries.forEach(([stageId, node]) => {
       if (!node) {
-        pending -= 1;
+        settle();
         return;
       }
-      node.measureInWindow((x, _y, width) => {
-        bounds.push({ stageId, x, width });
-        pending -= 1;
-        if (pending <= 0) {
-          columnBoundsRef.current = bounds;
-        }
+      node.measureInWindow((x, y, width) => {
+        bounds.push({ stageId, x, y, width });
+        settle();
       });
     });
   }, []);
+
+  const measureCardBounds = useCallback(() => {
+    const stageByAthlete = new Map<string, string>();
+    columns.forEach((column) => column.leads.forEach((lead) => stageByAthlete.set(lead.id, column.stage.id)));
+
+    const entries = Array.from(cardNodesRef.current.entries());
+    const bounds: CardBounds[] = [];
+    let pending = entries.length;
+
+    if (pending === 0) {
+      cardBoundsRef.current = [];
+      return;
+    }
+
+    const settle = () => {
+      pending -= 1;
+      if (pending <= 0) cardBoundsRef.current = bounds.sort((a, b) => a.y - b.y);
+    };
+
+    entries.forEach(([athleteId, node]) => {
+      const stageId = stageByAthlete.get(athleteId);
+      if (!node || !stageId) {
+        settle();
+        return;
+      }
+      node.measureInWindow((_x, y, _width, height) => {
+        bounds.push({ athleteId, stageId, y, height });
+        settle();
+      });
+    });
+  }, [columns]);
 
   const findStageAtPageX = useCallback((pageX: number) => {
     const match = columnBoundsRef.current.find((bounds) => pageX >= bounds.x && pageX <= bounds.x + bounds.width);
     return match?.stageId ?? null;
   }, []);
 
+  /** Columna bajo el dedo y hueco en el que quedaría la ficha, con la altura de la línea que lo marca. */
+  const findDropHint = useCallback(
+    (athleteId: string, pageX: number, pageY: number): DropHint | null => {
+      const stageId = findStageAtPageX(pageX);
+      if (!stageId) return null;
+
+      const others = cardBoundsRef.current.filter(
+        (card) => card.stageId === stageId && card.athleteId !== athleteId,
+      );
+      const index = dropIndexForPosition(others, pageY);
+      const lineY = dropLineOffsetForIndex(others, index);
+      const column = columnBoundsRef.current.find((bounds) => bounds.stageId === stageId);
+
+      return { stageId, index, lineTop: lineY === null || !column ? null : lineY - column.y };
+    },
+    [findStageAtPageX],
+  );
+
   const EDGE_ZONE = 56;
 
   const handleDragStart = useCallback(
     (athleteId: string) => {
       measureColumnBounds();
+      measureCardBounds();
       boardWrapperRef.current?.measureInWindow((x, _y, width) => {
         boardBoundsRef.current = { x, width };
       });
       setDraggingAthleteId(athleteId);
     },
-    [measureColumnBounds],
+    [measureCardBounds, measureColumnBounds],
   );
 
   const handleDragMove = useCallback(
-    (_athleteId: string, pageX: number) => {
-      setHoverStageId((current) => {
-        const next = findStageAtPageX(pageX);
-        return next === current ? current : next;
+    (athleteId: string, pageX: number, pageY: number) => {
+      setDropHint((current) => {
+        const next = findDropHint(athleteId, pageX, pageY);
+        if (!next || !current) return next;
+        const same =
+          next.stageId === current.stageId && next.index === current.index && next.lineTop === current.lineTop;
+        return same ? current : next;
       });
 
       const boardBounds = boardBoundsRef.current;
@@ -181,24 +257,26 @@ export function CrmBoard() {
         stopAutoScroll();
       }
     },
-    [findStageAtPageX, startAutoScroll, stopAutoScroll],
+    [findDropHint, startAutoScroll, stopAutoScroll],
   );
 
   const handleDragEnd = useCallback(
-    (athleteId: string, pageX: number) => {
+    (athleteId: string, pageX: number, pageY: number) => {
       stopAutoScroll();
-      const targetStageId = findStageAtPageX(pageX);
+      const target = findDropHint(athleteId, pageX, pageY);
       setDraggingAthleteId(null);
-      setHoverStageId(null);
+      setDropHint(null);
 
-      if (!targetStageId) return;
+      if (!target) return;
 
-      const currentStageId = columns.find((column) => column.leads.some((lead) => lead.id === athleteId))?.stage.id;
-      if (targetStageId === currentStageId) return;
+      const currentColumn = columns.find((column) => column.leads.some((lead) => lead.id === athleteId));
+      const currentIndex = currentColumn?.leads.findIndex((lead) => lead.id === athleteId) ?? -1;
+      // Soltarla en su mismo hueco no es un movimiento: ni se guarda ni se apunta en el historial.
+      if (target.stageId === currentColumn?.stage.id && target.index === currentIndex) return;
 
-      void moveLeadToStage(athleteId, targetStageId);
+      void moveLeadToStage(athleteId, target.stageId, target.index);
     },
-    [columns, findStageAtPageX, moveLeadToStage, stopAutoScroll],
+    [columns, findDropHint, moveLeadToStage, stopAutoScroll],
   );
 
   /** Coloca el pulgar de la barra sin re-renderizar el tablero en cada frame de scroll. */
@@ -342,6 +420,10 @@ export function CrmBoard() {
       ),
     }));
   }, [columns, normalizedQuery]);
+
+  const dragSourceStageId = draggingAthleteId
+    ? columns.find((column) => column.leads.some((lead) => lead.id === draggingAthleteId))?.stage.id
+    : undefined;
 
   if (isLoading && columns.length === 0) {
     return <ActivityIndicator color={colors.accent} style={styles.loader} />;
@@ -521,8 +603,11 @@ export function CrmBoard() {
                 emptyText={normalizedQuery ? 'Sin resultados' : 'Sin atletas en esta columna'}
                 canMoveLeft={index > 0}
                 canMoveRight={index < columns.length - 1}
-                isDropTarget={hoverStageId === column.stage.id}
+                isDropTarget={dropHint?.stageId === column.stage.id}
+                isDragSource={dragSourceStageId === column.stage.id}
+                dropLineTop={dropHint?.stageId === column.stage.id ? dropHint.lineTop : null}
                 columnRef={registerColumnRef(column.stage.id)}
+                cardRef={registerCardRef}
                 onOpenColumnActions={() => setColumnActions({ stageId: column.stage.id })}
                 onOpenLead={(athleteId) =>
                   router.push({ pathname: '/trainer/athlete/[id]', params: { id: athleteId } })

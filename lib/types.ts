@@ -60,7 +60,7 @@ export interface Program {
   category: ProgramCategory;
   level: FitnessLevel;
   duration: ProgramDuration;
-  goal: ProgramGoal;
+  goal?: ProgramGoal;
   sessionsPerWeek: number;
   status: ProgramStatus;
   icon: AppIconName;
@@ -153,6 +153,29 @@ export interface TrainerAthleteFeedback {
   createdAt: string;
   updatedAt: string;
   attachments: TrainerFeedbackAttachment[];
+}
+
+/** Una cita queda propuesta hasta que la confirma la parte que no la creó. */
+export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled';
+
+export interface Appointment {
+  id: string;
+  athleteId: string;
+  athleteName?: string;
+  /** Sin entrenador mientras es una petición del atleta: lo reclama quien la confirma. */
+  trainerId?: string;
+  trainerName?: string;
+  createdBy: string;
+  title: string;
+  notes?: string;
+  /** Inicio en ISO. La duración vive aparte para poder pintar el hueco en el calendario. */
+  startsAt: string;
+  durationMinutes: number;
+  meetingUrl?: string;
+  status: AppointmentStatus;
+  cancelledBy?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AthleteSummary {

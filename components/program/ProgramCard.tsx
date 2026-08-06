@@ -42,7 +42,7 @@ export function ProgramCard({ program }: ProgramCardProps) {
         {program.duration !== 'Por definir' ? (
           <MetaItem icon="calendar" text={program.duration} />
         ) : null}
-        <MetaItem icon="goal" text={goalLabels[program.goal]} />
+        {program.goal ? <MetaItem icon="goal" text={goalLabels[program.goal]} /> : null}
         {program.sessionsPerWeek > 0 ? (
           <MetaItem icon="frequency" text={`${program.sessionsPerWeek}x/semana`} />
         ) : null}

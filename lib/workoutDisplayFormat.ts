@@ -4,6 +4,8 @@ export interface BlockItemDisplay {
   name: string;
   quantity?: string;
   load?: string;
+  /** "Carga" no encaja cuando la prescripción es por tiempo. */
+  loadLabel?: 'Carga' | 'Tiempo';
 }
 
 export interface TimingDisplayPart {
@@ -16,6 +18,10 @@ function normalizeLoadUnit(unit?: string) {
   const normalized = unit?.toLowerCase();
   if (normalized === 'cal') return 'cal';
   if (normalized === 'kg') return 'kg';
+  if (normalized === 'min' || normalized === 'mins' || normalized === 'minutos') return 'min';
+  if (normalized === 's' || normalized === 'seg' || normalized === 'segs' || normalized === 'segundos') {
+    return 's';
+  }
   if (normalized) return unit ?? '';
   return 'kg';
 }
@@ -31,11 +37,16 @@ export function parseBlockItemForDisplay(line: string): BlockItemDisplay {
   }
 
   let load: string | undefined;
-  const loadMatch = prescription.match(/(?:@|·)\s*(\d+[\d.,]*)\s*(kg|cal|m|km|ft|mi)?/i);
+  let loadLabel: BlockItemDisplay['loadLabel'];
+  // Las alternativas largas van primero para que "min" no se quede en "m" ni "mi".
+  const loadMatch = prescription.match(
+    /(?:@|·)\s*(\d+[\d.,]*)\s*(kg|cal|km|minutos|mins|min|mi|m|ft|segundos|segs|seg|s)?\b/i,
+  );
   if (loadMatch) {
     const value = loadMatch[1];
     const unit = normalizeLoadUnit(loadMatch[2]);
     load = unit ? `${value} ${unit}` : value;
+    loadLabel = unit === 'min' || unit === 's' ? 'Tiempo' : 'Carga';
     prescription = prescription.replace(loadMatch[0], '').trim();
   }
 
@@ -54,6 +65,7 @@ export function parseBlockItemForDisplay(line: string): BlockItemDisplay {
     name,
     quantity: prescription || undefined,
     load,
+    loadLabel: load ? loadLabel ?? 'Carga' : undefined,
   };
 }
 
@@ -91,18 +103,21 @@ function normalizeTimingToken(part: string) {
     .replace(/\s+/g, ' ');
 }
 
-/** Devuelve los minutos si el token representa un cap o duración. */
-function parseDurationMinutes(part: string): number | null {
+/** Devuelve la duración si el token representa un cap o un tiempo, en minutos o en segundos. */
+function parseDuration(part: string): { value: number; unit: 'min' | 's' } | null {
   const normalized = normalizeTimingToken(part);
   if (!normalized) return null;
 
+  const seconds = normalized.match(/^(\d+)\s*(?:segundos?|segs?|s|"|\u2033)$/);
+  if (seconds) return { value: Number(seconds[1]), unit: 's' };
+
   const explicit = normalized.match(/^(\d+)\s*(?:min(?:utos?)?|m)\b/);
-  if (explicit) return Number(explicit[1]);
+  if (explicit) return { value: Number(explicit[1]), unit: 'min' };
 
   const quoteCap = normalized.match(/^(\d+)\s*'\s*$/);
-  if (quoteCap) return Number(quoteCap[1]);
+  if (quoteCap) return { value: Number(quoteCap[1]), unit: 'min' };
 
-  if (/^\d+$/.test(normalized)) return Number(normalized);
+  if (/^\d+$/.test(normalized)) return { value: Number(normalized), unit: 'min' };
 
   return null;
 }
@@ -114,8 +129,8 @@ function parseRoundsCount(part: string): number | null {
 }
 
 function timingTokenKey(part: string) {
-  const minutes = parseDurationMinutes(part);
-  if (minutes != null) return `time:${minutes}`;
+  const duration = parseDuration(part);
+  if (duration) return `time:${duration.value}${duration.unit}`;
 
   const rounds = parseRoundsCount(part);
   if (rounds != null) return `rounds:${rounds}`;
@@ -140,7 +155,7 @@ export function isStructuredTimingPart(part: string) {
   const trimmed = part.trim();
   if (!trimmed) return false;
   if (parseRoundsCount(trimmed) != null) return true;
-  if (parseDurationMinutes(trimmed) != null) return true;
+  if (parseDuration(trimmed) != null) return true;
   return false;
 }
 
@@ -173,9 +188,9 @@ function parseTimingPart(part: string, isDurationBlock: boolean): TimingDisplayP
     return { icon: 'rounds', value: String(rounds), unit: rounds === 1 ? 'ronda' : 'rondas' };
   }
 
-  const minutes = parseDurationMinutes(part);
-  if (minutes != null) {
-    return { icon: 'time', value: String(minutes), unit: 'min' };
+  const duration = parseDuration(part);
+  if (duration) {
+    return { icon: 'time', value: String(duration.value), unit: duration.unit };
   }
 
   if (/^\d+$/.test(normalizeTimingToken(part)) && isDurationBlock) {
@@ -186,7 +201,7 @@ function parseTimingPart(part: string, isDurationBlock: boolean): TimingDisplayP
 }
 
 function timingPartKey(part: TimingDisplayPart) {
-  if (part.icon === 'time') return `time:${part.value}`;
+  if (part.icon === 'time') return `time:${part.value}${part.unit}`;
   if (part.icon === 'rounds') return `rounds:${part.value}`;
   return `info:${part.value.trim().toLowerCase()}`;
 }
@@ -202,6 +217,8 @@ export function parseTimingForDisplay(timing: string | undefined, blockLabel: st
     normalizedLabel.includes('tabata') ||
     normalizedLabel.includes('unbroken') ||
     normalizedLabel.includes('movilidad') ||
+    normalizedLabel.includes('activación') ||
+    normalizedLabel.includes('activacion') ||
     normalizedLabel.includes('técnica') ||
     normalizedLabel.includes('tecnica');
 

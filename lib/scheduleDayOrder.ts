@@ -1,10 +1,20 @@
+import {
+  dropIndexForPosition,
+  dropLineOffsetForIndex,
+  type DragItemBounds,
+} from '@/lib/dragDropList';
 import { parsePersonalizedPlanContent, serializePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import type { AthletePlan } from '@/lib/types';
 
 /** Posición y alto de una tarjeta dentro de la columna de su día. */
-export interface ChipLayout {
-  y: number;
-  height: number;
+export type ChipLayout = DragItemBounds;
+
+function otherChips(
+  keys: readonly string[],
+  movedKey: string,
+  layouts: ReadonlyMap<string, ChipLayout>,
+) {
+  return keys.filter((key) => key !== movedKey).map((key) => layouts.get(key));
 }
 
 /**
@@ -18,16 +28,7 @@ export function dropIndexForDay(
   layouts: ReadonlyMap<string, ChipLayout>,
 ): number | null {
   if (!keys.includes(movedKey)) return null;
-
-  let index = 0;
-  for (const key of keys) {
-    if (key === movedKey) continue;
-    const layout = layouts.get(key);
-    // Solo se adelanta a una tarjeta si la ha rebasado por la mitad.
-    if (layout && movedCenterY > layout.y + layout.height / 2) index += 1;
-  }
-
-  return index;
+  return dropIndexForPosition(otherChips(keys, movedKey, layouts), movedCenterY);
 }
 
 /** Reordena el día colocando la sesión en el hueco indicado. Devuelve null si el orden no cambia. */
@@ -51,15 +52,7 @@ export function dropLineOffset(
   index: number,
   layouts: ReadonlyMap<string, ChipLayout>,
 ): number | null {
-  const rest = keys.filter((key) => key !== movedKey);
-  const before = index > 0 ? layouts.get(rest[index - 1]) : undefined;
-  const after = index < rest.length ? layouts.get(rest[index]) : undefined;
-
-  // Entre dos tarjetas la línea va centrada en la separación; en los extremos, pegada a la única.
-  if (before && after) return (before.y + before.height + after.y) / 2;
-  if (before) return before.y + before.height;
-  if (after) return after.y;
-  return null;
+  return dropLineOffsetForIndex(otherChips(keys, movedKey, layouts), index);
 }
 
 export interface DayOrderUpdate {

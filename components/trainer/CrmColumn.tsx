@@ -14,7 +14,12 @@ interface CrmColumnProps {
   canMoveLeft: boolean;
   canMoveRight: boolean;
   isDropTarget: boolean;
+  /** La columna de la que sale la ficha deja de recortar para que se vea entera mientras viaja. */
+  isDragSource: boolean;
+  /** Altura de la línea que marca dónde caerá la ficha arrastrada, medida desde el borde de la columna. */
+  dropLineTop: number | null;
   columnRef: (node: View | null) => void;
+  cardRef: (athleteId: string) => (node: View | null) => void;
   onOpenColumnActions: () => void;
   onOpenLead: (athleteId: string) => void;
   onOpenLeadActions: (athleteId: string) => void;
@@ -32,7 +37,10 @@ export function CrmColumn({
   canMoveLeft,
   canMoveRight,
   isDropTarget,
+  isDragSource,
+  dropLineTop,
   columnRef,
+  cardRef,
   onOpenColumnActions,
   onOpenLead,
   onOpenLeadActions,
@@ -43,7 +51,11 @@ export function CrmColumn({
   onDragEnd,
 }: CrmColumnProps) {
   return (
-    <View ref={columnRef} collapsable={false} style={[styles.column, isDropTarget && styles.columnDropTarget]}>
+    <View
+      ref={columnRef}
+      collapsable={false}
+      style={[styles.column, isDropTarget && styles.columnDropTarget, isDragSource && styles.columnDragSource]}
+    >
       <Pressable
         onPress={onOpenColumnActions}
         style={({ pressed }) => [styles.header, pressed && styles.headerPressed]}
@@ -63,12 +75,15 @@ export function CrmColumn({
 
       <View style={styles.list}>
         {leads.length === 0 ? (
-          <Text style={styles.emptyText}>{isDropTarget ? 'Suelta aquí' : emptyText}</Text>
+          <Text style={[styles.emptyText, isDropTarget && styles.emptyTextDropTarget]}>
+            {isDropTarget ? 'Suelta aquí' : emptyText}
+          </Text>
         ) : (
           leads.map((athlete) => (
             <DraggableLeadCard
               key={athlete.id}
               athlete={athlete}
+              cardRef={cardRef(athlete.id)}
               canMovePrev={canMoveLeft}
               canMoveNext={canMoveRight}
               onPress={() => onOpenLead(athlete.id)}
@@ -82,6 +97,12 @@ export function CrmColumn({
           ))
         )}
       </View>
+
+      {/* En posición absoluta a propósito: si ocupara sitio movería las fichas y el hueco calculado
+       * cambiaría solo con dibujar la línea. */}
+      {dropLineTop !== null ? (
+        <View pointerEvents="none" style={[styles.dropLine, { top: dropLineTop }]} />
+      ) : null}
     </View>
   );
 }
@@ -101,6 +122,11 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
     borderWidth: 2,
     backgroundColor: `${colors.accent}0F`,
+  },
+  /** Sin recorte y por encima del resto: si no, la ficha se corta al salir y la tapan las columnas siguientes. */
+  columnDragSource: {
+    overflow: 'visible',
+    zIndex: 30,
   },
   header: {
     flexDirection: 'row',
@@ -151,5 +177,19 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.md,
+  },
+  emptyTextDropTarget: {
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  dropLine: {
+    position: 'absolute',
+    left: spacing.sm,
+    right: spacing.sm,
+    height: 3,
+    marginTop: -1.5,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.accent,
+    zIndex: 10,
   },
 });

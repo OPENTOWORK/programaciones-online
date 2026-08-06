@@ -29,36 +29,32 @@ function isEmomBlock(block: WorkoutContentBlock) {
 function parseEmomMinutes(timing?: string) {
   if (!timing) return null;
 
-  const normalized = timing.toLowerCase();
-  const rondasMatch = normalized.match(/(\d+)\s*rondas?/);
-  if (rondasMatch) return Number(rondasMatch[1]);
-
-  const minutesMatch = normalized.match(/(\d+)\s*(?:min(?:utos?)?|'|m\b)/);
-  if (minutesMatch) return Number(minutesMatch[1]);
-
-  return null;
+  const minutesMatch = timing.toLowerCase().match(/(\d+)\s*(?:min(?:utos?)?|'|m\b)/);
+  return minutesMatch ? Number(minutesMatch[1]) : null;
 }
 
 function formatRounds(count: number) {
   return count === 1 ? '1 ronda' : `${count} rondas`;
 }
 
+/** Las rondas del circuito solo se deducen si el entrenador no las ha escrito él mismo. */
 function normalizeEmomBlock(block: WorkoutContentBlock): WorkoutContentBlock {
   if (!isEmomBlock(block) || block.items.length === 0) return block;
 
+  const items = block.items.map((item) => item.replace(/\s*[×x]\s*\d+\s*rondas?/gi, '').trim());
+  const cleaned = { ...block, items };
+
+  if (block.timing && /\d+\s*rondas?/i.test(block.timing)) return cleaned;
+
   const minutes = parseEmomMinutes(block.timing);
-  if (!minutes) return block;
+  if (!minutes) return cleaned;
 
   const circuitRounds = Math.floor(minutes / block.items.length);
-  if (circuitRounds <= 0) return block;
+  if (circuitRounds <= 0) return cleaned;
 
-  const items = block.items.map((item) =>
-    item.replace(/\s*[×x]\s*\d+\s*rondas?/gi, '').trim(),
-  );
+  const parts = (block.timing ?? '').split('·').map((part) => part.trim()).filter(Boolean);
 
-  const timing = `${minutes} min · ${formatRounds(circuitRounds)}`;
-
-  return { ...block, timing, items };
+  return { ...cleaned, timing: [...parts, formatRounds(circuitRounds)].join(' · ') };
 }
 
 function parseListSection(section: string): WorkoutContentBlock {
@@ -147,6 +143,8 @@ const KNOWN_BLOCK_LABELS = [
   'ladder',
   'reps for time',
   'movilidad',
+  'activacion',
+  'fuerza',
   'entrenamiento de tecnica',
   'entrenamiento libre',
   'estaciones de tiempo',
@@ -208,6 +206,15 @@ export function getBlockAccent(label: string) {
 
   if (normalized.includes('movilidad')) {
     return { bg: `${'#2DD4BF'}22`, text: '#2DD4BF', border: `${'#2DD4BF'}55` };
+  }
+
+  // El mismo naranja suave que marca las sesiones de activación.
+  if (normalized.includes('activación') || normalized.includes('activacion')) {
+    return { bg: `${'#FFB27A'}22`, text: '#FFB27A', border: `${'#FFB27A'}55` };
+  }
+
+  if (normalized.includes('fuerza')) {
+    return { bg: `${'#F472B6'}22`, text: '#F472B6', border: `${'#F472B6'}55` };
   }
 
   if (normalized.includes('técnica') || normalized.includes('tecnica')) {
