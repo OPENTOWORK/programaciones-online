@@ -1,4 +1,4 @@
-import { buildAthleteCalendarItems } from '@/lib/athleteSchedule';
+import { buildAthleteCalendarItems, type CatalogProgramSchedule } from '@/lib/athleteSchedule';
 import {
   buildSchedulePreviewItems,
   schedulePreviewItemKey,
@@ -22,6 +22,7 @@ export interface ScheduleCalendarSource {
     plans: AthletePlan[];
     workouts: Workout[];
     program?: Program;
+    catalogPrograms?: CatalogProgramSchedule[];
   };
 }
 

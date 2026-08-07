@@ -610,7 +610,7 @@ export function CrmBoard() {
                 cardRef={registerCardRef}
                 onOpenColumnActions={() => setColumnActions({ stageId: column.stage.id })}
                 onOpenLead={(athleteId) =>
-                  router.push({ pathname: '/trainer/athlete/[id]', params: { id: athleteId } })
+                  router.push({ pathname: '/trainer/athlete/[id]/calendar', params: { id: athleteId } })
                 }
                 onOpenLeadActions={(athleteId) => setLeadActions({ athleteId, stageId: column.stage.id })}
                 onMoveLeadPrev={(athleteId) => moveLeadToAdjacentStage(athleteId, 'prev')}

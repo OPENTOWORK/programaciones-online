@@ -1,11 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { TrainerChatPanel } from '@/components/trainer/TrainerChatPanel';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing } from '@/constants/theme';
 import { useAthlete } from '@/hooks/useAthletes';
+import { useChatComposer } from '@/hooks/useChatComposer';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useTrainerMessages } from '@/hooks/useTrainerMessages';
 import { markAthleteAlertRead } from '@/lib/trainerAthleteAlerts';
@@ -15,18 +15,16 @@ export default function TrainerAthleteChatScreen() {
   const athleteId = id ?? '';
   const { athlete, isLoading: loadingAthlete } = useAthlete(athleteId);
   const { messages, isEmpty, sendMessage } = useTrainerMessages({ athleteId, asTrainer: true });
-  const [newMessage, setNewMessage] = useState('');
+
+  const composer = useChatComposer({
+    onSend: (text, attachments) => sendMessage(text, attachments),
+  });
 
   useFocusRefresh(() => {
     if (athleteId) {
       void markAthleteAlertRead(athleteId, 'chat');
     }
   });
-
-  const handleSendMessage = async () => {
-    const sent = await sendMessage(newMessage);
-    if (sent) setNewMessage('');
-  };
 
   if (loadingAthlete) {
     return (
@@ -46,10 +44,8 @@ export default function TrainerAthleteChatScreen() {
           emptyText="Envía el primer mensaje a este atleta"
           messages={messages}
           isEmpty={isEmpty}
-          newMessage={newMessage}
-          onChangeMessage={setNewMessage}
-          onSend={handleSendMessage}
           viewerRole="trainer"
+          composer={composer}
         />
       </View>
     </ScreenWrapper>

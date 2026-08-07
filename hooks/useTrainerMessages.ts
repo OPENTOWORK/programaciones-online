@@ -1,21 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
+import type { ChatAttachmentDraft } from '@/lib/chatAttachments';
 import { mockTrainerMessages } from '@/lib/mockData';
 import { fetchTrainerAthleteFeedback } from '@/lib/trainerAthleteFeedbackService';
 import { fetchTrainerMessages, sendAthleteMessage, sendTrainerReply } from '@/lib/trainerService';
 import { addCrmActivity, buildMessageSentActivity } from '@/lib/trainerCrmActivity';
 import { getDemoTrainerMessages } from '@/lib/trainerWelcomeMessage';
-import type { TrainerAthleteFeedback, TrainerMessage } from '@/lib/types';
+import type { TrainerAthleteFeedback, TrainerChatAttachment, TrainerMessage } from '@/lib/types';
 
 function feedbackToMessage(entry: TrainerAthleteFeedback): TrainerMessage {
+  const messageId = `feedback-${entry.id}`;
+  const attachments: TrainerChatAttachment[] = entry.attachments.map((attachment) => ({
+    id: attachment.id,
+    messageId,
+    kind: attachment.kind,
+    fileName: attachment.fileName,
+    mimeType: attachment.mimeType,
+    url: attachment.url,
+    durationSeconds: attachment.durationSeconds,
+    createdAt: attachment.createdAt,
+  }));
+
   return {
-    id: `feedback-${entry.id}`,
+    id: messageId,
     sender: 'trainer',
     text: entry.message,
     timestamp: entry.createdAt,
     origin: 'feedback',
-    attachments: entry.attachments,
+    attachments,
   };
 }
 
@@ -97,18 +110,31 @@ export function useTrainerMessages(options: UseTrainerMessagesOptions = {}) {
   }, [conversationUserId, isDemoMode]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, attachments: ChatAttachmentDraft[] = []) => {
       const trimmed = text.trim();
-      if (!trimmed) return false;
+      if (!trimmed && attachments.length === 0) return false;
 
       if (isDemoMode) {
+        const messageId = `msg-${Date.now()}`;
+        const savedAttachments: TrainerChatAttachment[] = attachments.map((draft, index) => ({
+          id: `local-chat-${messageId}-${index}`,
+          messageId,
+          kind: draft.kind,
+          fileName: draft.fileName,
+          mimeType: draft.mimeType,
+          url: draft.uri,
+          durationSeconds: draft.durationSeconds,
+          createdAt: new Date().toISOString(),
+        }));
+
         setMessages((prev) => [
           ...prev,
           {
-            id: `msg-${Date.now()}`,
+            id: messageId,
             sender: asTrainer ? 'trainer' : 'user',
             text: trimmed,
             timestamp: new Date().toISOString(),
+            attachments: savedAttachments.length ? savedAttachments : undefined,
           },
         ]);
 
@@ -116,7 +142,7 @@ export function useTrainerMessages(options: UseTrainerMessagesOptions = {}) {
           void addCrmActivity(
             user.id,
             conversationUserId,
-            buildMessageSentActivity(trimmed),
+            buildMessageSentActivity(trimmed || 'Adjunto'),
             'message_sent',
             true,
           );
@@ -128,8 +154,8 @@ export function useTrainerMessages(options: UseTrainerMessagesOptions = {}) {
       if (!conversationUserId) return false;
 
       const saved = asTrainer
-        ? await sendTrainerReply(conversationUserId, trimmed)
-        : await sendAthleteMessage(conversationUserId, trimmed);
+        ? await sendTrainerReply(conversationUserId, trimmed, attachments)
+        : await sendAthleteMessage(conversationUserId, trimmed, attachments);
 
       if (!saved) return false;
 

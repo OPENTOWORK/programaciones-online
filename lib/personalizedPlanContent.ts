@@ -7,6 +7,7 @@ import {
 } from '@/lib/sessionSchedule';
 import {
   ACTIVATION_SESSION_NAME,
+  REST_DAY_SESSION_NAME,
   createEmptySessionDraft,
   type SessionDraft,
   type SessionKind,
@@ -58,8 +59,16 @@ export function serializePersonalizedPlanContent(draft: SessionDraft, sessionNum
     metaLines.push('kind=activation');
   }
 
+  if (draft.kind === 'rest') {
+    metaLines.push('kind=rest');
+  }
+
   if (typeof draft.dayOrder === 'number') {
     metaLines.push(`dayOrder=${draft.dayOrder}`);
+  }
+
+  if (draft.schedule.startDate) {
+    metaLines.push(`scheduleStart=${draft.schedule.startDate}`);
   }
 
   const meta = [META_START, ...metaLines, META_END].join('\n');
@@ -96,6 +105,7 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
   let sessionName = base.name;
   let kind = base.kind;
   let dayOrder = base.dayOrder;
+  let scheduleStart = base.schedule.startDate;
 
   for (const line of metaBlock.split('\n')) {
     if (line.startsWith('duration=')) {
@@ -105,7 +115,9 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
       sessionName = line.slice('sessionName='.length).trim() || sessionName;
     }
     if (line.startsWith('kind=')) {
-      kind = line.slice('kind='.length).trim() === 'activation' ? 'activation' : kind;
+      const value = line.slice('kind='.length).trim();
+      if (value === 'activation') kind = 'activation';
+      if (value === 'rest') kind = 'rest';
     }
     if (line.startsWith('dayOrder=')) {
       const parsed = Number.parseInt(line.slice('dayOrder='.length).trim(), 10);
@@ -115,7 +127,16 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
       const summary = line.slice('schedule='.length).trim();
       schedule = parseScheduleFromSummaryLabel(summary) ?? schedule;
     }
+    if (line.startsWith('scheduleStart=')) {
+      const value = line.slice('scheduleStart='.length).trim();
+      if (value) scheduleStart = value;
+    }
   }
+
+  const normalizedSchedule = normalizeSessionSchedule(
+    scheduleStart ? { ...schedule, startDate: scheduleStart } : schedule,
+    defaultScheduleForSession(sessionIndex),
+  );
 
   const draft: SessionDraft = {
     ...base,
@@ -123,8 +144,8 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
     kind,
     dayOrder,
     estimatedDuration,
-    schedule: normalizeSessionSchedule(schedule, defaultScheduleForSession(sessionIndex)),
-    dayLabel: formatScheduleSummary(normalizeSessionSchedule(schedule, defaultScheduleForSession(sessionIndex))),
+    schedule: normalizedSchedule,
+    dayLabel: formatScheduleSummary(normalizedSchedule),
     warmup: '',
     main: '',
     metcon: '',
@@ -201,6 +222,7 @@ export function formatSessionSectionTitle(
 ) {
   // La activación comparte número con su sesión, así que se distingue por el tipo.
   if (kind === 'activation') return ACTIVATION_SESSION_NAME;
+  if (kind === 'rest') return REST_DAY_SESSION_NAME;
 
   if (sessionNumber && sessionNumber > 0) return `Sesión ${sessionNumber}`;
 

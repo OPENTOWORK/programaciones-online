@@ -1,10 +1,20 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { colors, spacing, typography } from '@/constants/theme';
 import { formatAttachmentDuration } from '@/lib/feedbackAttachments';
-import type { TrainerFeedbackAttachment } from '@/lib/types';
+import type { ChatAttachmentKind } from '@/lib/types';
+
+export interface DisplayAttachment {
+  id: string;
+  kind: ChatAttachmentKind;
+  fileName: string;
+  mimeType: string;
+  url: string;
+  durationSeconds?: number;
+}
 
 function openExternal(url: string) {
   if (Platform.OS === 'web') {
@@ -14,7 +24,49 @@ function openExternal(url: string) {
   void Linking.openURL(url);
 }
 
-function VideoAttachment({ attachment }: { attachment: TrainerFeedbackAttachment }) {
+function ImageAttachment({ attachment }: { attachment: DisplayAttachment }) {
+  if (Platform.OS === 'web') {
+    return (
+      <img
+        src={attachment.url}
+        alt={attachment.fileName}
+        style={{
+          width: '100%',
+          maxHeight: 240,
+          borderRadius: 12,
+          objectFit: 'contain',
+          backgroundColor: colors.black,
+        }}
+      />
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={() => openExternal(attachment.url)}
+      style={({ pressed }) => [styles.mediaBtn, pressed && styles.pressed]}
+    >
+      <Ionicons name="image-outline" size={22} color={colors.accent} />
+      <Text style={styles.mediaBtnText}>Ver imagen</Text>
+    </Pressable>
+  );
+}
+
+function FileAttachment({ attachment }: { attachment: DisplayAttachment }) {
+  return (
+    <Pressable
+      onPress={() => openExternal(attachment.url)}
+      style={({ pressed }) => [styles.mediaBtn, pressed && styles.pressed]}
+    >
+      <Ionicons name="document-text-outline" size={22} color={colors.accent} />
+      <Text style={styles.mediaBtnText} numberOfLines={1}>
+        {attachment.fileName}
+      </Text>
+    </Pressable>
+  );
+}
+
+function VideoAttachment({ attachment }: { attachment: DisplayAttachment }) {
   if (Platform.OS === 'web') {
     return (
       <video
@@ -44,7 +96,7 @@ function VideoAttachment({ attachment }: { attachment: TrainerFeedbackAttachment
   );
 }
 
-function AudioAttachment({ attachment }: { attachment: TrainerFeedbackAttachment }) {
+function AudioAttachment({ attachment }: { attachment: DisplayAttachment }) {
   const player = useAudioPlayer(Platform.OS === 'web' ? null : { uri: attachment.url });
   const status = useAudioPlayerStatus(player);
   const duration = formatAttachmentDuration(attachment.durationSeconds);
@@ -85,8 +137,8 @@ function AudioAttachment({ attachment }: { attachment: TrainerFeedbackAttachment
 }
 
 interface FeedbackAttachmentListProps {
-  attachments: TrainerFeedbackAttachment[];
-  onRemove?: (attachment: TrainerFeedbackAttachment) => void;
+  attachments: DisplayAttachment[];
+  onRemove?: (attachment: DisplayAttachment) => void;
 }
 
 export function FeedbackAttachmentList({ attachments, onRemove }: FeedbackAttachmentListProps) {
@@ -100,13 +152,25 @@ export function FeedbackAttachmentList({ attachments, onRemove }: FeedbackAttach
         return (
           <View key={attachment.id} style={styles.item}>
             <View style={styles.itemHeader}>
-              <AppIcon
-                name={attachment.kind === 'audio' ? 'mic' : 'video'}
-                size={14}
-                color={colors.accent}
-              />
+              {attachment.kind === 'audio' ? (
+                <AppIcon name="mic" size={14} color={colors.accent} />
+              ) : attachment.kind === 'file' ? (
+                <Ionicons name="document-text-outline" size={14} color={colors.accent} />
+              ) : attachment.kind === 'image' || attachment.kind === 'gif' ? (
+                <Ionicons name="image-outline" size={14} color={colors.accent} />
+              ) : (
+                <AppIcon name="video" size={14} color={colors.accent} />
+              )}
               <Text style={styles.itemLabel} numberOfLines={1}>
-                {attachment.kind === 'audio' ? 'Nota de voz' : attachment.fileName}
+                {attachment.kind === 'audio'
+                  ? 'Nota de voz'
+                  : attachment.kind === 'gif'
+                    ? 'GIF'
+                    : attachment.kind === 'image'
+                      ? 'Imagen'
+                      : attachment.kind === 'file'
+                        ? attachment.fileName
+                        : attachment.fileName}
                 {attachment.kind === 'audio' && duration ? ` · ${duration}` : ''}
               </Text>
               {onRemove ? (
@@ -118,6 +182,10 @@ export function FeedbackAttachmentList({ attachments, onRemove }: FeedbackAttach
 
             {attachment.kind === 'audio' ? (
               <AudioAttachment attachment={attachment} />
+            ) : attachment.kind === 'image' || attachment.kind === 'gif' ? (
+              <ImageAttachment attachment={attachment} />
+            ) : attachment.kind === 'file' ? (
+              <FileAttachment attachment={attachment} />
             ) : (
               <VideoAttachment attachment={attachment} />
             )}

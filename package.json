@@ -59,6 +59,7 @@
     "supabase:athlete-intake-form": "node scripts/apply-athlete-intake-form.mjs",
     "supabase:trainer-athlete-alert-reads": "node scripts/apply-trainer-athlete-alert-reads.mjs",
     "supabase:trainer-athlete-feedback": "node scripts/apply-trainer-athlete-feedback.mjs",
+    "supabase:trainer-chat-media": "node scripts/apply-trainer-chat-media.mjs",
     "supabase:signup-welcome": "node scripts/apply-signup-welcome-message.mjs",
     "supabase:session-templates": "node scripts/apply-session-templates.mjs",
     "supabase:crm-role-stage": "node scripts/apply-trainer-crm-role-stage.mjs",

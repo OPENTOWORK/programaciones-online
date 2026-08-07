@@ -14,9 +14,10 @@ import {
 } from '@/lib/workoutBlockBuilder';
 
 /** Una activación es la sesión corta que acompaña al entreno del mismo día. */
-export type SessionKind = 'session' | 'activation';
+export type SessionKind = 'session' | 'activation' | 'rest';
 
 export const ACTIVATION_SESSION_NAME = 'Activación';
+export const REST_DAY_SESSION_NAME = 'Día de descanso';
 
 const ACTIVATION_DEFAULT_DURATION = '15 min';
 
@@ -39,17 +40,37 @@ export type SessionDraft = {
 
 /** Orden por defecto de un día: la activación encabeza el día si nadie ha reordenado. */
 export function defaultDayOrder(draft: Pick<SessionDraft, 'kind' | 'dayOrder'>) {
-  return draft.dayOrder ?? (draft.kind === 'activation' ? 0 : 1);
+  return draft.dayOrder ?? (draft.kind === 'activation' || draft.kind === 'rest' ? 0 : 1);
 }
 
 export function isActivationSessionDraft(draft: Pick<SessionDraft, 'kind'>) {
   return draft.kind === 'activation';
 }
 
+export function isRestDaySessionDraft(draft: Pick<SessionDraft, 'kind'>) {
+  return draft.kind === 'rest';
+}
+
 /** Una copia de sesión pasa a llevar el número siguiente, pero una activación mantiene su nombre. */
 export function renameSessionCopy(draft: SessionDraft, sessionNumber: number): SessionDraft {
   if (isActivationSessionDraft(draft)) return draft;
   return { ...draft, name: `Sesión ${sessionNumber}` };
+}
+
+/** Marca un día como descanso, sin bloques de entrenamiento. */
+export function createRestDayDraft(sessionIndex = 0): SessionDraft {
+  return {
+    ...createEmptySessionDraft(sessionIndex),
+    kind: 'rest',
+    name: REST_DAY_SESSION_NAME,
+    estimatedDuration: 'Descanso',
+    warmup: '',
+    main: '',
+    metcon: '',
+    core: '',
+    cooldown: '',
+    exercises: [],
+  };
 }
 
 /** Hereda el calendario de su sesión y nace sin bloques para rellenarla más tarde. */

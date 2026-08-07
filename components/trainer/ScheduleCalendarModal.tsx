@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Modal,
   Pressable,
@@ -10,12 +10,13 @@ import {
   View,
 } from 'react-native';
 
+import { CopyDayToDateModal } from '@/components/trainer/CopyDayToDateModal';
 import {
-  ScheduleCalendarGrid,
-  scheduleItemKey,
-  shiftSchedulePeriod,
-  type CalendarSessionActions,
-} from '@/components/trainer/ScheduleCalendarGrid';
+  CalendarDayActionsMenu,
+  type CalendarDayActionId,
+} from '@/components/trainer/CalendarDayActionsMenu';
+import { SessionTemplatePickerModal } from '@/components/trainer/SessionTemplatePickerModal';
+import { SessionInlineTextEditor } from '@/components/trainer/SessionInlineTextEditor';
 import { SessionDraftSummary } from '@/components/trainer/SessionDraftSummary';
 import { SessionEditorForm } from '@/components/trainer/SessionEditorForm';
 import { type ActionSheetAction } from '@/components/ui/ActionSheetModal';
@@ -31,7 +32,20 @@ import {
   type ScheduleViewMode,
 } from '@/lib/programSchedulePreview';
 import { buildScheduleCalendarItems, type ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
+import { applyTemplateToDraft } from '@/lib/sessionTemplates';
+import {
+  applyInlineTextToSessionDraft,
+  sessionDraftToInlineText,
+} from '@/lib/sessionInlineText';
 import { workoutToSessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
+
+import {
+  ScheduleCalendarGrid,
+  isSelectableCalendarSession,
+  scheduleItemKey,
+  shiftSchedulePeriod,
+  type CalendarSessionActions,
+} from '@/components/trainer/ScheduleCalendarGrid';
 
 export interface CalendarSessionSaveInput {
   draft: SessionDraft;
@@ -41,10 +55,14 @@ export interface CalendarSessionSaveInput {
 
 interface ScheduleCalendarModalProps {
   visible: boolean;
-  onClose: () => void;
+  onClose?: () => void;
   title: string;
   subtitle?: string;
   source: ScheduleCalendarSource;
+  /** Modal sobre otra pantalla, o incrustado como pantalla completa. */
+  presentation?: 'modal' | 'inline';
+  /** Acción de cabecera alternativa al botón de cerrar (p. ej. enlace a la ficha). */
+  headerAction?: ReactNode;
   /** Abre la sesión en solo lectura tal y como la verá el atleta. */
   onSessionPreview?: (item: SchedulePreviewItem) => void;
   /** Alternativa cuando la sesión no se puede editar dentro del calendario. */
@@ -54,16 +72,36 @@ interface ScheduleCalendarModalProps {
   onCreateSession?: (date: Date) => void;
   /** Borrador inicial para crear un entreno en la fecha elegida. */
   buildSessionDraft?: (date: Date) => SessionDraft;
+  /** Borrador de día de descanso para la fecha elegida. */
+  buildRestDayDraft?: (date: Date) => SessionDraft;
+  /** Acciones del menú del día que se resuelven fuera del calendario (p. ej. nutrición). */
+  onDayAction?: (
+    action: CalendarDayActionId,
+    context: { date: Date; dayItems: SchedulePreviewItem[] },
+  ) => void;
   /** Borrador de una sesión existente para editarla sin salir del calendario. */
   loadSessionDraft?: (item: SchedulePreviewItem) => SessionDraft | null;
   /** Guarda el entreno creado o editado. Devuelve un mensaje de error o null. */
   saveSession?: (input: CalendarSessionSaveInput) => Promise<string | null> | string | null;
   /** Duplica la sesión del calendario. Devuelve un mensaje de error o null. */
   onSessionCopy?: (item: SchedulePreviewItem) => Promise<string | null> | string | null;
+  /** Copia todas las sesiones de un día a otra fecha. */
+  onCopyDayToDate?: (
+    sourceDate: Date,
+    targetDate: Date,
+    items: SchedulePreviewItem[],
+  ) => Promise<string | null> | string | null;
   /** Elimina la sesión del calendario. Devuelve un mensaje de error o null. */
   onSessionDelete?: (item: SchedulePreviewItem) => Promise<string | null> | string | null;
-  /** Mueve la sesión a otro día de la semana. Devuelve un mensaje de error o null. */
-  onSessionMoveToDate?: (item: SchedulePreviewItem, date: Date) => Promise<string | null> | string | null;
+  /**
+   * Mueve la sesión a otro día. `dayItems` trae el día de destino con la sesión ya colocada en el
+   * hueco donde se soltó. Devuelve un mensaje de error o null.
+   */
+  onSessionMoveToDate?: (
+    item: SchedulePreviewItem,
+    date: Date,
+    dayItems?: SchedulePreviewItem[],
+  ) => Promise<string | null> | string | null;
   /** Guarda el orden de las sesiones de un día. Devuelve un mensaje de error o null. */
   onSessionReorderDay?: (
     date: Date,
@@ -77,18 +115,26 @@ export function ScheduleCalendarModal({
   title,
   subtitle,
   source,
+  presentation = 'modal',
+  headerAction,
   onSessionEdit,
   onCreateSession,
   buildSessionDraft,
+  buildRestDayDraft,
+  onDayAction,
   loadSessionDraft,
   saveSession,
   onSessionCopy,
+  onCopyDayToDate,
   onSessionDelete,
   onSessionMoveToDate,
   onSessionReorderDay,
 }: ScheduleCalendarModalProps) {
-  const { width } = useWindowDimensions();
-  const isSplitLayout = width >= 960;
+  const { width, height } = useWindowDimensions();
+  const isWideCalendar = width >= 960;
+  const editorMaxWidth = Math.min(720, width - spacing.lg * 2);
+  const editorMaxHeight = Math.min(height * 0.88, 860);
+  const editorScrollMaxHeight = editorMaxHeight - 88;
 
   const [viewMode, setViewMode] = useState<ScheduleViewMode>('week');
   const [focusDate, setFocusDate] = useState(() => new Date());
@@ -99,23 +145,87 @@ export function ScheduleCalendarModal({
     draft: SessionDraft;
     date: Date;
   } | null>(null);
+  const [inlineEditor, setInlineEditor] = useState<{
+    item: SchedulePreviewItem;
+    draft: SessionDraft;
+    text: string;
+  } | null>(null);
   const [expandedItemIds, setExpandedItemIds] = useState<string[]>([]);
   const [menu, setMenu] = useState<{ item: SchedulePreviewItem; anchor: PopoverAnchor } | null>(null);
+  const [dayMenu, setDayMenu] = useState<{
+    date: Date;
+    dayItems: SchedulePreviewItem[];
+    anchor: PopoverAnchor;
+  } | null>(null);
+  const [copyDayPicker, setCopyDayPicker] = useState<{
+    date: Date;
+    dayItems: SchedulePreviewItem[];
+  } | null>(null);
+  const [copyDaySaving, setCopyDaySaving] = useState(false);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [templatePickerDate, setTemplatePickerDate] = useState<Date | null>(null);
   const [deleteItem, setDeleteItem] = useState<SchedulePreviewItem | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [selectedSessionKeys, setSelectedSessionKeys] = useState<Set<string>>(() => new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [pendingBlocks, setPendingBlocks] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [inlineSaving, setInlineSaving] = useState(false);
 
   const canCreateInline = Boolean(buildSessionDraft && saveSession);
+  const showDayActions = Boolean(
+    buildSessionDraft || buildRestDayDraft || onDayAction || onSessionCopy || onCopyDayToDate,
+  );
+
+  const planItemsFromDay = (dayItems: SchedulePreviewItem[]) =>
+    dayItems.filter((item) => item.id.startsWith('plan:'));
+
+  const openEditorWithDraft = (date: Date, draft: SessionDraft) => {
+    setInlineEditor(null);
+    setSelectedDate(date);
+    setFormError(null);
+    setPendingBlocks(false);
+    setEditor({ draft, date });
+  };
+
+  const openCreateEditor = (date: Date) => {
+    if (!buildSessionDraft || !saveSession) {
+      onCreateSession?.(date);
+      return;
+    }
+    openEditorWithDraft(date, buildSessionDraft(date));
+  };
+
+  const saveRestDay = async (date: Date) => {
+    if (!buildRestDayDraft || !saveSession) {
+      onDayAction?.('rest', { date, dayItems: [] });
+      return;
+    }
+
+    setFormError(null);
+    const result = await saveSession({ draft: buildRestDayDraft(date), date });
+    if (result) setFormError(result);
+  };
 
   useEffect(() => {
     if (visible) return;
     setEditor(null);
+    setInlineEditor(null);
     setFormError(null);
     setPendingBlocks(false);
+    setInlineSaving(false);
     setExpandedItemIds([]);
     setMenu(null);
+    setDayMenu(null);
+    setCopyDayPicker(null);
+    setCopyDaySaving(false);
+    setTemplatePickerOpen(false);
+    setTemplatePickerDate(null);
     setDeleteItem(null);
+    setBulkDeleteOpen(false);
+    setSelectedSessionKeys(new Set());
+    setBulkDeleting(false);
   }, [visible]);
 
   const items = useMemo(() => {
@@ -134,6 +244,34 @@ export function ScheduleCalendarModal({
     return merged;
   }, [source, focusDate, viewMode, visiblePeriods]);
 
+  const selectableItems = useMemo(
+    () => items.filter(isSelectableCalendarSession),
+    [items],
+  );
+
+  const selectedItems = useMemo(
+    () => selectableItems.filter((item) => selectedSessionKeys.has(scheduleItemKey(item))),
+    [selectableItems, selectedSessionKeys],
+  );
+
+  const toggleSessionSelection = useCallback((item: SchedulePreviewItem) => {
+    const key = scheduleItemKey(item);
+    setSelectedSessionKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const clearSessionSelection = useCallback(() => {
+    setSelectedSessionKeys(new Set());
+  }, []);
+
+  const sessionSelection = onSessionDelete
+    ? { selectedKeys: selectedSessionKeys, onToggle: toggleSessionSelection }
+    : undefined;
+
   const selectDate = (date: Date) => {
     setSelectedDate(date);
     if (visiblePeriods === 1) setFocusDate(date);
@@ -144,24 +282,72 @@ export function ScheduleCalendarModal({
     setVisiblePeriods(1);
   };
 
-  const openCreateEditor = (date: Date) => {
-    if (!buildSessionDraft || !saveSession) {
-      onCreateSession?.(date);
-      return;
-    }
-    setSelectedDate(date);
-    setFormError(null);
-    setPendingBlocks(false);
-    setEditor({ draft: buildSessionDraft(date), date });
-  };
-
   /** Sin panel lateral de día: en un día vacío se puede crear el entreno al tocarlo. */
   const handleDayPress = (date: Date) => {
     selectDate(date);
+    if (showDayActions) return;
     const dayItems = itemsForDate(items, date);
     if (dayItems.length === 0 && (canCreateInline || onCreateSession)) {
       openCreateEditor(date);
     }
+  };
+
+  const handleDayActionsPress = (
+    date: Date,
+    dayItems: SchedulePreviewItem[],
+    anchor: PopoverAnchor,
+  ) => {
+    selectDate(date);
+    setDayMenu({ date, dayItems, anchor });
+  };
+
+  const handleDayAction = (action: CalendarDayActionId) => {
+    if (!dayMenu) return;
+    const { date, dayItems } = dayMenu;
+    setDayMenu(null);
+
+    if (action === 'session') {
+      openCreateEditor(date);
+      return;
+    }
+
+    if (action === 'rest') {
+      void saveRestDay(date);
+      return;
+    }
+
+    if (action === 'template') {
+      if (!buildSessionDraft || !saveSession) {
+        onDayAction?.(action, { date, dayItems });
+        return;
+      }
+      setTemplatePickerDate(date);
+      setTemplatePickerOpen(true);
+      return;
+    }
+
+    if (action === 'copy') {
+      const planItems = planItemsFromDay(dayItems);
+      if (!onCopyDayToDate || planItems.length === 0) return;
+      setCopyDayPicker({ date, dayItems: planItems });
+      return;
+    }
+
+    onDayAction?.(action, { date, dayItems });
+  };
+
+  const handleTemplateSelect = (template: { content: string }) => {
+    if (!templatePickerDate || !buildSessionDraft) {
+      setTemplatePickerOpen(false);
+      setTemplatePickerDate(null);
+      return;
+    }
+
+    const date = templatePickerDate;
+    const draft = applyTemplateToDraft(buildSessionDraft(date), template.content);
+    setTemplatePickerOpen(false);
+    setTemplatePickerDate(null);
+    openEditorWithDraft(date, draft);
   };
 
   const openEditEditor = (item: SchedulePreviewItem) => {
@@ -170,10 +356,50 @@ export function ScheduleCalendarModal({
       onSessionEdit?.(item);
       return;
     }
+    setInlineEditor(null);
     setSelectedDate(item.date);
     setFormError(null);
     setPendingBlocks(false);
     setEditor({ item, draft, date: item.date });
+  };
+
+  const openInlineEditor = (item: SchedulePreviewItem) => {
+    const draft = loadSessionDraft && saveSession ? loadSessionDraft(item) : null;
+    if (!draft) return;
+
+    const key = scheduleItemKey(item);
+    setEditor(null);
+    setFormError(null);
+    setInlineEditor({ item, draft, text: sessionDraftToInlineText(draft) });
+    setExpandedItemIds((current) => (current.includes(key) ? current : [...current, key]));
+    setSelectedDate(item.date);
+  };
+
+  const closeInlineEditor = () => {
+    setInlineEditor(null);
+    setFormError(null);
+  };
+
+  const handleInlineSave = async () => {
+    if (!inlineEditor || !saveSession) return;
+
+    setInlineSaving(true);
+    setFormError(null);
+    try {
+      const draft = applyInlineTextToSessionDraft(inlineEditor.text, inlineEditor.draft);
+      const result = await saveSession({
+        draft,
+        date: inlineEditor.item.date,
+        item: inlineEditor.item,
+      });
+      if (result) {
+        setFormError(result);
+        return;
+      }
+      closeInlineEditor();
+    } finally {
+      setInlineSaving(false);
+    }
   };
 
   const handleSave = async () => {
@@ -201,6 +427,10 @@ export function ScheduleCalendarModal({
   // Cada sesión se despliega por su cuenta: abrir una no cierra las demás.
   const toggleExpandedItem = (item: SchedulePreviewItem) => {
     const key = scheduleItemKey(item);
+    const isExpanded = expandedItemIds.includes(key);
+    if (isExpanded && inlineEditor && scheduleItemKey(inlineEditor.item) === key) {
+      closeInlineEditor();
+    }
     setExpandedItemIds((current) =>
       current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key],
     );
@@ -230,9 +460,13 @@ export function ScheduleCalendarModal({
 
   const hasSessionMenu = Boolean(onSessionCopy || onSessionDelete || loadSessionDraft || onSessionEdit || saveSession);
 
-  const handleSessionMoveToDate = async (item: SchedulePreviewItem, date: Date) => {
+  const handleSessionMoveToDate = async (
+    item: SchedulePreviewItem,
+    date: Date,
+    dayItems?: SchedulePreviewItem[],
+  ) => {
     if (!onSessionMoveToDate) return;
-    const result = await onSessionMoveToDate(item, date);
+    const result = await onSessionMoveToDate(item, date, dayItems);
     if (result) setFormError(result);
   };
 
@@ -251,7 +485,35 @@ export function ScheduleCalendarModal({
   const handleSessionDelete = async (item: SchedulePreviewItem) => {
     if (!onSessionDelete) return;
     const result = await onSessionDelete(item);
-    if (result) setFormError(result);
+    if (result) {
+      setFormError(result);
+      return;
+    }
+    setSelectedSessionKeys((current) => {
+      const next = new Set(current);
+      next.delete(scheduleItemKey(item));
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (!onSessionDelete || selectedItems.length === 0) return;
+
+    setBulkDeleting(true);
+    setFormError(null);
+    try {
+      for (const item of selectedItems) {
+        const result = await onSessionDelete(item);
+        if (result) {
+          setFormError(result);
+          return;
+        }
+      }
+      clearSessionSelection();
+      setBulkDeleteOpen(false);
+    } finally {
+      setBulkDeleting(false);
+    }
   };
 
   const sessionActions = useMemo<CalendarSessionActions>(
@@ -276,6 +538,17 @@ export function ScheduleCalendarModal({
         onPress: () => {
           setMenu(null);
           openEditEditor(menuItem);
+        },
+      });
+    }
+
+    if (canEditInline) {
+      menuActions.push({
+        key: 'write-inline',
+        label: 'Escribir aquí',
+        onPress: () => {
+          setMenu(null);
+          openInlineEditor(menuItem);
         },
       });
     }
@@ -311,25 +584,118 @@ export function ScheduleCalendarModal({
     }
 
     const editable = Boolean(saveSession && loadSessionDraft?.(item));
+    const isInlineEditing =
+      inlineEditor && scheduleItemKey(inlineEditor.item) === scheduleItemKey(item);
+
+    if (isInlineEditing && inlineEditor) {
+      return (
+        <View style={styles.detailInline}>
+          <SessionInlineTextEditor
+            value={inlineEditor.text}
+            onChange={(text) =>
+              setInlineEditor((current) => (current ? { ...current, text } : current))
+            }
+          />
+          <View style={styles.inlineEditorActions}>
+            <Button
+              title="Guardar cambios"
+              onPress={() => void handleInlineSave()}
+              loading={inlineSaving}
+              style={styles.inlineEditorActionBtn}
+            />
+            <Button
+              title="Cancelar"
+              variant="outline"
+              onPress={closeInlineEditor}
+              disabled={inlineSaving}
+              style={styles.inlineEditorActionBtn}
+            />
+          </View>
+        </View>
+      );
+    }
 
     return (
       <View style={styles.detail}>
         <SessionDraftSummary draft={draft} />
         {editable ? (
           <Pressable
-            onPress={() => openEditEditor(item)}
+            onPress={() => openInlineEditor(item)}
             style={({ pressed }) => [styles.detailEditBtn, pressed && styles.detailEditBtnPressed]}
           >
             <Ionicons name="create-outline" size={14} color={colors.accent} />
-            <Text style={styles.detailEditText}>Modificar este entreno</Text>
+            <Text style={styles.detailEditText}>Escribir sobre este entreno</Text>
           </Pressable>
         ) : null}
       </View>
     );
   };
 
+  const closeEditor = () => {
+    setEditor(null);
+    setFormError(null);
+    setPendingBlocks(false);
+  };
+
+  const editorOverlay = editor ? (
+    <View style={styles.editorOverlayLayer} pointerEvents="box-none">
+      <Pressable style={styles.editorBackdrop} onPress={closeEditor} accessibilityLabel="Cerrar editor" />
+      <View style={[styles.editorDialog, { maxWidth: editorMaxWidth, maxHeight: editorMaxHeight }]}>
+        <View style={styles.editorDialogHeader}>
+          <View style={styles.editorDialogHeaderText}>
+            <Text style={styles.dayTitle}>
+              {editor.item ? 'Editar entrenamiento' : 'Nuevo entrenamiento'}
+            </Text>
+            <Text style={styles.dayHint}>
+              {formatDayLabel(editor.date)} · {editor.draft.dayLabel}
+            </Text>
+          </View>
+          <Pressable
+            onPress={closeEditor}
+            accessibilityLabel="Cerrar"
+            style={({ pressed }) => [styles.editorCloseBtn, pressed && styles.closeBtnPressed]}
+          >
+            <Ionicons name="close" size={20} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        <ScrollView
+          style={[styles.editorDialogScroll, { maxHeight: editorScrollMaxHeight }]}
+          contentContainerStyle={styles.editorDialogContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <SessionEditorForm
+            draft={editor.draft}
+            onChange={(draft) => setEditor((current) => (current ? { ...current, draft } : current))}
+            showSessionName
+            showTemplates={false}
+            onPendingBlocksChange={setPendingBlocks}
+          />
+
+          {formError ? <Text style={styles.error}>{formError}</Text> : null}
+
+          <View style={styles.editorActions}>
+            <Button
+              title={editor.item ? 'Guardar cambios' : 'Guardar entrenamiento'}
+              onPress={() => void handleSave()}
+              loading={saving}
+              style={styles.editorActionBtn}
+            />
+            <Button
+              title="Cancelar"
+              variant="outline"
+              onPress={closeEditor}
+              style={styles.editorActionBtn}
+            />
+          </View>
+        </ScrollView>
+      </View>
+    </View>
+  ) : null;
+
   const calendarPanel = (
-    <View style={[styles.calendarCard, isSplitLayout && styles.calendarCardFill]}>
+    <View style={[styles.calendarCard, isWideCalendar && styles.calendarCardFill]}>
       <ScheduleCalendarGrid
         items={items}
         viewMode={viewMode}
@@ -339,67 +705,32 @@ export function ScheduleCalendarModal({
         size="large"
         selectedDate={selectedDate}
         onDayPress={handleDayPress}
+        onDayActionsPress={showDayActions ? handleDayActionsPress : undefined}
         onSessionPress={(item) => selectDate(item.date)}
         visiblePeriods={visiblePeriods}
         onVisiblePeriodsChange={(value) => setVisiblePeriods(Math.max(1, value))}
-        fill={isSplitLayout}
+        fill={isWideCalendar}
         expandedItemIds={expandedItemIds}
         onToggleItemExpanded={toggleExpandedItem}
         renderItemDetail={renderSessionDetail}
         sessionActions={sessionActions}
         onSessionMenuPress={hasSessionMenu ? (item, anchor) => setMenu({ item, anchor }) : undefined}
+        sessionSelection={sessionSelection}
+        inlineEditingKey={inlineEditor ? scheduleItemKey(inlineEditor.item) : undefined}
       />
     </View>
   );
 
-  const editorPanel = editor ? (
-    <View style={styles.sideCard}>
-      <Text style={styles.dayTitle}>
-        {editor.item ? 'Editar entrenamiento' : 'Nuevo entrenamiento'}
-      </Text>
-      <Text style={styles.dayHint}>
-        {formatDayLabel(editor.date)} · {editor.draft.dayLabel}
-      </Text>
-
-      <SessionEditorForm
-        draft={editor.draft}
-        onChange={(draft) => setEditor((current) => (current ? { ...current, draft } : current))}
-        showSessionName
-        showTemplates={false}
-        onPendingBlocksChange={setPendingBlocks}
-      />
-
-      {formError ? <Text style={styles.error}>{formError}</Text> : null}
-
-      <View style={styles.editorActions}>
-        <Button
-          title={editor.item ? 'Guardar cambios' : 'Guardar entrenamiento'}
-          onPress={() => void handleSave()}
-          loading={saving}
-          style={styles.editorActionBtn}
-        />
-        <Button
-          title="Cancelar"
-          variant="outline"
-          onPress={() => {
-            setEditor(null);
-            setFormError(null);
-            setPendingBlocks(false);
-          }}
-          style={styles.editorActionBtn}
-        />
-      </View>
-    </View>
-  ) : null;
-
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} transparent={false}>
-      <View style={styles.screen}>
-        <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>{title}</Text>
-            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-          </View>
+  const screenContent = (
+    <View style={styles.screen}>
+      <View style={styles.header}>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>{title}</Text>
+          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        </View>
+        {headerAction ? (
+          headerAction
+        ) : onClose ? (
           <Pressable
             onPress={onClose}
             accessibilityLabel="Cerrar calendario"
@@ -407,35 +738,65 @@ export function ScheduleCalendarModal({
           >
             <Ionicons name="close" size={20} color={colors.textSecondary} />
           </Pressable>
-        </View>
-
-        {isSplitLayout ? (
-          <View style={styles.contentWide}>
-            <ScrollView
-              style={editor ? styles.calendarColumnWithEditor : styles.calendarColumnFull}
-              contentContainerStyle={styles.calendarColumnContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {calendarPanel}
-            </ScrollView>
-            {editor ? (
-              <ScrollView
-                style={styles.sideColumnEditing}
-                contentContainerStyle={styles.sideColumnContent}
-                showsVerticalScrollIndicator={false}
-              >
-                {editorPanel}
-              </ScrollView>
-            ) : null}
-          </View>
-        ) : (
-          <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-            {calendarPanel}
-            {editorPanel}
-          </ScrollView>
-        )}
+        ) : null}
       </View>
 
+      {formError && !editor ? <Text style={styles.headerError}>{formError}</Text> : null}
+
+      {selectedItems.length > 0 ? (
+        <View style={styles.selectionBar}>
+          <Text style={styles.selectionBarText}>
+            {selectedItems.length} sesión{selectedItems.length === 1 ? '' : 'es'} seleccionada
+            {selectedItems.length === 1 ? '' : 's'}
+          </Text>
+          <View style={styles.selectionBarActions}>
+            <Button
+              title="Eliminar"
+              onPress={() => setBulkDeleteOpen(true)}
+              loading={bulkDeleting}
+              style={styles.selectionBarBtn}
+            />
+            <Button
+              title="Cancelar"
+              variant="outline"
+              onPress={clearSessionSelection}
+              disabled={bulkDeleting}
+              style={styles.selectionBarBtn}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      <ScrollView
+        style={styles.calendarScroll}
+        contentContainerStyle={[styles.body, isWideCalendar && styles.bodyFill]}
+        showsVerticalScrollIndicator={false}
+      >
+        {calendarPanel}
+      </ScrollView>
+      {editorOverlay}
+    </View>
+  );
+
+  const handleCopyDayConfirm = async (targetDate: Date) => {
+    if (!copyDayPicker || !onCopyDayToDate) return;
+
+    setCopyDaySaving(true);
+    setFormError(null);
+    try {
+      const result = await onCopyDayToDate(copyDayPicker.date, targetDate, copyDayPicker.dayItems);
+      if (result) {
+        setFormError(result);
+        return;
+      }
+      setCopyDayPicker(null);
+    } finally {
+      setCopyDaySaving(false);
+    }
+  };
+
+  const overlayModals = (
+    <>
       <PopoverMenu
         visible={menu !== null}
         anchor={menu?.anchor ?? null}
@@ -443,7 +804,32 @@ export function ScheduleCalendarModal({
         actions={menuActions}
         onClose={() => setMenu(null)}
       />
-
+      <CalendarDayActionsMenu
+        visible={dayMenu !== null}
+        anchor={dayMenu?.anchor ?? null}
+        onClose={() => setDayMenu(null)}
+        onAction={handleDayAction}
+        canCopy={Boolean(
+          dayMenu && planItemsFromDay(dayMenu.dayItems).length > 0 && onCopyDayToDate,
+        )}
+        hasRestDay={Boolean(dayMenu?.dayItems.some((item) => item.kind === 'rest'))}
+      />
+      <CopyDayToDateModal
+        visible={copyDayPicker !== null}
+        sourceDate={copyDayPicker?.date ?? null}
+        sessionCount={copyDayPicker?.dayItems.length ?? 0}
+        saving={copyDaySaving}
+        onCancel={() => setCopyDayPicker(null)}
+        onConfirm={(targetDate) => void handleCopyDayConfirm(targetDate)}
+      />
+      <SessionTemplatePickerModal
+        visible={templatePickerOpen}
+        onClose={() => {
+          setTemplatePickerOpen(false);
+          setTemplatePickerDate(null);
+        }}
+        onSelect={handleTemplateSelect}
+      />
       <ConfirmModal
         visible={deleteItem !== null}
         title="Eliminar sesión"
@@ -457,6 +843,34 @@ export function ScheduleCalendarModal({
           setDeleteItem(null);
         }}
       />
+      <ConfirmModal
+        visible={bulkDeleteOpen}
+        title="Eliminar sesiones seleccionadas"
+        message={`¿Eliminar ${selectedItems.length} sesión${selectedItems.length === 1 ? '' : 'es'} del plan del atleta?`}
+        checkboxLabel="Entiendo que estas sesiones se eliminarán permanentemente"
+        confirmLabel={`Eliminar ${selectedItems.length} sesión${selectedItems.length === 1 ? '' : 'es'}`}
+        destructive
+        onCancel={() => setBulkDeleteOpen(false)}
+        onConfirm={() => void handleBulkDelete()}
+      />
+    </>
+  );
+
+  if (presentation === 'inline') {
+    if (!visible) return null;
+
+    return (
+      <>
+        {screenContent}
+        {overlayModals}
+      </>
+    );
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose} transparent={false}>
+      {screenContent}
+      {overlayModals}
     </Modal>
   );
 }
@@ -465,6 +879,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
+    position: 'relative',
   },
   header: {
     flexDirection: 'row',
@@ -490,6 +905,40 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 20,
   },
+  headerError: {
+    ...typography.bodySmall,
+    color: colors.danger,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  selectionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: `${colors.accent}55`,
+    backgroundColor: `${colors.accent}10`,
+  },
+  selectionBarText: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontWeight: '700',
+    flex: 1,
+  },
+  selectionBarActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  selectionBarBtn: {
+    paddingHorizontal: spacing.sm,
+    minWidth: 96,
+  },
   closeBtn: {
     width: 40,
     height: 40,
@@ -504,35 +953,73 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   body: {
+    flexGrow: 1,
     padding: spacing.lg,
     paddingBottom: spacing.xl,
-    gap: spacing.lg,
   },
-  contentWide: {
+  bodyFill: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: spacing.md,
+    minHeight: '100%',
+  },
+  calendarScroll: {
+    flex: 1,
+  },
+  editorOverlayLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: spacing.lg,
+    zIndex: 20,
   },
-  calendarColumnFull: {
+  editorBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.38)',
+  },
+  editorDialog: {
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    zIndex: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  editorDialogHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  editorDialogHeaderText: {
     flex: 1,
-    minWidth: 0,
+    gap: 2,
   },
-  calendarColumnWithEditor: {
-    flex: 3,
-    minWidth: 0,
+  editorCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
-  calendarColumnContent: {
-    flexGrow: 1,
+  editorDialogScroll: {
+    flexShrink: 1,
   },
-  sideColumnEditing: {
-    flex: 1,
-    maxWidth: 380,
-    minWidth: 280,
-  },
-  sideColumnContent: {
-    paddingBottom: spacing.lg,
+  editorDialogContent: {
+    padding: spacing.md,
+    gap: spacing.sm,
   },
   calendarCard: {
     width: '100%',
@@ -544,15 +1031,7 @@ const styles = StyleSheet.create({
   },
   calendarCardFill: {
     flex: 1,
-  },
-  sideCard: {
-    width: '100%',
-    gap: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.sm + 2,
+    minHeight: 0,
   },
   dayTitle: {
     ...typography.h3,
@@ -565,6 +1044,11 @@ const styles = StyleSheet.create({
   },
   detail: {
     gap: spacing.sm,
+  },
+  detailInline: {
+    flexGrow: 1,
+    gap: spacing.sm,
+    width: '100%',
   },
   detailEmpty: {
     ...typography.caption,
@@ -590,6 +1074,15 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.accent,
     fontWeight: '700',
+  },
+  inlineEditorActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  inlineEditorActionBtn: {
+    flex: 1,
+    paddingHorizontal: spacing.sm,
   },
   editorActions: {
     flexDirection: 'row',

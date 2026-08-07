@@ -11,6 +11,8 @@ export const colors = {
   accentBlue: '#00B8D4',
   /** Naranja suave para las sesiones de activación. */
   activation: '#FFB27A',
+  /** Azul apagado para los días de descanso. */
+  restDay: '#7C9CBF',
   warning: '#FFB300',
   danger: '#FF5252',
   success: '#FF7373',

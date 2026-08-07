@@ -32,40 +32,6 @@ export function needsActivationForDraft(draft: SessionDraft, existing: SessionDr
   );
 }
 
-/** Devuelve las activaciones que faltan para las sesiones guardadas de un plan. */
-export function getMissingActivations(sessions: AthletePlan[]) {
-  const entries = sessions.map((plan, index) => ({
-    plan,
-    ...planToDraft(plan, index),
-  }));
-
-  const allDrafts = entries.map((entry) => entry.draft);
-  const pendingDrafts = [...allDrafts];
-  const missing: Array<{
-    sessionNumber: number;
-    draft: SessionDraft;
-    athleteId: string;
-    title: string;
-    planGroupId: string;
-  }> = [];
-
-  for (const entry of entries) {
-    if (!needsActivationForDraft(entry.draft, pendingDrafts)) continue;
-
-    const activationDraft = createActivationDraftFor(entry.draft);
-    missing.push({
-      sessionNumber: entry.sessionNumber,
-      draft: activationDraft,
-      athleteId: entry.plan.athleteId,
-      title: entry.plan.title,
-      planGroupId: entry.plan.planGroupId ?? entry.plan.id,
-    });
-    pendingDrafts.push(activationDraft);
-  }
-
-  return missing;
-}
-
 /** Crea la activación de una sesión recién guardada o copiada, si ese día aún no tiene una. */
 export async function createActivationAfterSession(
   sessionDraft: SessionDraft,
@@ -92,23 +58,4 @@ export async function createActivationAfterSession(
     sessionNumber,
   });
   return result.error ?? null;
-}
-
-/** Crea en base de datos las activaciones que falten para un grupo de sesiones. */
-export async function ensureActivationsForSessions(
-  sessions: AthletePlan[],
-  create: (input: ActivationCreateInput) => Promise<{ error?: string | null }>,
-): Promise<string | null> {
-  const missing = getMissingActivations(sessions);
-  for (const item of missing) {
-    const result = await create({
-      athleteId: item.athleteId,
-      title: item.title,
-      content: serializePersonalizedPlanContent(item.draft, item.sessionNumber),
-      planGroupId: item.planGroupId,
-      sessionNumber: item.sessionNumber,
-    });
-    if (result.error) return result.error;
-  }
-  return null;
 }

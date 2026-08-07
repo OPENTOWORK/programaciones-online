@@ -911,7 +911,7 @@ export function WorkoutBlocksEditor({
 
             return (
               <SortableBlock
-                key={block.id}
+                key={`${block.id}-${index}`}
                 index={index}
                 isDragging={draggingIndex === index}
                 onMeasure={(y, height) => layoutsRef.current.set(block.id, { y, height })}

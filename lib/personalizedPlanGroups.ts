@@ -1,5 +1,5 @@
 import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
-import { ACTIVATION_SESSION_NAME, defaultDayOrder } from '@/lib/trainerSessionDraft';
+import { ACTIVATION_SESSION_NAME, REST_DAY_SESSION_NAME, defaultDayOrder } from '@/lib/trainerSessionDraft';
 import type { AthletePlan } from '@/lib/types';
 
 export interface PersonalizedPlanGroup {
@@ -25,6 +25,7 @@ export function getSessionNumber(plan: AthletePlan, fallbackIndex = 0) {
 export function getSessionLabel(plan: AthletePlan, fallbackIndex = 0) {
   const draft = parsePersonalizedPlanContent(plan.content, getSessionNumber(plan, fallbackIndex) - 1);
   if (draft.kind === 'activation') return ACTIVATION_SESSION_NAME;
+  if (draft.kind === 'rest') return REST_DAY_SESSION_NAME;
   const name = draft.name.trim();
   if (name && name.toLowerCase() !== plan.title.trim().toLowerCase()) {
     return name;

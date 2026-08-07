@@ -32,10 +32,10 @@ export function SessionDraftSummary({ draft }: { draft: SessionDraft }) {
       {sections.map((section) => (
         <View key={section.label} style={styles.section}>
           <Text style={styles.sectionLabel}>{section.label}</Text>
-          {section.blocks.map((block) => {
+          {section.blocks.map((block, blockIndex) => {
             if (block.type === 'free_text') {
               return (
-                <View key={block.id} style={styles.block}>
+                <View key={`${block.id}-${blockIndex}`} style={styles.block}>
                   {block.title?.trim() ? <Text style={styles.blockHeader}>{block.title.trim()}</Text> : null}
                   <Text style={styles.freeText}>{block.timing.trim()}</Text>
                 </View>
@@ -47,10 +47,10 @@ export function SessionDraftSummary({ draft }: { draft: SessionDraft }) {
               .filter((line) => line.trim());
 
             return (
-              <View key={block.id} style={styles.block}>
+              <View key={`${block.id}-${blockIndex}`} style={styles.block}>
                 <Text style={styles.blockHeader}>{blockHeader(block)}</Text>
-                {lines.map((line, index) => (
-                  <Text key={`${block.id}-${index}`} style={styles.blockItem}>
+                {lines.map((line, lineIndex) => (
+                  <Text key={`${block.id}-${lineIndex}`} style={styles.blockItem}>
                     · {line}
                   </Text>
                 ))}

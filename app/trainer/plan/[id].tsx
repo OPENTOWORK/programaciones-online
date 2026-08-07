@@ -39,11 +39,7 @@ import {
 import { createEmptyNutritionPlan } from '@/lib/nutritionPlanContent';
 import { openPlanPdf } from '@/lib/openPlanPdf';
 import { pickPlanPdf, type PickedPlanPdf } from '@/lib/planPdfPicker';
-import {
-  createActivationAfterSession,
-  ensureActivationsForSessions,
-  getMissingActivations,
-} from '@/lib/planActivation';
+import { createActivationAfterSession } from '@/lib/planActivation';
 import {
   createPersonalizedPlanPreviewProgram,
   isStructuredPersonalizedPlanContent,
@@ -53,7 +49,7 @@ import {
 } from '@/lib/personalizedPlanContent';
 import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
 import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
-import { formatScheduleSummary, toWeekdayIndex } from '@/lib/sessionSchedule';
+import { moveCalendarSessionToDate } from '@/lib/moveCalendarSession';
 import { collectExerciseNamesFromSessionDraft } from '@/lib/exerciseTextParser';
 import { syncExerciseVideosForNames } from '@/lib/exerciseVideoSyncService';
 import { createEmptySessionDraft, renameSessionCopy, type SessionDraft } from '@/lib/trainerSessionDraft';
@@ -205,36 +201,6 @@ export default function TrainerPlanDetailScreen() {
     await refresh();
   }, [plan, refresh]);
 
-  useEffect(() => {
-    if (!calendarOpen || !plan || plan.planType !== 'personalized') return;
-
-    let cancelled = false;
-    void (async () => {
-      if (getMissingActivations(groupSessions).length === 0) return;
-
-      const error = await ensureActivationsForSessions(groupSessions, async (input) => {
-        const result = await createPlan({
-          athleteId: input.athleteId,
-          planType: 'personalized',
-          title: input.title,
-          content: input.content,
-          planGroupId: input.planGroupId,
-          sessionNumber: input.sessionNumber,
-          athleteName: plan.athleteName,
-        });
-        return { error: result.error };
-      });
-
-      if (!cancelled && !error) {
-        await refreshGroupSessions();
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [calendarOpen, createPlan, groupSessions, plan, refreshGroupSessions]);
-
   const loadViewCalendarSessionDraft = (item: SchedulePreviewItem) => {
     const sessionId = planIdFromCalendarItem(item);
     const session = groupSessions.find((entry) => entry.id === sessionId);
@@ -251,7 +217,7 @@ export default function TrainerPlanDetailScreen() {
 
     if (sessionId === plan?.id) {
       setCalendarOpen(false);
-      safeGoBack(router, { pathname: '/trainer/athlete/[id]', params: { id: plan.athleteId } });
+      safeGoBack(router, { pathname: '/trainer/athlete/[id]/calendar', params: { id: plan.athleteId } });
       return null;
     }
 
@@ -308,27 +274,29 @@ export default function TrainerPlanDetailScreen() {
     return null;
   };
 
-  const handleViewCalendarMoveToDate = async (item: SchedulePreviewItem, date: Date) => {
+  const handleViewCalendarMoveToDate = async (
+    item: SchedulePreviewItem,
+    date: Date,
+    dayItems?: SchedulePreviewItem[],
+  ) => {
     const sessionId = planIdFromCalendarItem(item);
     const source = groupSessions.find((session) => session.id === sessionId);
     if (!source) return 'No se pudo mover la sesión.';
 
-    const draft = parsePersonalizedPlanContent(source.content, (source.sessionNumber ?? 1) - 1);
-    const schedule = { ...draft.schedule, weekdays: [toWeekdayIndex(date)] };
-    const updatedDraft = {
-      ...draft,
-      schedule,
-      dayLabel: formatScheduleSummary(schedule),
-    };
-
-    const result = await updatePlan(source.id, {
-      athleteId: source.athleteId,
-      planType: 'personalized',
-      title: source.title,
-      content: serializePersonalizedPlanContent(updatedDraft, source.sessionNumber ?? 1),
+    const error = await moveCalendarSessionToDate({
+      sessions: groupSessions,
+      plan: source,
+      targetDate: date,
+      orderedIds: dayItems
+        ?.map((entry) => planIdFromCalendarItem(entry))
+        .filter((entry): entry is string => Boolean(entry)),
+      updatePlan: async (id, input) => {
+        const result = await updatePlan(id, input);
+        return { error: result.error };
+      },
     });
 
-    if (result.error) return result.error;
+    if (error) return error;
     await refreshGroupSessions();
     return null;
   };
@@ -557,7 +525,7 @@ export default function TrainerPlanDetailScreen() {
         return;
       }
 
-      safeGoBack(router, `/trainer/athlete/${plan.athleteId}`);
+      safeGoBack(router, `/trainer/athlete/${plan.athleteId}/calendar`);
     };
 
     if (Platform.OS === 'web') {

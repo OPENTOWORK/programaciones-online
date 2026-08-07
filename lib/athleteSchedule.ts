@@ -1,9 +1,11 @@
-import { fetchAthletePlansForUser } from '@/lib/athletePlanService';
+import { fetchAthletePlansForAthlete, fetchAthletePlansForUser } from '@/lib/athletePlanService';
 import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import { buildSchedulePreviewItems, itemsForDate, type SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import { createPersonalizedPlanPreviewProgram } from '@/lib/personalizedPlanContent';
+import { fetchProgramsByIds } from '@/lib/programService';
+import { fetchActiveProgramsForUser } from '@/lib/userProgramService';
 import { fetchWorkoutsByProgram } from '@/lib/workoutService';
-import { ACTIVATION_SESSION_NAME, defaultDayOrder } from '@/lib/trainerSessionDraft';
+import { ACTIVATION_SESSION_NAME, REST_DAY_SESSION_NAME, defaultDayOrder } from '@/lib/trainerSessionDraft';
 import type { AthletePlan, Program, Workout } from '@/lib/types';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
 
@@ -33,6 +35,11 @@ function planToDraft(plan: AthletePlan): SessionDraft {
   return parsePersonalizedPlanContent(plan.content);
 }
 
+export interface CatalogProgramSchedule {
+  program: Program;
+  workouts: Workout[];
+}
+
 export async function loadAthleteScheduleSources(userId: string, programId?: string) {
   const plans = await fetchAthletePlansForUser(userId, 'personalized');
   let workouts: Workout[] = [];
@@ -44,48 +51,94 @@ export async function loadAthleteScheduleSources(userId: string, programId?: str
   return { plans, workouts };
 }
 
+/** Planes personalizados y catálogo activo del atleta, para la vista del entrenador. */
+export async function loadTrainerAthleteScheduleSources(athleteId: string) {
+  const [allPlans, activePrograms] = await Promise.all([
+    fetchAthletePlansForAthlete(athleteId),
+    fetchActiveProgramsForUser(athleteId),
+  ]);
+
+  const personalizedPlans = allPlans.filter((plan) => plan.planType === 'personalized');
+  const programIds = activePrograms.map((program) => program.id);
+  const programsById = await fetchProgramsByIds(programIds);
+
+  const catalogPrograms: CatalogProgramSchedule[] = [];
+  await Promise.all(
+    programIds.map(async (programId) => {
+      const program = programsById.get(programId);
+      if (!program) return;
+
+      const workouts = await fetchWorkoutsByProgram(programId);
+      if (workouts.length > 0) {
+        catalogPrograms.push({ program, workouts });
+      }
+    }),
+  );
+
+  return { personalizedPlans, catalogPrograms };
+}
+
+function buildCatalogWorkoutItems(
+  program: Program,
+  workouts: Workout[],
+  focusDate: Date,
+  viewMode: 'month' | 'week' | 'day',
+) {
+  const items: SchedulePreviewItem[] = [];
+
+  for (const workout of workouts) {
+    const draft = {
+      name: workout.name,
+      dayLabel: workout.dayLabel,
+      estimatedDuration: workout.estimatedDuration,
+      warmup: workout.warmup,
+      main: workout.main,
+      metcon: '',
+      core: workout.core ?? '',
+      cooldown: workout.cooldown,
+      exercises: workout.exercises,
+      schedule: workout.schedule ?? { weekdays: [], recurrence: 'weekly' as const },
+    };
+
+    items.push(
+      ...buildSchedulePreviewItems({
+        program,
+        workouts: [workout],
+        draft,
+        editingWorkoutId: workout.id,
+        isNewSession: false,
+        focusDate,
+        viewMode,
+      }),
+    );
+  }
+
+  return items;
+}
+
 export function buildAthleteCalendarItems({
   plans,
   workouts,
   program,
+  catalogPrograms,
   focusDate = new Date(),
   viewMode = 'week' as const,
 }: {
   plans: AthletePlan[];
   workouts: Workout[];
   program?: Program;
+  catalogPrograms?: CatalogProgramSchedule[];
   focusDate?: Date;
   viewMode?: 'month' | 'week' | 'day';
 }): SchedulePreviewItem[] {
   const items: SchedulePreviewItem[] = [];
 
   if (program && workouts.length > 0) {
-    for (const workout of workouts) {
-      const draft = {
-        name: workout.name,
-        dayLabel: workout.dayLabel,
-        estimatedDuration: workout.estimatedDuration,
-        warmup: workout.warmup,
-        main: workout.main,
-        metcon: '',
-        core: workout.core ?? '',
-        cooldown: workout.cooldown,
-        exercises: workout.exercises,
-        schedule: workout.schedule ?? { weekdays: [], recurrence: 'weekly' as const },
-      };
+    items.push(...buildCatalogWorkoutItems(program, workouts, focusDate, viewMode));
+  }
 
-      items.push(
-        ...buildSchedulePreviewItems({
-          program,
-          workouts: [workout],
-          draft,
-          editingWorkoutId: workout.id,
-          isNewSession: false,
-          focusDate,
-          viewMode,
-        }),
-      );
-    }
+  for (const entry of catalogPrograms ?? []) {
+    items.push(...buildCatalogWorkoutItems(entry.program, entry.workouts, focusDate, viewMode));
   }
 
   for (const plan of plans) {
@@ -93,7 +146,9 @@ export function buildAthleteCalendarItems({
     const sessionLabel =
       draft.kind === 'activation'
         ? ACTIVATION_SESSION_NAME
-        : draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
+        : draft.kind === 'rest'
+          ? REST_DAY_SESSION_NAME
+          : draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
     const previewProgram = createPersonalizedPlanPreviewProgram(plan.title);
     items.push(
       ...buildSchedulePreviewItems({

@@ -4,9 +4,8 @@ import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextIn
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
-import { SectionHeader } from '@/components/ui/SectionHeader';
 import { borderRadius, goalLabels, levelColors, colors, spacing, typography } from '@/constants/theme';
 import { useAthlete } from '@/hooks/useAthletes';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
@@ -15,11 +14,8 @@ import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
 import { useTrainerCrmActivity } from '@/hooks/useTrainerCrmActivity';
 import { fetchAthletePlansForAthlete } from '@/lib/athletePlanService';
-import {
-  createActivationAfterSession,
-  ensureActivationsForSessions,
-  getMissingActivations,
-} from '@/lib/planActivation';
+import { copyCalendarDaySessions } from '@/lib/copyCalendarDaySessions';
+import { createActivationAfterSession } from '@/lib/planActivation';
 import {
   createPersonalizedPlanPreviewProgram,
   parsePersonalizedPlanContent,
@@ -29,8 +25,9 @@ import { getNextSessionNumber, groupPersonalizedPlans, splitAssignedPlans, type 
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
 import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
-import { formatScheduleSummary, toWeekdayIndex } from '@/lib/sessionSchedule';
-import { createEmptySessionDraft, renameSessionCopy } from '@/lib/trainerSessionDraft';
+import { moveCalendarSessionToDate } from '@/lib/moveCalendarSession';
+import { formatScheduleSummary, toLocalDateString, toWeekdayIndex } from '@/lib/sessionSchedule';
+import { createEmptySessionDraft, renameSessionCopy, type SessionDraft } from '@/lib/trainerSessionDraft';
 import { fetchAthleteSessionLogs } from '@/lib/sessionLogService';
 import { markAthleteDetailAlertsRead } from '@/lib/trainerAthleteAlerts';
 import type { AthletePlan } from '@/lib/types';
@@ -42,6 +39,15 @@ import { IntakeAnswersTable } from '@/components/trainer/IntakeAnswersTable';
 
 function formatActivityDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function applyDateToDraft(draft: SessionDraft, date: Date): SessionDraft {
+  const schedule = {
+    weekdays: [toWeekdayIndex(date)],
+    recurrence: 'once' as const,
+    startDate: toLocalDateString(date),
+  };
+  return { ...draft, schedule, dayLabel: formatScheduleSummary(schedule) };
 }
 
 function formatOptionalValue(value: string | number | undefined, suffix = '') {
@@ -238,36 +244,6 @@ export default function AthleteDetailScreen() {
     else setCalendarGroup(null);
   }, [calendarGroup, id, user?.id]);
 
-  useEffect(() => {
-    if (!calendarGroup || !user?.id) return;
-
-    let cancelled = false;
-    void (async () => {
-      if (getMissingActivations(calendarGroup.sessions).length === 0) return;
-
-      const error = await ensureActivationsForSessions(calendarGroup.sessions, async (input) => {
-        const result = await createPlan({
-          athleteId: input.athleteId,
-          planType: 'personalized',
-          title: input.title,
-          content: input.content,
-          planGroupId: input.planGroupId,
-          sessionNumber: input.sessionNumber,
-          athleteName: athlete?.name,
-        });
-        return { error: result.error };
-      });
-
-      if (!cancelled && !error) {
-        await refreshCalendarGroup();
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [athlete?.name, calendarGroup, createPlan, refreshCalendarGroup, user?.id]);
-
   const handleCalendarDelete = async (item: SchedulePreviewItem) => {
     const planId = planIdFromCalendarItem(item);
     if (!planId) return 'No se pudo identificar la sesión.';
@@ -327,27 +303,57 @@ export default function AthleteDetailScreen() {
     return null;
   };
 
-  const handleCalendarMoveToDate = async (item: SchedulePreviewItem, date: Date) => {
-    const planId = planIdFromCalendarItem(item);
-    const source = calendarGroup?.sessions.find((session) => session.id === planId);
-    if (!source) return 'No se pudo mover la sesión.';
+  const handleCopyDayToDate = async (
+    _sourceDate: Date,
+    targetDate: Date,
+    items: SchedulePreviewItem[],
+  ) => {
+    if (!calendarGroup) return 'No hay plan cargado.';
 
-    const draft = parsePersonalizedPlanContent(source.content, (source.sessionNumber ?? 1) - 1);
-    const schedule = { ...draft.schedule, weekdays: [toWeekdayIndex(date)] };
-    const updatedDraft = {
-      ...draft,
-      schedule,
-      dayLabel: formatScheduleSummary(schedule),
-    };
-
-    const result = await updatePlan(source.id, {
-      athleteId: source.athleteId,
-      planType: 'personalized',
-      title: source.title,
-      content: serializePersonalizedPlanContent(updatedDraft, source.sessionNumber ?? 1),
+    const error = await copyCalendarDaySessions({
+      items,
+      targetDate,
+      planIdFromItem: planIdFromCalendarItem,
+      findPlan: (planId) => calendarGroup.sessions.find((session) => session.id === planId),
+      findPlanGroup: () => calendarGroup,
+      loadDraft: loadCalendarSessionDraft,
+      applyDateToDraft,
+      createPlan: async (input) => {
+        const result = await createPlan(input);
+        return { error: result.error };
+      },
+      athleteName: athlete?.name,
     });
 
-    if (result.error) return result.error;
+    if (error) return error;
+    await refreshCalendarGroup();
+    return null;
+  };
+
+  const handleCalendarMoveToDate = async (
+    item: SchedulePreviewItem,
+    date: Date,
+    dayItems?: SchedulePreviewItem[],
+  ) => {
+    const planId = planIdFromCalendarItem(item);
+    const sessions = calendarGroup?.sessions;
+    const source = sessions?.find((session) => session.id === planId);
+    if (!sessions || !source) return 'No se pudo mover la sesión.';
+
+    const error = await moveCalendarSessionToDate({
+      sessions,
+      plan: source,
+      targetDate: date,
+      orderedIds: dayItems
+        ?.map((entry) => planIdFromCalendarItem(entry))
+        .filter((entry): entry is string => Boolean(entry)),
+      updatePlan: async (id, input) => {
+        const result = await updatePlan(id, input);
+        return { error: result.error };
+      },
+    });
+
+    if (error) return error;
     await refreshCalendarGroup();
     return null;
   };
@@ -423,6 +429,14 @@ export default function AthleteDetailScreen() {
         </View>
         <Text style={styles.name}>{athlete.name}</Text>
         <Text style={styles.email}>{athlete.email}</Text>
+        <Pressable
+          onPress={() =>
+            router.push({ pathname: '/trainer/athlete/[id]/calendar', params: { id: athlete.id } })
+          }
+          style={({ pressed }) => [styles.calendarLink, pressed && styles.calendarLinkPressed]}
+        >
+          <Text style={styles.calendarLinkText}>Ver calendario del atleta</Text>
+        </Pressable>
         <View style={styles.badges}>
           {athlete.fitnessLevel ? (
             <Text style={[styles.badge, { color: levelColors[athlete.fitnessLevel] }]}>
@@ -436,12 +450,11 @@ export default function AthleteDetailScreen() {
       </View>
 
       {athlete.alerts && athlete.alerts.total > 0 ? (
-        <Card style={styles.alertCard}>
-          <SectionHeader
-            title={`${athlete.alerts.total} alerta${athlete.alerts.total === 1 ? '' : 's'} pendiente${athlete.alerts.total === 1 ? '' : 's'}`}
-            subtitle="Origen de las novedades de este atleta"
-          />
-
+        <CollapsibleSection
+          style={styles.alertCard}
+          title={`${athlete.alerts.total} alerta${athlete.alerts.total === 1 ? '' : 's'} pendiente${athlete.alerts.total === 1 ? '' : 's'}`}
+          subtitle="Origen de las novedades de este atleta"
+        >
           {athlete.alerts.chatCount > 0 ? (
             <Pressable
               onPress={() =>
@@ -485,12 +498,14 @@ export default function AthleteDetailScreen() {
               </View>
             </View>
           ) : null}
-        </Card>
+        </CollapsibleSection>
       ) : null}
 
-      <Card style={styles.programCard}>
-        <SectionHeader title="Seguimiento" subtitle="Notas, columnas, planes y mensajes por fecha" />
-
+      <CollapsibleSection
+        style={styles.programCard}
+        title="Seguimiento"
+        subtitle="Notas, columnas, planes y mensajes por fecha"
+      >
         {!activityPersistent ? (
           <Text style={styles.activityWarning}>
             Este historial se guarda solo en esta sesión (falta ejecutar la migración SQL del CRM en Supabase).
@@ -543,20 +558,19 @@ export default function AthleteDetailScreen() {
             </View>
           ))
         )}
-      </Card>
+      </CollapsibleSection>
 
-      <Card>
-        <SectionHeader title="Datos físicos" />
+      <CollapsibleSection title="Datos físicos">
         <InfoRow label="Altura" value={formatOptionalValue(athlete.height, ' cm')} />
         <InfoRow label="Peso" value={formatOptionalValue(athlete.weight, ' kg')} />
         <InfoRow label="Limitaciones" value={formatOptionalValue(athlete.injuries)} />
-      </Card>
+      </CollapsibleSection>
 
-      <Card style={styles.programCard}>
-        <SectionHeader
-          title="Formulario de bienvenida"
-          subtitle="Respuestas del cuestionario previo al entrenamiento online"
-        />
+      <CollapsibleSection
+        style={styles.programCard}
+        title="Formulario de bienvenida"
+        subtitle="Respuestas del cuestionario previo al entrenamiento online"
+      >
         {intakeLoading ? (
           <ActivityIndicator color={colors.accent} style={styles.loader} />
         ) : intakeForm && intakeComplete ? (
@@ -566,10 +580,13 @@ export default function AthleteDetailScreen() {
             Este atleta todavía no ha completado el formulario de bienvenida.
           </Text>
         )}
-      </Card>
+      </CollapsibleSection>
 
-      <Card style={styles.programCard}>
-        <SectionHeader title="Programación" subtitle="Programación personalizada de este atleta" />
+      <CollapsibleSection
+        style={styles.programCard}
+        title="Programación"
+        subtitle="Programación personalizada de este atleta"
+      >
         {plansLoading ? (
           <ActivityIndicator color={colors.accent} />
         ) : personalizedGroups.length === 0 ? (
@@ -607,11 +624,10 @@ export default function AthleteDetailScreen() {
             style={styles.planActionBtn}
           />
         </View>
-      </Card>
+      </CollapsibleSection>
 
       {!plansLoading && nutritionPlans.length > 0 ? (
-        <Card style={styles.programCard}>
-          <SectionHeader title="Plan nutricional" />
+        <CollapsibleSection style={styles.programCard} title="Plan nutricional">
           {planActionError ? <Text style={styles.planActionError}>{planActionError}</Text> : null}
           <AssignedPlansList
             personalizedGroups={[]}
@@ -625,11 +641,14 @@ export default function AthleteDetailScreen() {
             onEditNutritionPlan={openNutritionPlanEditor}
             onDeleteNutritionPlan={handleDeleteNutritionPlan}
           />
-        </Card>
+        </CollapsibleSection>
       ) : null}
 
-      <Card style={styles.programCard}>
-        <SectionHeader title="Registro de entrenos" subtitle="Sensaciones, progreso y videos por sesión" />
+      <CollapsibleSection
+        style={styles.programCard}
+        title="Registro de entrenos"
+        subtitle="Sensaciones, progreso y videos por sesión"
+      >
         {logsLoading ? (
           <ActivityIndicator color={colors.accent} />
         ) : sessionLogs.length === 0 ? (
@@ -650,9 +669,9 @@ export default function AthleteDetailScreen() {
             />
           ))
         )}
-      </Card>
+      </CollapsibleSection>
 
-      <AthleteFeedbackPanel athleteId={athlete.id} />
+      <AthleteFeedbackPanel athleteId={athlete.id} style={styles.programCard} />
 
       <Button
         title="Abrir chat"
@@ -669,6 +688,7 @@ export default function AthleteDetailScreen() {
         loadSessionDraft={loadCalendarSessionDraft}
         onSessionEdit={openCalendarSession}
         onSessionCopy={handleCalendarCopy}
+        onCopyDayToDate={handleCopyDayToDate}
         onSessionDelete={handleCalendarDelete}
         onSessionMoveToDate={handleCalendarMoveToDate}
         onSessionReorderDay={handleCalendarReorderDay}
@@ -702,6 +722,23 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 32, fontWeight: '700', color: colors.accentBlue },
   name: { ...typography.h2, color: colors.text },
   email: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 4 },
+  calendarLink: {
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    backgroundColor: `${colors.accent}12`,
+  },
+  calendarLinkPressed: {
+    opacity: 0.85,
+  },
+  calendarLinkText: {
+    ...typography.bodySmall,
+    color: colors.accent,
+    fontWeight: '700',
+  },
   badges: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   badge: { ...typography.bodySmall, fontWeight: '600' },
   alertCard: {

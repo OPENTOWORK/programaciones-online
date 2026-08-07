@@ -120,7 +120,7 @@ export interface TrainerMessage {
   timestamp: string;
   /** Los mensajes originados en un feedback del entrenador se marcan para diferenciarlos en el chat. */
   origin?: 'chat' | 'feedback';
-  attachments?: TrainerFeedbackAttachment[];
+  attachments?: TrainerChatAttachment[];
 }
 
 export interface AthleteAlertSummary {
@@ -132,10 +132,23 @@ export interface AthleteAlertSummary {
 
 export type TrainerFeedbackAttachmentKind = 'video' | 'audio';
 
+export type ChatAttachmentKind = TrainerFeedbackAttachmentKind | 'image' | 'file' | 'gif';
+
 export interface TrainerFeedbackAttachment {
   id: string;
   feedbackId: string;
   kind: TrainerFeedbackAttachmentKind;
+  fileName: string;
+  mimeType: string;
+  url: string;
+  durationSeconds?: number;
+  createdAt: string;
+}
+
+export interface TrainerChatAttachment {
+  id: string;
+  messageId: string;
+  kind: ChatAttachmentKind;
   fileName: string;
   mimeType: string;
   url: string;

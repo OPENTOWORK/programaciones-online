@@ -281,8 +281,31 @@ export function usesTimingDurationPicker(timing: string | undefined) {
   return !timing?.trim() || parseTimingDuration(timing) != null;
 }
 
+let uniqueIdCounter = 0;
+
 function createId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  uniqueIdCounter += 1;
+  return `${prefix}-${Date.now()}-${uniqueIdCounter}`;
+}
+
+/** Garantiza ids únicos al cargar bloques (p. ej. tras parsear varias secciones a la vez). */
+export function ensureUniqueWorkoutBlockIds<T extends WorkoutBlockDraft>(blocks: T[]): T[] {
+  const seen = new Set<string>();
+
+  return blocks.map((block) => {
+    if (!seen.has(block.id)) {
+      seen.add(block.id);
+      return block;
+    }
+
+    const next = {
+      ...block,
+      id: createId('block'),
+      items: block.items.map((item) => ({ ...item, id: createId('block-item') })),
+    };
+    seen.add(next.id);
+    return next;
+  });
 }
 
 export function createEmptyBlockItem(): WorkoutBlockItemDraft {
@@ -593,7 +616,7 @@ export function parseWorkoutBlocksFromText(content: string): WorkoutBlockDraft[]
     if (parsed) blocks.push(blockFromParsed(parsed));
   }
 
-  return blocks;
+  return ensureUniqueWorkoutBlockIds(blocks);
 }
 
 export function serializeWorkoutBlocks(blocks: WorkoutBlockDraft[]): string {

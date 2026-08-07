@@ -1,5 +1,4 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CrmBoard } from '@/components/trainer/CrmBoard';
@@ -9,6 +8,7 @@ import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAuth } from '@/hooks/useAuth';
+import { useChatComposer } from '@/hooks/useChatComposer';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useTrainerMessages } from '@/hooks/useTrainerMessages';
 import { isTrainerRole } from '@/lib/athleteService';
@@ -19,7 +19,10 @@ function AthleteChatScreen() {
   const { prefill } = useLocalSearchParams<{ prefill?: string | string[] }>();
   const { messages, isEmpty, sendMessage } = useTrainerMessages();
   const { isComplete: intakeComplete, isLoading: intakeLoading } = useAthleteIntakeForm();
-  const [newMessage, setNewMessage] = useState('');
+  const composer = useChatComposer({
+    disabled: !intakeLoading && !intakeComplete,
+    onSend: (text, attachments) => sendMessage(text, attachments),
+  });
 
   useFocusRefresh(() => {
     const paramMessage = Array.isArray(prefill) ? prefill[0] : prefill;
@@ -28,18 +31,12 @@ function AthleteChatScreen() {
       typeof paramMessage === 'string' && paramMessage.trim() ? paramMessage : queuedMessage;
 
     if (message?.trim()) {
-      setNewMessage(message);
+      composer.onChangeMessage(message);
     }
   });
 
   const lastTrainerMsg = [...messages].reverse().find((message) => message.sender === 'trainer');
   const chatBlocked = !intakeLoading && !intakeComplete;
-
-  const handleSendMessage = async () => {
-    if (chatBlocked) return;
-    const sent = await sendMessage(newMessage);
-    if (sent) setNewMessage('');
-  };
 
   return (
     <ScreenWrapper scrollable={false} padded={false}>
@@ -69,11 +66,9 @@ function AthleteChatScreen() {
           emptyText="Escribe a tu entrenador para empezar la conversación"
           messages={messages}
           isEmpty={isEmpty}
-          newMessage={newMessage}
-          onChangeMessage={setNewMessage}
-          onSend={handleSendMessage}
           disabled={chatBlocked}
           disabledMessage="Completa el formulario de bienvenida para escribir"
+          composer={composer}
         />
       </View>
     </ScreenWrapper>

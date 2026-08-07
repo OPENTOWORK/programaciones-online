@@ -84,6 +84,27 @@ export function toWeekdayIndex(date: Date): WeekdayIndex {
   return (date.getDay() === 0 ? 6 : date.getDay() - 1) as WeekdayIndex;
 }
 
+/** Programa una copia nueva en un día concreto del calendario, sin repetirse. */
+export function scheduleForCalendarDate(date: Date): SessionSchedule {
+  return {
+    weekdays: [toWeekdayIndex(date)],
+    recurrence: 'once',
+    startDate: toLocalDateString(date),
+  };
+}
+
+/**
+ * Lleva un horario existente a otro día conservando su repetición: una sesión semanal sigue siendo
+ * semanal en el día nuevo y una puntual cambia su fecha exacta.
+ */
+export function moveScheduleToDate(schedule: SessionSchedule, date: Date): SessionSchedule {
+  const weekdays: WeekdayIndex[] = [toWeekdayIndex(date)];
+  if (schedule.recurrence === 'once') {
+    return { ...schedule, weekdays, startDate: toLocalDateString(date) };
+  }
+  return { ...schedule, weekdays };
+}
+
 export function defaultScheduleForSession(sessionIndex: number): SessionSchedule {
   const weekday = (sessionIndex % 5) as WeekdayIndex;
   return {

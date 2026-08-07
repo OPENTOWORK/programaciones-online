@@ -1,5 +1,6 @@
 import {
   blockUsesSeries,
+  ensureUniqueWorkoutBlockIds,
   parseWorkoutBlocksFromText,
   sanitizeWorkoutBlock,
   serializeWorkoutBlocks,
@@ -35,12 +36,14 @@ export function draftSectionFingerprint(draft: SessionDraft) {
 }
 
 export function draftToTaggedBlocks(draft: SessionDraft): TaggedWorkoutBlock[] {
-  return SESSION_BLOCK_SECTIONS.flatMap(({ key }) =>
+  const blocks = SESSION_BLOCK_SECTIONS.flatMap(({ key }) =>
     parseWorkoutBlocksFromText(draft[key]).map((block) => ({
       ...block,
       section: 'main' as SessionBlockSection,
     })),
   );
+
+  return ensureUniqueWorkoutBlockIds(blocks);
 }
 
 export function taggedBlocksToDraft(

@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
 
 import { FeedbackAttachmentList } from '@/components/feedback/FeedbackAttachmentList';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { SectionHeader } from '@/components/ui/SectionHeader';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useTrainerAthleteFeedback } from '@/hooks/useTrainerAthleteFeedback';
 import { useVoiceNoteRecorder } from '@/hooks/useVoiceNoteRecorder';
@@ -32,7 +31,13 @@ function formatTimer(millis: number) {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function AthleteFeedbackPanel({ athleteId }: { athleteId: string }) {
+export function AthleteFeedbackPanel({
+  athleteId,
+  style,
+}: {
+  athleteId: string;
+  style?: ViewStyle;
+}) {
   const { entries, isLoading, sending, persistent, error, send, remove } =
     useTrainerAthleteFeedback(athleteId);
   const recorder = useVoiceNoteRecorder();
@@ -102,12 +107,11 @@ export function AthleteFeedbackPanel({ athleteId }: { athleteId: string }) {
   };
 
   return (
-    <Card style={styles.card}>
-      <SectionHeader
-        title="Feedback para el atleta"
-        subtitle="Aparecerá en su apartado Mi Progreso y en el chat, con los vídeos y notas de voz que adjuntes"
-      />
-
+    <CollapsibleSection
+      style={style}
+      title="Feedback para el atleta"
+      subtitle="Aparecerá en su apartado Mi Progreso y en el chat, con los vídeos y notas de voz que adjuntes"
+    >
       {!persistent ? (
         <Text style={styles.warning}>
           El feedback se guarda temporalmente porque Supabase no está disponible.
@@ -236,14 +240,11 @@ export function AthleteFeedbackPanel({ athleteId }: { athleteId: string }) {
           </View>
         ))
       )}
-    </Card>
+    </CollapsibleSection>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginTop: spacing.md,
-  },
   warning: {
     ...typography.caption,
     color: colors.warning,
