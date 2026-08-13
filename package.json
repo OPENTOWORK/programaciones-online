@@ -62,6 +62,8 @@
     "supabase:trainer-chat-media": "node scripts/apply-trainer-chat-media.mjs",
     "supabase:signup-welcome": "node scripts/apply-signup-welcome-message.mjs",
     "supabase:session-templates": "node scripts/apply-session-templates.mjs",
+    "supabase:session-templates-tags": "node scripts/apply-session-templates-tags.mjs",
+    "supabase:session-templates-format-tags": "node scripts/apply-session-templates-format-tags.mjs",
     "supabase:crm-role-stage": "node scripts/apply-trainer-crm-role-stage.mjs",
     "supabase:crm-archived-leads": "node scripts/apply-trainer-crm-archived-leads.mjs",
     "supabase:trainer-team": "node scripts/apply-trainer-team.mjs",

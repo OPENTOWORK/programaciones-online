@@ -1,18 +1,38 @@
+import {
+  normalizeSessionTemplateFormatTag,
+  normalizeSessionTemplateTag,
+  type SessionTemplateFormatTag,
+  type SessionTemplateTag,
+} from '@/lib/sessionTemplateTags';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const TABLE = 'trainer_session_templates';
-const LOCAL_STORAGE_KEY = 'trainer-session-templates-v1';
+const LOCAL_STORAGE_KEY = 'trainer-session-templates-v3';
+const SELECT_FULL =
+  'id, trainer_id, name, content, tag, format_tag, created_at, updated_at';
+const SELECT_WITH_TAG = 'id, trainer_id, name, content, tag, created_at, updated_at';
+const SELECT_WITHOUT_TAG = 'id, trainer_id, name, content, created_at, updated_at';
 
 export interface SessionTemplate {
   id: string;
   trainerId: string;
   name: string;
   content: string;
+  tag: SessionTemplateTag | null;
+  formatTag: SessionTemplateFormatTag | null;
   createdAt: string;
   updatedAt: string;
 }
 
 const localTemplatesByTrainer = new Map<string, SessionTemplate[]>();
+
+function normalizeTemplate(template: Partial<SessionTemplate> & { name: string; content: string; id: string; trainerId: string; createdAt: string; updatedAt: string }): SessionTemplate {
+  return {
+    ...template,
+    tag: normalizeSessionTemplateTag(template.tag),
+    formatTag: normalizeSessionTemplateFormatTag(template.formatTag),
+  };
+}
 
 function readPersistedLocalTemplates(): Record<string, SessionTemplate[]> {
   if (typeof window === 'undefined') return {};
@@ -20,7 +40,13 @@ function readPersistedLocalTemplates(): Record<string, SessionTemplate[]> {
     const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, SessionTemplate[]>;
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    if (!parsed || typeof parsed !== 'object') return {};
+
+    const normalized: Record<string, SessionTemplate[]> = {};
+    for (const [trainerId, list] of Object.entries(parsed)) {
+      normalized[trainerId] = (list ?? []).map((template) => normalizeTemplate(template));
+    }
+    return normalized;
   } catch {
     return {};
   }
@@ -64,6 +90,15 @@ function isMissingTableError(error: { message?: string; code?: string } | null |
   );
 }
 
+function isMissingColumnError(
+  error: { message?: string; code?: string } | null | undefined,
+  column: string,
+) {
+  if (!error) return false;
+  const message = error.message?.toLowerCase() ?? '';
+  return message.includes(column) && (message.includes('column') || message.includes('schema cache'));
+}
+
 function isDuplicateNameError(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   return error.code === '23505' || (error.message?.toLowerCase().includes('unique') ?? false);
@@ -75,6 +110,10 @@ function mapRow(row: Record<string, unknown>): SessionTemplate {
     trainerId: row.trainer_id as string,
     name: row.name as string,
     content: row.content as string,
+    tag: normalizeSessionTemplateTag(typeof row.tag === 'string' ? row.tag : null),
+    formatTag: normalizeSessionTemplateFormatTag(
+      typeof row.format_tag === 'string' ? row.format_tag : null,
+    ),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -91,6 +130,29 @@ function validateName(name: string) {
   return null;
 }
 
+function validateTag(tag: SessionTemplateTag | null | undefined) {
+  if (!tag) return 'Elige una etiqueta de zona para la plantilla.';
+  return null;
+}
+
+function mirrorLocal(trainerId: string, template: SessionTemplate) {
+  const local = localList(trainerId);
+  const withoutDup = local.filter(
+    (entry) => entry.id !== template.id && entry.name.toLowerCase() !== template.name.toLowerCase(),
+  );
+  withoutDup.push(template);
+  localTemplatesByTrainer.set(trainerId, withoutDup);
+  persistLocalList(trainerId);
+}
+
+function uniqueName(trainerId: string, baseName: string) {
+  const existing = new Set(localList(trainerId).map((template) => template.name.toLowerCase()));
+  if (!existing.has(baseName.toLowerCase())) return baseName;
+  let suffix = 2;
+  while (existing.has(`${baseName} (${suffix})`.toLowerCase())) suffix += 1;
+  return `${baseName} (${suffix})`;
+}
+
 export async function fetchSessionTemplates(
   trainerId: string,
   useLocalStore = false,
@@ -104,22 +166,31 @@ export async function fetchSessionTemplates(
   const supabase = getSupabase();
   if (!supabase) return { templates: sortByName(localList(trainerId)), persistent: false };
 
-  const { data, error } = await supabase
-    .from(TABLE)
-    .select('id, trainer_id, name, content, created_at, updated_at')
-    .order('name', { ascending: true });
+  let { data, error } = await supabase.from(TABLE).select(SELECT_FULL).order('name', { ascending: true });
+
+  if (error && isMissingColumnError(error, 'format_tag')) {
+    ({ data, error } = await supabase
+      .from(TABLE)
+      .select(SELECT_WITH_TAG)
+      .order('name', { ascending: true }));
+  }
+
+  if (error && isMissingColumnError(error, 'tag')) {
+    ({ data, error } = await supabase
+      .from(TABLE)
+      .select(SELECT_WITHOUT_TAG)
+      .order('name', { ascending: true }));
+  }
 
   if (error || !data) {
     if (isMissingTableError(error)) {
       return { templates: sortByName(localList(trainerId)), persistent: false };
     }
-    // No vaciar el listado ante un error puntual: usa copia local si existe.
     const local = localList(trainerId);
     return { templates: sortByName(local), persistent: local.length > 0 ? false : true };
   }
 
   const templates = data.map((row) => mapRow(row as Record<string, unknown>));
-  // Espejo local para no perder el listado si un fetch posterior falla.
   localTemplatesByTrainer.set(trainerId, [...templates]);
   persistLocalList(trainerId);
 
@@ -130,13 +201,20 @@ export async function createSessionTemplate(input: {
   trainerId: string;
   name: string;
   content: string;
+  tag: SessionTemplateTag;
+  formatTag?: SessionTemplateFormatTag | null;
   useLocalStore: boolean;
 }): Promise<{ template?: SessionTemplate; error?: string }> {
-  const nameError = validateName(input.name);
-  if (nameError) return { error: nameError };
+  const tagError = validateTag(input.tag);
+  if (tagError) return { error: tagError };
   if (!input.content.trim()) return { error: 'La sesión está vacía, no hay nada que guardar.' };
 
-  const name = input.name.trim();
+  const name = uniqueName(input.trainerId, input.name.trim() || input.tag);
+  const nameError = validateName(name);
+  if (nameError) return { error: nameError };
+
+  const tag = input.tag;
+  const formatTag = input.formatTag ?? null;
 
   if (input.useLocalStore || !isSupabaseConfigured) {
     const templates = localList(input.trainerId);
@@ -150,6 +228,8 @@ export async function createSessionTemplate(input: {
       trainerId: input.trainerId,
       name,
       content: input.content,
+      tag,
+      formatTag,
       createdAt: now,
       updatedAt: now,
     };
@@ -161,14 +241,39 @@ export async function createSessionTemplate(input: {
   const supabase = getSupabase();
   if (!supabase) return { error: 'Supabase no está disponible.' };
 
-  const { data, error } = await supabase
-    .from(TABLE)
-    .insert({ trainer_id: input.trainerId, name, content: input.content })
-    .select('id, trainer_id, name, content, created_at, updated_at')
-    .single();
+  const insertPayload: Record<string, unknown> = {
+    trainer_id: input.trainerId,
+    name,
+    content: input.content,
+    tag,
+    format_tag: formatTag,
+  };
+
+  let { data, error } = await supabase.from(TABLE).insert(insertPayload).select(SELECT_FULL).single();
+
+  if (error && isMissingColumnError(error, 'format_tag')) {
+    delete insertPayload.format_tag;
+    ({ data, error } = await supabase
+      .from(TABLE)
+      .insert(insertPayload)
+      .select(SELECT_WITH_TAG)
+      .single());
+  }
+
+  if (error && isMissingColumnError(error, 'tag')) {
+    delete insertPayload.tag;
+    ({ data, error } = await supabase
+      .from(TABLE)
+      .insert(insertPayload)
+      .select(SELECT_WITHOUT_TAG)
+      .single());
+  }
 
   if (error || !data) {
-    if (isDuplicateNameError(error)) return { error: 'Ya hay una plantilla con ese nombre.' };
+    if (isDuplicateNameError(error)) {
+      const retryName = uniqueName(input.trainerId, `${name} ${Date.now().toString(36).slice(-4)}`);
+      return createSessionTemplate({ ...input, name: retryName });
+    }
     if (isMissingTableError(error)) {
       return createSessionTemplate({ ...input, useLocalStore: true });
     }
@@ -177,16 +282,13 @@ export async function createSessionTemplate(input: {
     };
   }
 
-  const template = mapRow(data as Record<string, unknown>);
-  // Espejo local para que «Usar plantilla» las vea aunque falle un fetch.
-  const local = localList(input.trainerId);
-  const withoutDup = local.filter(
-    (entry) => entry.id !== template.id && entry.name.toLowerCase() !== template.name.toLowerCase(),
-  );
-  withoutDup.push(template);
-  localTemplatesByTrainer.set(input.trainerId, withoutDup);
-  persistLocalList(input.trainerId);
-
+  const mapped = mapRow(data as Record<string, unknown>);
+  const template: SessionTemplate = {
+    ...mapped,
+    tag: mapped.tag ?? tag,
+    formatTag: mapped.formatTag ?? formatTag,
+  };
+  mirrorLocal(input.trainerId, template);
   return { template };
 }
 
@@ -194,13 +296,21 @@ export async function updateSessionTemplate(input: {
   template: SessionTemplate;
   name?: string;
   content?: string;
+  tag?: SessionTemplateTag | null;
+  formatTag?: SessionTemplateFormatTag | null;
   useLocalStore: boolean;
 }): Promise<{ template?: SessionTemplate; error?: string }> {
   const { template } = input;
   const name = input.name?.trim() ?? template.name;
+  const tag = input.tag === undefined ? template.tag : input.tag;
+  const formatTag = input.formatTag === undefined ? template.formatTag : input.formatTag;
 
   const nameError = validateName(name);
   if (nameError) return { error: nameError };
+  if (input.tag !== undefined) {
+    const tagError = validateTag(input.tag);
+    if (tagError) return { error: tagError };
+  }
 
   const content = input.content ?? template.content;
   const updatedAt = new Date().toISOString();
@@ -213,7 +323,7 @@ export async function updateSessionTemplate(input: {
     if (duplicated) return { error: 'Ya hay una plantilla con ese nombre.' };
 
     const index = templates.findIndex((entry) => entry.id === template.id);
-    const updated: SessionTemplate = { ...template, name, content, updatedAt };
+    const updated: SessionTemplate = { ...template, name, content, tag, formatTag, updatedAt };
     if (index >= 0) templates[index] = updated;
     else templates.push(updated);
     persistLocalList(template.trainerId);
@@ -223,19 +333,54 @@ export async function updateSessionTemplate(input: {
   const supabase = getSupabase();
   if (!supabase) return { error: 'Supabase no está disponible.' };
 
-  const { data, error } = await supabase
+  const updatePayload: Record<string, unknown> = {
+    name,
+    content,
+    tag,
+    format_tag: formatTag,
+    updated_at: updatedAt,
+  };
+
+  let { data, error } = await supabase
     .from(TABLE)
-    .update({ name, content, updated_at: updatedAt })
+    .update(updatePayload)
     .eq('id', template.id)
-    .select('id, trainer_id, name, content, created_at, updated_at')
+    .select(SELECT_FULL)
     .single();
+
+  if (error && isMissingColumnError(error, 'format_tag')) {
+    delete updatePayload.format_tag;
+    ({ data, error } = await supabase
+      .from(TABLE)
+      .update(updatePayload)
+      .eq('id', template.id)
+      .select(SELECT_WITH_TAG)
+      .single());
+  }
+
+  if (error && isMissingColumnError(error, 'tag')) {
+    delete updatePayload.tag;
+    ({ data, error } = await supabase
+      .from(TABLE)
+      .update(updatePayload)
+      .eq('id', template.id)
+      .select(SELECT_WITHOUT_TAG)
+      .single());
+  }
 
   if (error || !data) {
     if (isDuplicateNameError(error)) return { error: 'Ya hay una plantilla con ese nombre.' };
     return { error: error?.message ?? 'No se pudo actualizar la plantilla.' };
   }
 
-  return { template: mapRow(data as Record<string, unknown>) };
+  const mapped = mapRow(data as Record<string, unknown>);
+  const updated: SessionTemplate = {
+    ...mapped,
+    tag: mapped.tag ?? tag,
+    formatTag: mapped.formatTag ?? formatTag,
+  };
+  mirrorLocal(template.trainerId, updated);
+  return { template: updated };
 }
 
 export async function deleteSessionTemplate(

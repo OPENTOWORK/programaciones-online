@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,13 +14,14 @@ import { ActionSheetModal } from '@/components/ui/ActionSheetModal';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { PromptModal } from '@/components/ui/PromptModal';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useSessionTemplates } from '@/hooks/useSessionTemplates';
 import { safeGoBack } from '@/lib/navigation';
 import type { SessionTemplate } from '@/lib/sessionTemplateService';
+import { groupTemplatesByTag } from '@/lib/sessionTemplateTags';
 import { describeSessionTemplate } from '@/lib/sessionTemplates';
 
 function confirmDelete(name: string, onConfirm: () => void) {
@@ -44,13 +45,6 @@ function TemplateListItem({
   onOptions: () => void;
 }) {
   const summary = describeSessionTemplate(template.content);
-  const details = [
-    `${summary.blockCount} bloque${summary.blockCount === 1 ? '' : 's'}`,
-    summary.duration,
-    summary.schedule,
-  ]
-    .filter(Boolean)
-    .join(' · ');
 
   return (
     <View style={styles.row}>
@@ -58,17 +52,28 @@ function TemplateListItem({
         onPress={onEdit}
         style={({ pressed }) => [styles.rowMain, pressed && styles.pressed]}
       >
-        <Text style={styles.rowName} numberOfLines={1}>
-          {template.name}
+        <Text style={styles.rowName} numberOfLines={2}>
+          {template.formatTag ?? template.tag ?? template.name}
         </Text>
         <Text style={styles.rowDetails} numberOfLines={1}>
-          {details}
+          {[
+            template.formatTag && template.tag ? template.tag : null,
+            `${summary.blockCount} bloque${summary.blockCount === 1 ? '' : 's'}`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </Text>
-        {summary.blockLabels.length > 0 ? (
-          <Text style={styles.rowBlocks} numberOfLines={1}>
-            {summary.blockLabels.join(' · ')}
-          </Text>
-        ) : null}
+        {summary.exerciseLines.length > 0 ? (
+          <View style={styles.exerciseList}>
+            {summary.exerciseLines.map((line, index) => (
+              <Text key={`${template.id}-ex-${index}`} style={styles.exerciseLine} numberOfLines={2}>
+                • {line}
+              </Text>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.rowBlocks}>Sin ejercicios listados</Text>
+        )}
       </Pressable>
       <Pressable
         onPress={onOptions}
@@ -84,10 +89,10 @@ function TemplateListItem({
 
 export default function TrainerSessionTemplatesScreen() {
   const router = useRouter();
-  const { templates, isLoading, saving, persistent, error, isTrainer, update, remove } =
+  const { templates, isLoading, saving, persistent, error, isTrainer, remove } =
     useSessionTemplates();
   const [optionsFor, setOptionsFor] = useState<SessionTemplate | null>(null);
-  const [renaming, setRenaming] = useState<SessionTemplate | null>(null);
+  const groups = useMemo(() => groupTemplatesByTag(templates), [templates]);
 
   if (!isTrainer) {
     return (
@@ -101,13 +106,6 @@ export default function TrainerSessionTemplatesScreen() {
     router.push(`/trainer/template/${templateId}`);
   };
 
-  const handleRename = async (name: string) => {
-    const template = renaming;
-    setRenaming(null);
-    if (!template) return;
-    await update(template, { name });
-  };
-
   const handleDelete = (template: SessionTemplate) => {
     setOptionsFor(null);
     confirmDelete(template.name, () => {
@@ -118,14 +116,14 @@ export default function TrainerSessionTemplatesScreen() {
   return (
     <ScreenWrapper>
       <SectionHeader
-        title="Plantillas de sesión"
-        subtitle="Crea y edita sesiones reutilizables para aplicarlas en cualquier programación"
+        title="Plantillas"
+        subtitle="Organizadas por etiqueta. Despliega cada grupo para ver los ejercicios."
       />
 
       {!persistent ? (
         <Text style={styles.warning}>
           Las plantillas se guardan solo en este dispositivo. Ejecuta npm run
-          supabase:session-templates para guardarlas en Supabase.
+          supabase:session-templates-tags para guardarlas en Supabase.
         </Text>
       ) : null}
 
@@ -142,19 +140,31 @@ export default function TrainerSessionTemplatesScreen() {
         <Card style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Sin plantillas todavía</Text>
           <Text style={styles.emptyText}>
-            Crea tu primera plantilla para reutilizar bloques, duración y días en cualquier
-            programación.
+            Crea plantillas desde el menú de una sesión y asígnales una etiqueta (Tren inferior,
+            Tren superior, Core, Activación o Descanso).
           </Text>
         </Card>
       ) : (
         <View style={styles.list}>
-          {templates.map((template) => (
-            <TemplateListItem
-              key={template.id}
-              template={template}
-              onEdit={() => openEditor(template.id)}
-              onOptions={() => setOptionsFor(template)}
-            />
+          {groups.map((group) => (
+            <CollapsibleSection
+              key={group.label}
+              title={group.label}
+              subtitle={`${group.templates.length} plantilla${group.templates.length === 1 ? '' : 's'}`}
+              defaultExpanded={false}
+              style={styles.groupCard}
+            >
+              <View style={styles.groupList}>
+                {group.templates.map((template) => (
+                  <TemplateListItem
+                    key={template.id}
+                    template={template}
+                    onEdit={() => openEditor(template.id)}
+                    onOptions={() => setOptionsFor(template)}
+                  />
+                ))}
+              </View>
+            </CollapsibleSection>
           ))}
         </View>
       )}
@@ -180,30 +190,12 @@ export default function TrainerSessionTemplatesScreen() {
             onPress: () => optionsFor && openEditor(optionsFor.id),
           },
           {
-            key: 'rename',
-            label: 'Renombrar',
-            onPress: () => {
-              const template = optionsFor;
-              setOptionsFor(null);
-              setRenaming(template);
-            },
-          },
-          {
             key: 'delete',
             label: 'Eliminar',
             destructive: true,
             onPress: () => optionsFor && handleDelete(optionsFor),
           },
         ]}
-      />
-
-      <PromptModal
-        visible={renaming != null}
-        title="Renombrar plantilla"
-        initialValue={renaming?.name ?? ''}
-        confirmLabel="Guardar nombre"
-        onCancel={() => setRenaming(null)}
-        onConfirm={(value) => void handleRename(value)}
       />
     </ScreenWrapper>
   );
@@ -225,14 +217,20 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.lg,
   },
+  groupCard: {
+    marginBottom: 0,
+  },
+  groupList: {
+    gap: spacing.sm,
+  },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.xs,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   rowMain: {
     flex: 1,
@@ -252,6 +250,15 @@ const styles = StyleSheet.create({
   rowBlocks: {
     ...typography.caption,
     color: colors.textMuted,
+  },
+  exerciseList: {
+    marginTop: spacing.xs,
+    gap: 2,
+  },
+  exerciseLine: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 16,
   },
   rowOptions: {
     paddingHorizontal: spacing.sm,

@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import {
   draftToTaggedBlocks,
@@ -11,7 +10,18 @@ import {
   taggedBlocksToDraft,
   type TaggedWorkoutBlock,
 } from '@/lib/sessionBlockSections';
-import { canSaveSessionAsTemplate, sessionDraftToTemplateContent } from '@/lib/sessionTemplates';
+import {
+  canSaveSessionAsTemplate,
+  describeSessionTemplate,
+  sessionDraftToTemplateContent,
+} from '@/lib/sessionTemplates';
+import {
+  buildSessionTemplateName,
+  SESSION_TEMPLATE_FORMAT_TAGS,
+  SESSION_TEMPLATE_ZONE_TAGS,
+  type SessionTemplateFormatTag,
+  type SessionTemplateTag,
+} from '@/lib/sessionTemplateTags';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
 import {
   formatBlockItemLineForDisplay,
@@ -24,7 +34,12 @@ interface CreateSessionTemplateModalProps {
   draft: SessionDraft | null;
   saving?: boolean;
   onClose: () => void;
-  onConfirm: (input: { name: string; content: string }) => void;
+  onConfirm: (input: {
+    name: string;
+    content: string;
+    tag: SessionTemplateTag;
+    formatTag: SessionTemplateFormatTag | null;
+  }) => void;
 }
 
 function blockTitle(block: TaggedWorkoutBlock) {
@@ -75,13 +90,15 @@ export function CreateSessionTemplateModal({
   onConfirm,
 }: CreateSessionTemplateModalProps) {
   const blocks = useMemo(() => (draft ? draftToTaggedBlocks(draft) : []), [draft]);
-  const [name, setName] = useState('');
+  const [tag, setTag] = useState<SessionTemplateTag | null>(null);
+  const [formatTag, setFormatTag] = useState<SessionTemplateFormatTag | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<Set<string>>(() => new Set());
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     if (!visible || !draft) return;
-    setName('');
+    setTag(null);
+    setFormatTag(null);
     setSelectedBlockIds(new Set());
     setSelectedItemIds(new Set());
   }, [draft, visible]);
@@ -100,7 +117,7 @@ export function CreateSessionTemplateModal({
   const selectedExerciseCount = selectedItemIds.size;
   const selectedFreeTextCount = selectedBlockIds.size;
   const selectedCount = selectedExerciseCount + selectedFreeTextCount;
-  const canSave = Boolean(draft && name.trim() && selectedCount > 0 && !saving);
+  const canSave = Boolean(draft && tag && selectedCount > 0 && !saving);
 
   const isBlockChecked = (block: TaggedWorkoutBlock) => {
     if (block.type === 'free_text') return selectedBlockIds.has(block.id);
@@ -167,14 +184,16 @@ export function CreateSessionTemplateModal({
   };
 
   const handleConfirm = () => {
-    if (!draft || !canSave) return;
+    if (!draft || !tag || !canSave) return;
     const content = sessionDraftToTemplateContent(
       buildTemplateDraft(blocks, selectedBlockIds, selectedItemIds, {
         ...draft,
-        name: name.trim(),
+        name: tag,
       }),
     );
-    onConfirm({ name: name.trim(), content });
+    const exerciseHint = describeSessionTemplate(content).exerciseLines[0] ?? null;
+    const name = buildSessionTemplateName({ tag, formatTag, exerciseHint });
+    onConfirm({ name, content, tag, formatTag });
   };
 
   const selectionLabel = [
@@ -194,15 +213,52 @@ export function CreateSessionTemplateModal({
         <Pressable style={styles.sheet} onPress={(event) => event.stopPropagation()}>
           <Text style={styles.title}>Crear plantilla</Text>
           <Text style={styles.subtitle}>
-            Elige ejercicios o bloques concretos. No se guarda la sesión entera.
+            Elige zona, formato (opcional) y los ejercicios o bloques a guardar.
           </Text>
 
-          <Input
-            value={name}
-            onChangeText={setName}
-            placeholder="Nombre de la plantilla"
-            style={styles.nameInput}
-          />
+          <Text style={styles.tagLabel}>Zona</Text>
+          <View style={styles.tagRow}>
+            {SESSION_TEMPLATE_ZONE_TAGS.map((option) => {
+              const selected = tag === option;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => setTag(option)}
+                  style={({ pressed }) => [
+                    styles.tagChip,
+                    selected && styles.tagChipSelected,
+                    pressed && styles.rowPressed,
+                  ]}
+                >
+                  <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.tagLabel}>Formato</Text>
+          <View style={styles.tagRow}>
+            {SESSION_TEMPLATE_FORMAT_TAGS.map((option) => {
+              const selected = formatTag === option;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => setFormatTag(selected ? null : option)}
+                  style={({ pressed }) => [
+                    styles.tagChip,
+                    selected && styles.tagChipSelected,
+                    pressed && styles.rowPressed,
+                  ]}
+                >
+                  <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
           {!draft || !canSaveSessionAsTemplate(draft) || blocks.length === 0 ? (
             <Text style={styles.hint}>Esta sesión no tiene bloques ni ejercicios para guardar.</Text>
@@ -348,8 +404,37 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 20,
   },
-  nameInput: {
-    marginBottom: 0,
+  tagLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  tagChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background,
+  },
+  tagChipSelected: {
+    borderColor: colors.accent,
+    backgroundColor: `${colors.accent}18`,
+  },
+  tagChipText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  tagChipTextSelected: {
+    color: colors.accent,
   },
   hint: {
     ...typography.bodySmall,

@@ -5,7 +5,7 @@ import {
 import { draftToTaggedBlocks, hasSessionBlockContent } from '@/lib/sessionBlockSections';
 import { formatScheduleSummary } from '@/lib/sessionSchedule';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
-import { getBlockTypeConfig, getWorkoutBlockSummary } from '@/lib/workoutBlockBuilder';
+import { getBlockTypeConfig, getWorkoutBlockSummary, formatBlockItemLineForDisplay } from '@/lib/workoutBlockBuilder';
 
 export interface SessionTemplateSummary {
   blockCount: number;
@@ -13,6 +13,7 @@ export interface SessionTemplateSummary {
   schedule: string;
   blockLabels: string[];
   firstBlockSummary: string;
+  exerciseLines: string[];
 }
 
 /** Contenido que se guarda en la plantilla: mismo formato que el plan del atleta. */
@@ -64,9 +65,33 @@ export function mergeTemplateIntoDraft(draft: SessionDraft, templateContent: str
   };
 }
 
+/** Combina varias plantillas en orden sobre un borrador de sesión. */
+export function mergeTemplatesIntoDraft(
+  draft: SessionDraft,
+  templateContents: string[],
+): SessionDraft {
+  return templateContents.reduce(
+    (current, content) => mergeTemplateIntoDraft(current, content),
+    draft,
+  );
+}
+
 export function describeSessionTemplate(templateContent: string): SessionTemplateSummary {
   const draft = parsePersonalizedPlanContent(templateContent);
   const blocks = draftToTaggedBlocks(draft);
+  const exerciseLines: string[] = [];
+
+  for (const block of blocks) {
+    if (block.type === 'free_text') {
+      const text = block.timing.trim() || block.title?.trim();
+      if (text) exerciseLines.push(text);
+      continue;
+    }
+    for (const item of block.items) {
+      if (!item.text.trim()) continue;
+      exerciseLines.push(formatBlockItemLineForDisplay(item, block.type) || item.text.trim());
+    }
+  }
 
   return {
     blockCount: blocks.length,
@@ -74,5 +99,6 @@ export function describeSessionTemplate(templateContent: string): SessionTemplat
     schedule: formatScheduleSummary(draft.schedule),
     blockLabels: blocks.map((block) => getBlockTypeConfig(block.type).label),
     firstBlockSummary: blocks[0] ? getWorkoutBlockSummary(blocks[0]) : '',
+    exerciseLines,
   };
 }

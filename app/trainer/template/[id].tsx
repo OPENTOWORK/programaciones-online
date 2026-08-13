@@ -1,21 +1,28 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { SessionEditorForm } from '@/components/trainer/SessionEditorForm';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useSessionTemplates } from '@/hooks/useSessionTemplates';
 import { safeGoBack } from '@/lib/navigation';
 import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import {
   canSaveSessionAsTemplate,
+  describeSessionTemplate,
   sessionDraftToTemplateContent,
 } from '@/lib/sessionTemplates';
+import {
+  buildSessionTemplateName,
+  SESSION_TEMPLATE_FORMAT_TAGS,
+  SESSION_TEMPLATE_ZONE_TAGS,
+  type SessionTemplateFormatTag,
+  type SessionTemplateTag,
+} from '@/lib/sessionTemplateTags';
 import { createEmptySessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
 
 export default function TrainerSessionTemplateScreen() {
@@ -28,7 +35,8 @@ export default function TrainerSessionTemplateScreen() {
     useSessionTemplates();
   const template = isNew ? undefined : templates.find((entry) => entry.id === rawId);
 
-  const [name, setName] = useState('');
+  const [tag, setTag] = useState<SessionTemplateTag | null>(null);
+  const [formatTag, setFormatTag] = useState<SessionTemplateFormatTag | null>(null);
   const [draft, setDraft] = useState<SessionDraft>(() => createEmptySessionDraft(0));
   const [hasPendingBlocks, setHasPendingBlocks] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -37,15 +45,16 @@ export default function TrainerSessionTemplateScreen() {
   useEffect(() => {
     if (isNew || !template || hydratedRef.current) return;
     hydratedRef.current = true;
-    setName(template.name);
+    setTag(template.tag);
+    setFormatTag(template.formatTag);
     setDraft(parsePersonalizedPlanContent(template.content));
   }, [isNew, template]);
 
   const handleSave = async () => {
     setFormError(null);
 
-    if (!name.trim()) {
-      setFormError('Ponle un nombre a la plantilla.');
+    if (!tag) {
+      setFormError('Elige una etiqueta de zona para la plantilla.');
       return;
     }
     if (hasPendingBlocks) {
@@ -57,10 +66,12 @@ export default function TrainerSessionTemplateScreen() {
       return;
     }
 
-    const content = sessionDraftToTemplateContent({ ...draft, name: name.trim() });
+    const content = sessionDraftToTemplateContent({ ...draft, name: tag });
+    const exerciseHint = describeSessionTemplate(content).exerciseLines[0] ?? null;
+    const name = buildSessionTemplateName({ tag, formatTag, exerciseHint });
     const result = template
-      ? await update(template, { name: name.trim(), content })
-      : await create(name.trim(), content);
+      ? await update(template, { name, content, tag, formatTag })
+      : await create(name, content, tag, formatTag);
 
     if (!result.error) {
       safeGoBack(router, '/tabs/trainer');
@@ -114,24 +125,61 @@ export default function TrainerSessionTemplateScreen() {
   return (
     <ScreenWrapper>
       <SectionHeader
-        title={isNew ? 'Nueva plantilla de sesión' : 'Editar plantilla'}
-        subtitle="Monta los bloques una vez y reutilízalos en los planes de cualquier atleta"
+        title={isNew ? 'Nueva plantilla' : 'Editar plantilla'}
+        subtitle="Elige zona y formato; el nombre se genera solo"
       />
 
       {!persistent ? (
         <Text style={styles.warning}>
           Las plantillas se guardan solo en este dispositivo. Ejecuta npm run
-          supabase:session-templates para guardarlas en Supabase.
+          supabase:session-templates-format-tags para guardarlas en Supabase.
         </Text>
       ) : null}
 
       <Card style={styles.nameCard}>
-        <Input
-          label="Nombre de la plantilla"
-          value={name}
-          onChangeText={setName}
-          placeholder="Ej. Fuerza tren superior"
-        />
+        <Text style={styles.tagLabel}>Zona</Text>
+        <View style={styles.tagRow}>
+          {SESSION_TEMPLATE_ZONE_TAGS.map((option) => {
+            const selected = tag === option;
+            return (
+              <Pressable
+                key={option}
+                onPress={() => setTag(option)}
+                style={({ pressed }) => [
+                  styles.tagChip,
+                  selected && styles.tagChipSelected,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
+                  {option}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={styles.tagLabel}>Formato</Text>
+        <View style={styles.tagRow}>
+          {SESSION_TEMPLATE_FORMAT_TAGS.map((option) => {
+            const selected = formatTag === option;
+            return (
+              <Pressable
+                key={option}
+                onPress={() => setFormatTag(selected ? null : option)}
+                style={({ pressed }) => [
+                  styles.tagChip,
+                  selected && styles.tagChipSelected,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
+                  {option}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </Card>
 
       <SessionEditorForm
@@ -191,6 +239,42 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     backgroundColor: colors.surface,
     marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  tagLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  tagChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background,
+  },
+  tagChipSelected: {
+    borderColor: colors.accent,
+    backgroundColor: `${colors.accent}18`,
+  },
+  tagChipText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  tagChipTextSelected: {
+    color: colors.accent,
+  },
+  pressed: {
+    opacity: 0.85,
   },
   error: {
     ...typography.bodySmall,

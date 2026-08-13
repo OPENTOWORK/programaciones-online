@@ -38,9 +38,8 @@ import {
 } from '@/lib/programSchedulePreview';
 import { buildScheduleCalendarItems, type ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
 import {
-  applyTemplateToDraft,
   canSaveSessionAsTemplate,
-  mergeTemplateIntoDraft,
+  mergeTemplatesIntoDraft,
 } from '@/lib/sessionTemplates';
 import {
   applyInlineTextToSessionDraft,
@@ -391,14 +390,23 @@ export function ScheduleCalendarModal({
     setTemplatePickerItem(null);
   };
 
-  const handleTemplateSelect = async (template: { name?: string; content: string }) => {
-    if (!saveSession) {
+  const handleTemplateSelect = async (
+    templates: Array<{ name?: string; content: string }>,
+  ) => {
+    if (!saveSession || templates.length === 0) {
       closeTemplatePicker();
       return;
     }
 
     setTemplateApplying(true);
     setFormError(null);
+    const names = templates.map((template) => template.name).filter(Boolean) as string[];
+    const label =
+      names.length === 0
+        ? `${templates.length} plantilla${templates.length === 1 ? '' : 's'}`
+        : names.length <= 2
+          ? names.join(' + ')
+          : `${names[0]} + ${names.length - 1} más`;
 
     try {
       if (templatePickerItem && loadSessionDraft) {
@@ -408,7 +416,10 @@ export function ScheduleCalendarModal({
           Alert.alert('No se pudo aplicar', 'No se encontró la sesión de destino.');
           return;
         }
-        const draft = mergeTemplateIntoDraft(source, template.content);
+        const draft = mergeTemplatesIntoDraft(
+          source,
+          templates.map((template) => template.content),
+        );
         const result = await saveSession({ draft, date: item.date, item });
         if (result) {
           setFormError(result);
@@ -417,15 +428,18 @@ export function ScheduleCalendarModal({
         }
         closeTemplatePicker();
         Alert.alert(
-          'Plantilla aplicada',
-          `Se añadieron los bloques de "${template.name ?? 'la plantilla'}" a esta sesión.`,
+          'Plantillas aplicadas',
+          `Se añadieron los bloques de ${label} a esta sesión.`,
         );
         return;
       }
 
       if (templatePickerDate && buildSessionDraft) {
         const date = templatePickerDate;
-        const draft = applyTemplateToDraft(buildSessionDraft(date), template.content);
+        const draft = mergeTemplatesIntoDraft(
+          buildSessionDraft(date),
+          templates.map((template) => template.content),
+        );
         const result = await saveSession({ draft, date });
         if (result) {
           setFormError(result);
@@ -433,12 +447,7 @@ export function ScheduleCalendarModal({
           return;
         }
         closeTemplatePicker();
-        Alert.alert(
-          'Sesión creada',
-          template.name
-            ? `Se creó una sesión con la plantilla "${template.name}".`
-            : 'Se creó una sesión con la plantilla.',
-        );
+        Alert.alert('Sesión creada', `Se creó una sesión combinando ${label}.`);
       }
     } finally {
       setTemplateApplying(false);
@@ -968,12 +977,13 @@ export function ScheduleCalendarModal({
       <SessionTemplatePickerModal
         visible={isTrainer && templatePickerOpen}
         onClose={closeTemplatePicker}
-        onSelect={(template) => void handleTemplateSelect(template)}
+        onConfirm={(templates) => void handleTemplateSelect(templates)}
         saving={templateApplying}
+        confirmLabel={templatePickerItem ? 'Añadir a la sesión' : 'Crear sesión'}
         subtitle={
           templatePickerItem
-            ? 'Se añadirán los bloques o ejercicios de la plantilla a esta sesión.'
-            : 'Se creará una sesión nueva en el día con los bloques de la plantilla.'
+            ? 'Marca una o varias plantillas; sus bloques se añadirán a esta sesión.'
+            : 'Marca una o varias plantillas para crear una sesión nueva con todas ellas.'
         }
       />
       <CreateSessionTemplateModal
@@ -989,14 +999,19 @@ export function ScheduleCalendarModal({
         onConfirm={(input) => {
           void (async () => {
             setCreateTemplateSaving(true);
-            const result = await createTemplate(input.name, input.content);
+            const result = await createTemplate(
+              input.name,
+              input.content,
+              input.tag,
+              input.formatTag,
+            );
             setCreateTemplateSaving(false);
             if (result.error) {
               Alert.alert('No se pudo guardar', result.error);
               return;
             }
             setCreateTemplateItem(null);
-            Alert.alert('Plantilla guardada', `"${input.name}" ya está disponible en Usar plantilla.`);
+            Alert.alert('Plantilla guardada', 'Ya está disponible en Usar plantilla.');
           })();
         }}
       />

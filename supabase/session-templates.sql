@@ -8,6 +8,26 @@ create table if not exists public.trainer_session_templates (
   trainer_id uuid not null references auth.users(id) on delete cascade,
   name text not null check (char_length(trim(name)) between 1 and 120),
   content text not null,
+  tag text check (
+    tag is null
+    or tag in ('Tren inferior', 'Tren superior', 'Core', 'Activación', 'Descanso')
+  ),
+  format_tag text check (
+    format_tag is null
+    or format_tag in (
+      'EMOM',
+      'For Time',
+      'Rounds For Time',
+      'AMRAP',
+      'Tabata',
+      'Reps For Time / Ladder',
+      'Estaciones de tiempo',
+      'Fuerza',
+      'Técnica',
+      'Movilidad',
+      'Unbroken'
+    )
+  ),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

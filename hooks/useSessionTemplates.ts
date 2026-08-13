@@ -10,6 +10,7 @@ import {
   updateSessionTemplate,
   type SessionTemplate,
 } from '@/lib/sessionTemplateService';
+import type { SessionTemplateTag, SessionTemplateFormatTag } from '@/lib/sessionTemplateTags';
 
 type TemplatesSnapshot = {
   trainerId: string | null;
@@ -119,7 +120,12 @@ export function useSessionTemplates() {
   useFocusRefresh(() => load());
 
   const create = useCallback(
-    async (name: string, content: string) => {
+    async (
+      name: string,
+      content: string,
+      tag: SessionTemplateTag,
+      formatTag?: SessionTemplateFormatTag | null,
+    ) => {
       if (!trainerId) return { error: 'Solo el entrenador puede guardar plantillas.' };
 
       emit({ saving: true, error: null });
@@ -127,8 +133,8 @@ export function useSessionTemplates() {
         trainerId,
         name,
         content,
-        // Si Supabase está configurado, intentamos siempre la nube aunque el
-        // primer fetch marcara fallback. createSessionTemplate ya degrada a local.
+        tag,
+        formatTag,
         useLocalStore: isDemoMode,
       });
 
@@ -157,7 +163,15 @@ export function useSessionTemplates() {
   );
 
   const update = useCallback(
-    async (template: SessionTemplate, changes: { name?: string; content?: string }) => {
+    async (
+      template: SessionTemplate,
+      changes: {
+        name?: string;
+        content?: string;
+        tag?: SessionTemplateTag | null;
+        formatTag?: SessionTemplateFormatTag | null;
+      },
+    ) => {
       emit({ saving: true, error: null });
       const result = await updateSessionTemplate({
         template,

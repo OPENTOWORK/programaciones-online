@@ -301,14 +301,14 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
         onConfirm={(input) => {
           void (async () => {
             setCreateSaving(true);
-            const result = await create(input.name, input.content);
+            const result = await create(input.name, input.content, input.tag, input.formatTag);
             setCreateSaving(false);
             if (result.error) {
               setNotice(result.error);
               return;
             }
             setCreateOpen(false);
-            setNotice(`Plantilla "${input.name}" guardada.`);
+            setNotice('Plantilla guardada.');
           })();
         }}
       />
