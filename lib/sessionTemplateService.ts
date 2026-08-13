@@ -1,6 +1,7 @@
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const TABLE = 'trainer_session_templates';
+const LOCAL_STORAGE_KEY = 'trainer-session-templates-v1';
 
 export interface SessionTemplate {
   id: string;
@@ -13,12 +14,41 @@ export interface SessionTemplate {
 
 const localTemplatesByTrainer = new Map<string, SessionTemplate[]>();
 
+function readPersistedLocalTemplates(): Record<string, SessionTemplate[]> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, SessionTemplate[]>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePersistedLocalTemplates(all: Record<string, SessionTemplate[]>) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(all));
+  } catch {
+    // ignore quota / private mode failures
+  }
+}
+
 function localList(trainerId: string) {
   const existing = localTemplatesByTrainer.get(trainerId);
   if (existing) return existing;
-  const created: SessionTemplate[] = [];
+
+  const persisted = readPersistedLocalTemplates()[trainerId] ?? [];
+  const created = [...persisted];
   localTemplatesByTrainer.set(trainerId, created);
   return created;
+}
+
+function persistLocalList(trainerId: string) {
+  const all = readPersistedLocalTemplates();
+  all[trainerId] = localList(trainerId);
+  writePersistedLocalTemplates(all);
 }
 
 function isMissingTableError(error: { message?: string; code?: string } | null | undefined) {
@@ -117,6 +147,7 @@ export async function createSessionTemplate(input: {
       updatedAt: now,
     };
     templates.push(template);
+    persistLocalList(input.trainerId);
     return { template };
   }
 
@@ -166,6 +197,8 @@ export async function updateSessionTemplate(input: {
     const index = templates.findIndex((entry) => entry.id === template.id);
     const updated: SessionTemplate = { ...template, name, content, updatedAt };
     if (index >= 0) templates[index] = updated;
+    else templates.push(updated);
+    persistLocalList(template.trainerId);
     return { template: updated };
   }
 
@@ -195,6 +228,7 @@ export async function deleteSessionTemplate(
     const templates = localList(template.trainerId);
     const index = templates.findIndex((entry) => entry.id === template.id);
     if (index >= 0) templates.splice(index, 1);
+    persistLocalList(template.trainerId);
     return {};
   }
 

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
@@ -21,7 +22,11 @@ export function SessionTemplatePickerModal({
   subtitle = 'Se aplicará y guardará en la sesión seleccionada.',
   saving = false,
 }: SessionTemplatePickerModalProps) {
-  const { templates, isLoading } = useSessionTemplates();
+  const { templates, isLoading, refresh } = useSessionTemplates();
+
+  useEffect(() => {
+    if (visible) void refresh();
+  }, [visible, refresh]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

@@ -979,6 +979,7 @@ export function ScheduleCalendarModal({
               return;
             }
             setCreateTemplateItem(null);
+            Alert.alert('Plantilla guardada', `"${input.name}" ya está disponible en Usar plantilla.`);
           })();
         }}
       />
