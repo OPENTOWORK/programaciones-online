@@ -118,8 +118,6 @@ export function useSessionTemplates() {
 
   useFocusRefresh(() => load());
 
-  const useLocalStore = isDemoMode || !state.persistent;
-
   const create = useCallback(
     async (name: string, content: string) => {
       if (!trainerId) return { error: 'Solo el entrenador puede guardar plantillas.' };
