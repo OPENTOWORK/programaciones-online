@@ -96,8 +96,8 @@ export async function persistCatalogSessionDraft(
 
   if (result.error) return result.error;
 
-  const videoSync = await syncExerciseVideosForNames(collectExerciseNamesFromSessionDraft(draftToSave));
-  if (videoSync.error) return videoSync.error;
+  // El guardado de la sesión no debe fallar si el catálogo de vídeos falla.
+  void syncExerciseVideosForNames(collectExerciseNamesFromSessionDraft(draftToSave));
 
   return null;
 }

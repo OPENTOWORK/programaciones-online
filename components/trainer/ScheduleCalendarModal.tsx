@@ -391,7 +391,7 @@ export function ScheduleCalendarModal({
     setTemplatePickerItem(null);
   };
 
-  const handleTemplateSelect = async (template: { content: string }) => {
+  const handleTemplateSelect = async (template: { name?: string; content: string }) => {
     if (!saveSession) {
       closeTemplatePicker();
       return;
@@ -403,13 +403,23 @@ export function ScheduleCalendarModal({
     try {
       if (templatePickerItem && loadSessionDraft) {
         const item = templatePickerItem;
-        const draft = mergeTemplateIntoDraft(loadSessionDraft(item), template.content);
+        const source = loadSessionDraft(item);
+        if (!source) {
+          Alert.alert('No se pudo aplicar', 'No se encontró la sesión de destino.');
+          return;
+        }
+        const draft = mergeTemplateIntoDraft(source, template.content);
         const result = await saveSession({ draft, date: item.date, item });
         if (result) {
           setFormError(result);
+          Alert.alert('No se pudo aplicar', result);
           return;
         }
         closeTemplatePicker();
+        Alert.alert(
+          'Plantilla aplicada',
+          `Se añadieron los bloques de "${template.name ?? 'la plantilla'}" a esta sesión.`,
+        );
         return;
       }
 
@@ -419,9 +429,16 @@ export function ScheduleCalendarModal({
         const result = await saveSession({ draft, date });
         if (result) {
           setFormError(result);
+          Alert.alert('No se pudo aplicar', result);
           return;
         }
         closeTemplatePicker();
+        Alert.alert(
+          'Sesión creada',
+          template.name
+            ? `Se creó una sesión con la plantilla "${template.name}".`
+            : 'Se creó una sesión con la plantilla.',
+        );
       }
     } finally {
       setTemplateApplying(false);

@@ -102,7 +102,7 @@ export async function fetchSessionTemplates(
   }
 
   const supabase = getSupabase();
-  if (!supabase) return { templates: [], persistent: false };
+  if (!supabase) return { templates: sortByName(localList(trainerId)), persistent: false };
 
   const { data, error } = await supabase
     .from(TABLE)
@@ -113,10 +113,17 @@ export async function fetchSessionTemplates(
     if (isMissingTableError(error)) {
       return { templates: sortByName(localList(trainerId)), persistent: false };
     }
-    return { templates: [], persistent: true };
+    // No vaciar el listado ante un error puntual: usa copia local si existe.
+    const local = localList(trainerId);
+    return { templates: sortByName(local), persistent: local.length > 0 ? false : true };
   }
 
-  return { templates: data.map((row) => mapRow(row as Record<string, unknown>)), persistent: true };
+  const templates = data.map((row) => mapRow(row as Record<string, unknown>));
+  // Espejo local para no perder el listado si un fetch posterior falla.
+  localTemplatesByTrainer.set(trainerId, [...templates]);
+  persistLocalList(trainerId);
+
+  return { templates, persistent: true };
 }
 
 export async function createSessionTemplate(input: {
@@ -162,14 +169,25 @@ export async function createSessionTemplate(input: {
 
   if (error || !data) {
     if (isDuplicateNameError(error)) return { error: 'Ya hay una plantilla con ese nombre.' };
+    if (isMissingTableError(error)) {
+      return createSessionTemplate({ ...input, useLocalStore: true });
+    }
     return {
-      error: isMissingTableError(error)
-        ? 'Falta aplicar la tabla de plantillas: npm run supabase:session-templates'
-        : error?.message ?? 'No se pudo guardar la plantilla.',
+      error: error?.message ?? 'No se pudo guardar la plantilla.',
     };
   }
 
-  return { template: mapRow(data as Record<string, unknown>) };
+  const template = mapRow(data as Record<string, unknown>);
+  // Espejo local para que «Usar plantilla» las vea aunque falle un fetch.
+  const local = localList(input.trainerId);
+  const withoutDup = local.filter(
+    (entry) => entry.id !== template.id && entry.name.toLowerCase() !== template.name.toLowerCase(),
+  );
+  withoutDup.push(template);
+  localTemplatesByTrainer.set(input.trainerId, withoutDup);
+  persistLocalList(input.trainerId);
+
+  return { template };
 }
 
 export async function updateSessionTemplate(input: {

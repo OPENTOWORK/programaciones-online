@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
@@ -33,6 +33,7 @@ const EMPTY_SNAPSHOT: TemplatesSnapshot = {
 
 let snapshot: TemplatesSnapshot = EMPTY_SNAPSHOT;
 const listeners = new Set<() => void>();
+let loadSeq = 0;
 
 function emit(next: Partial<TemplatesSnapshot>) {
   snapshot = { ...snapshot, ...next, version: snapshot.version + 1 };
@@ -56,10 +57,13 @@ export function useSessionTemplates() {
   const { user, isDemoMode } = useAuth();
   const trainerId = isTrainerRole(user?.role) ? user?.id : undefined;
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  const [bootstrappedFor, setBootstrappedFor] = useState<string | null>(null);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const trainerIdRef = useRef(trainerId);
+  trainerIdRef.current = trainerId;
 
   const load = useCallback(async () => {
-    if (!trainerId) {
+    const activeTrainerId = trainerIdRef.current;
+    if (!activeTrainerId) {
       emit({
         trainerId: null,
         templates: [],
@@ -67,45 +71,68 @@ export function useSessionTemplates() {
         persistent: true,
         error: null,
       });
-      setBootstrappedFor(null);
+      setHasLoadedOnce(false);
       return;
     }
 
-    emit({ trainerId, isLoading: true, error: null });
+    const seq = ++loadSeq;
+    const keepCurrent =
+      snapshot.trainerId === activeTrainerId && snapshot.templates.length > 0
+        ? snapshot.templates
+        : [];
+
+    emit({
+      trainerId: activeTrainerId,
+      isLoading: keepCurrent.length === 0,
+      error: null,
+      templates: keepCurrent,
+    });
+
     try {
-      const result = await fetchSessionTemplates(trainerId, isDemoMode);
+      const result = await fetchSessionTemplates(activeTrainerId, isDemoMode);
+      if (seq !== loadSeq || trainerIdRef.current !== activeTrainerId) return;
+
       emit({
-        trainerId,
+        trainerId: activeTrainerId,
         templates: result.templates,
         persistent: result.persistent,
         isLoading: false,
+        error: null,
       });
-      setBootstrappedFor(trainerId);
+      setHasLoadedOnce(true);
     } catch (error) {
+      if (seq !== loadSeq || trainerIdRef.current !== activeTrainerId) return;
       emit({
         isLoading: false,
         error: error instanceof Error ? error.message : 'No se pudieron cargar las plantillas.',
+        // Conserva lo que ya hubiera en pantalla si el fetch falla.
+        templates: keepCurrent.length > 0 ? keepCurrent : snapshot.templates,
       });
-      setBootstrappedFor(trainerId);
+      setHasLoadedOnce(true);
     }
-  }, [trainerId, isDemoMode]);
+  }, [isDemoMode]);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, trainerId]);
 
   useFocusRefresh(() => load());
 
   const useLocalStore = isDemoMode || !state.persistent;
-  const ready = Boolean(trainerId) && bootstrappedFor === trainerId && !state.isLoading;
 
   const create = useCallback(
     async (name: string, content: string) => {
       if (!trainerId) return { error: 'Solo el entrenador puede guardar plantillas.' };
-      if (!ready) return { error: 'Espera un momento a que carguen las plantillas.' };
 
       emit({ saving: true, error: null });
-      const result = await createSessionTemplate({ trainerId, name, content, useLocalStore });
+      const result = await createSessionTemplate({
+        trainerId,
+        name,
+        content,
+        // Si Supabase está configurado, intentamos siempre la nube aunque el
+        // primer fetch marcara fallback. createSessionTemplate ya degrada a local.
+        useLocalStore: isDemoMode,
+      });
 
       if (result.error) {
         emit({ saving: false, error: result.error });
@@ -113,25 +140,32 @@ export function useSessionTemplates() {
       }
 
       if (result.template) {
+        const withoutDup = getSnapshot().templates.filter(
+          (entry) => entry.id !== result.template!.id && entry.name !== result.template!.name,
+        );
         emit({
           saving: false,
-          templates: sortTemplates([...getSnapshot().templates, result.template]),
+          persistent: !result.template.id.startsWith('local-template-'),
+          templates: sortTemplates([...withoutDup, result.template]),
         });
       } else {
         emit({ saving: false });
       }
 
-      // Releer de la fuente de verdad para que todos los listados queden alineados.
       void load();
       return {};
     },
-    [trainerId, useLocalStore, ready, load],
+    [trainerId, isDemoMode, load],
   );
 
   const update = useCallback(
     async (template: SessionTemplate, changes: { name?: string; content?: string }) => {
       emit({ saving: true, error: null });
-      const result = await updateSessionTemplate({ template, ...changes, useLocalStore });
+      const result = await updateSessionTemplate({
+        template,
+        ...changes,
+        useLocalStore: isDemoMode || template.id.startsWith('local-template-'),
+      });
 
       if (result.error) {
         emit({ saving: false, error: result.error });
@@ -154,13 +188,16 @@ export function useSessionTemplates() {
       void load();
       return {};
     },
-    [useLocalStore, load],
+    [isDemoMode, load],
   );
 
   const remove = useCallback(
     async (template: SessionTemplate) => {
       emit({ error: null });
-      const result = await deleteSessionTemplate(template, useLocalStore);
+      const result = await deleteSessionTemplate(
+        template,
+        isDemoMode || template.id.startsWith('local-template-'),
+      );
       if (result.error) {
         emit({ error: result.error });
         return result;
@@ -171,12 +208,12 @@ export function useSessionTemplates() {
       void load();
       return {};
     },
-    [useLocalStore, load],
+    [isDemoMode, load],
   );
 
   return {
     templates: state.trainerId === trainerId ? state.templates : [],
-    isLoading: state.isLoading || (Boolean(trainerId) && bootstrappedFor !== trainerId),
+    isLoading: Boolean(trainerId) && !hasLoadedOnce && state.isLoading,
     saving: state.saving,
     persistent: state.persistent,
     error: state.error,

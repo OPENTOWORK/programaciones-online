@@ -146,13 +146,12 @@ export default function EditSessionScreen() {
 
     if (workoutResult.error) return { error: workoutResult.error };
 
-    const videoSync = await syncExerciseVideosForNames(collectExerciseNamesFromSessionDraft(draftToSave));
-    if (videoSync.error) return { error: videoSync.error };
+    void syncExerciseVideosForNames(collectExerciseNamesFromSessionDraft(draftToSave));
 
     await refreshPrograms();
     await reloadWorkouts();
 
-    return { syncedVideos: videoSync.synced };
+    return { syncedVideos: 0 };
   };
 
   const handleSave = async () => {

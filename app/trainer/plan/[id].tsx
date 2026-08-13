@@ -406,8 +406,7 @@ export default function TrainerPlanDetailScreen() {
     const draftError = validatePersonalizedPlanDraft(draftToSave);
     if (draftError && !attachedPdf && !plan.pdfFileName) return draftError;
 
-    const videoSync = await syncExerciseVideosForNames(collectExerciseNamesFromSessionDraft(draftToSave));
-    if (videoSync.error) return videoSync.error;
+    void syncExerciseVideosForNames(collectExerciseNamesFromSessionDraft(draftToSave));
 
     const result = await updatePlan(plan.id, {
       athleteId: plan.athleteId,
@@ -435,8 +434,7 @@ export default function TrainerPlanDetailScreen() {
     const draftError = validatePersonalizedPlanDraft(draftToSave);
     if (draftError) return draftError;
 
-    const videoSync = await syncExerciseVideosForNames(collectExerciseNamesFromSessionDraft(draftToSave));
-    if (videoSync.error) return videoSync.error;
+    void syncExerciseVideosForNames(collectExerciseNamesFromSessionDraft(draftToSave));
 
     const content = serializePersonalizedPlanContent(draftToSave, target.sessionNumber ?? 1);
     const result = await updatePlan(target.id, {

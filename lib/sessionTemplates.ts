@@ -29,8 +29,8 @@ function appendSection(current: string, incoming: string) {
 }
 
 /**
- * Aplica una plantilla como sesión nueva: sustituye bloques/contenido y conserva
- * el nombre y el número de la sesión destino.
+ * Aplica una plantilla como sesión nueva: copia bloques/contenido y conserva
+ * nombre, número y calendario del destino (el día donde se está creando/editando).
  */
 export function applyTemplateToDraft(draft: SessionDraft, templateContent: string): SessionDraft {
   const parsed = parsePersonalizedPlanContent(templateContent);
@@ -44,14 +44,12 @@ export function applyTemplateToDraft(draft: SessionDraft, templateContent: strin
     core: parsed.core,
     cooldown: parsed.cooldown,
     exercises: parsed.exercises,
-    schedule: parsed.schedule,
-    dayLabel: formatScheduleSummary(parsed.schedule),
   };
 }
 
 /**
  * Inserta los bloques/ejercicios de una plantilla en la sesión actual sin
- * reemplazarla entera.
+ * reemplazarla entera. Conserva nombre, duración y calendario del destino.
  */
 export function mergeTemplateIntoDraft(draft: SessionDraft, templateContent: string): SessionDraft {
   const parsed = parsePersonalizedPlanContent(templateContent);
