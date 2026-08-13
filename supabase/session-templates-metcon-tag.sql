@@ -11,7 +11,6 @@ alter table public.trainer_session_templates
       'Tren superior',
       'Core',
       'Metcon',
-      'Activación',
       'Descanso'
     )
   );

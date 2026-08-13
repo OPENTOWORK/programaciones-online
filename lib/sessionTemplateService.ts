@@ -105,15 +105,21 @@ function isDuplicateNameError(error: { message?: string; code?: string } | null 
 }
 
 function mapRow(row: Record<string, unknown>): SessionTemplate {
+  const rawTag = typeof row.tag === 'string' ? row.tag : null;
+  const rawFormat = typeof row.format_tag === 'string' ? row.format_tag : null;
+
+  // Legacy: Activación estaba como zona; ahora es formato.
+  const legacyActivation = rawTag?.trim() === 'Activación';
+
   return {
     id: row.id as string,
     trainerId: row.trainer_id as string,
     name: row.name as string,
     content: row.content as string,
-    tag: normalizeSessionTemplateTag(typeof row.tag === 'string' ? row.tag : null),
-    formatTag: normalizeSessionTemplateFormatTag(
-      typeof row.format_tag === 'string' ? row.format_tag : null,
-    ),
+    tag: legacyActivation ? null : normalizeSessionTemplateTag(rawTag),
+    formatTag:
+      normalizeSessionTemplateFormatTag(rawFormat) ??
+      (legacyActivation ? 'Activación' : null),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };

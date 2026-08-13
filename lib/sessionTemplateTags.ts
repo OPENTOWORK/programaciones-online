@@ -3,11 +3,11 @@ export const SESSION_TEMPLATE_ZONE_TAGS = [
   'Tren superior',
   'Core',
   'Metcon',
-  'Activación',
   'Descanso',
 ] as const;
 
 export const SESSION_TEMPLATE_FORMAT_TAGS = [
+  'Activación',
   'EMOM',
   'For Time',
   'Rounds For Time',
