@@ -51,12 +51,14 @@ export function useExerciseVideos() {
   }, []);
 
   const getVideoId = useCallback(
-    (name: string, aimharderEjerId?: number) => lookupExerciseVideoId(catalog, name, aimharderEjerId),
+    (name: string, aimharderEjerId?: number, youtubeVideoId?: string) =>
+      lookupExerciseVideoId(catalog, name, aimharderEjerId, youtubeVideoId),
     [catalog],
   );
 
   const hasVideo = useCallback(
-    (name: string, aimharderEjerId?: number) => Boolean(getVideoId(name, aimharderEjerId)),
+    (name: string, aimharderEjerId?: number, youtubeVideoId?: string) =>
+      Boolean(getVideoId(name, aimharderEjerId, youtubeVideoId)),
     [getVideoId],
   );
 

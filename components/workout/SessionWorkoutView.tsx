@@ -36,8 +36,8 @@ interface SessionWorkoutViewProps {
   loadingLog?: boolean;
   error?: string | null;
   saved?: boolean;
-  getVideoId: (name: string, aimharderEjerId?: number) => string | null;
-  hasVideo: (name: string, aimharderEjerId?: number) => boolean;
+  getVideoId: (name: string, aimharderEjerId?: number, youtubeVideoId?: string) => string | null;
+  hasVideo: (name: string, aimharderEjerId?: number, youtubeVideoId?: string) => boolean;
   readOnly?: boolean;
   readOnlySubtitle?: string;
   logId?: string;
@@ -70,8 +70,13 @@ export function SessionWorkoutView({
   const completedTotal = checklist.filter((item) => completed[item.key]).length;
   const total = checklist.length;
 
-  const openExerciseVideo = (key: string, name: string, aimharderEjerId?: number) => {
-    const videoId = getVideoId(name, aimharderEjerId);
+  const openExerciseVideo = (
+    key: string,
+    name: string,
+    aimharderEjerId?: number,
+    youtubeVideoId?: string,
+  ) => {
+    const videoId = getVideoId(name, aimharderEjerId, youtubeVideoId);
     if (!videoId) return;
     setActiveVideo((current) => (current?.key === key ? null : { key, name, videoId }));
   };
@@ -80,9 +85,10 @@ export function SessionWorkoutView({
     sectionKey,
     completedItems: completed,
     onToggleItem: readOnly ? undefined : onToggleItem,
-    onExercisePress: (name: string, aimharderEjerId?: number) =>
-      openExerciseVideo(`block:${normalizeExerciseName(name)}`, name, aimharderEjerId),
-    hasExerciseVideo: (name: string, aimharderEjerId?: number) => hasVideo(name, aimharderEjerId),
+    onExercisePress: (name: string, aimharderEjerId?: number, youtubeVideoId?: string) =>
+      openExerciseVideo(`block:${normalizeExerciseName(name)}`, name, aimharderEjerId, youtubeVideoId),
+    hasExerciseVideo: (name: string, aimharderEjerId?: number, youtubeVideoId?: string) =>
+      hasVideo(name, aimharderEjerId, youtubeVideoId),
     activeExerciseName: activeVideo?.name,
   });
 
@@ -142,10 +148,17 @@ export function SessionWorkoutView({
                 <ExerciseRow
                   exercise={exercise}
                   completed={!!completed[key]}
-                  hasVideo={hasVideo(exercise.name, exercise.aimharderEjerId)}
+                  hasVideo={hasVideo(exercise.name, exercise.aimharderEjerId, exercise.youtubeVideoId)}
                   isVideoActive={isVideoActive}
                   onToggle={readOnly ? undefined : () => onToggleItem(key)}
-                  onOpenVideo={() => openExerciseVideo(exercise.id, exercise.name, exercise.aimharderEjerId)}
+                  onOpenVideo={() =>
+                    openExerciseVideo(
+                      exercise.id,
+                      exercise.name,
+                      exercise.aimharderEjerId,
+                      exercise.youtubeVideoId,
+                    )
+                  }
                 />
               </View>
             );

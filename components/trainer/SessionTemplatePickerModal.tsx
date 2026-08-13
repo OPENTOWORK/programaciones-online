@@ -10,12 +10,16 @@ interface SessionTemplatePickerModalProps {
   visible: boolean;
   onClose: () => void;
   onSelect: (template: SessionTemplate) => void;
+  subtitle?: string;
+  saving?: boolean;
 }
 
 export function SessionTemplatePickerModal({
   visible,
   onClose,
   onSelect,
+  subtitle = 'Se aplicará y guardará en la sesión seleccionada.',
+  saving = false,
 }: SessionTemplatePickerModalProps) {
   const { templates, isLoading } = useSessionTemplates();
 
@@ -24,11 +28,11 @@ export function SessionTemplatePickerModal({
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(event) => event.stopPropagation()}>
           <Text style={styles.title}>Elegir plantilla</Text>
-          <Text style={styles.subtitle}>
-            Se aplicará al nuevo entrenamiento del día seleccionado.
-          </Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
 
-          {isLoading ? (
+          {saving ? (
+            <Text style={styles.hint}>Guardando plantilla…</Text>
+          ) : isLoading ? (
             <Text style={styles.hint}>Cargando plantillas…</Text>
           ) : templates.length === 0 ? (
             <Text style={styles.hint}>
@@ -49,7 +53,12 @@ export function SessionTemplatePickerModal({
                   <Pressable
                     key={template.id}
                     onPress={() => onSelect(template)}
-                    style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                    disabled={saving}
+                    style={({ pressed }) => [
+                      styles.row,
+                      saving && styles.rowDisabled,
+                      pressed && !saving && styles.rowPressed,
+                    ]}
                   >
                     <Text style={styles.rowName} numberOfLines={1}>
                       {template.name}
@@ -63,7 +72,13 @@ export function SessionTemplatePickerModal({
             </ScrollView>
           )}
 
-          <Button title="Cancelar" variant="outline" onPress={onClose} style={styles.cancelBtn} />
+          <Button
+            title="Cancelar"
+            variant="outline"
+            onPress={onClose}
+            disabled={saving}
+            style={styles.cancelBtn}
+          />
         </Pressable>
       </Pressable>
     </Modal>
@@ -113,6 +128,9 @@ const styles = StyleSheet.create({
   rowPressed: {
     opacity: 0.85,
     backgroundColor: `${colors.accent}08`,
+  },
+  rowDisabled: {
+    opacity: 0.5,
   },
   rowName: {
     ...typography.body,

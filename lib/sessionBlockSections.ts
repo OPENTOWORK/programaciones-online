@@ -39,7 +39,7 @@ export function draftToTaggedBlocks(draft: SessionDraft): TaggedWorkoutBlock[] {
   const blocks = SESSION_BLOCK_SECTIONS.flatMap(({ key }) =>
     parseWorkoutBlocksFromText(draft[key]).map((block) => ({
       ...block,
-      section: 'main' as SessionBlockSection,
+      section: key,
     })),
   );
 
@@ -50,21 +50,40 @@ export function taggedBlocksToDraft(
   blocks: TaggedWorkoutBlock[],
   confirmedIds: Set<string>,
   base: SessionDraft,
+  options?: { preserveSections?: boolean },
 ): SessionDraft {
   const confirmed = blocks
     .filter((block) => confirmedIds.has(block.id))
-    .map((block) => sanitizeWorkoutBlock(block));
+    .map((block) => {
+      const sanitized = sanitizeWorkoutBlock(block);
+      return { ...sanitized, section: block.section } as TaggedWorkoutBlock;
+    });
 
-  const serialized = serializeWorkoutBlocks(confirmed);
+  if (!options?.preserveSections) {
+    return {
+      ...base,
+      warmup: '',
+      main: serializeWorkoutBlocks(confirmed),
+      metcon: '',
+      core: '',
+      cooldown: '',
+    };
+  }
 
-  return {
+  const next: SessionDraft = {
     ...base,
     warmup: '',
-    main: serialized,
+    main: '',
     metcon: '',
     core: '',
     cooldown: '',
   };
+
+  for (const { key } of SESSION_BLOCK_SECTIONS) {
+    next[key] = serializeWorkoutBlocks(confirmed.filter((block) => block.section === key));
+  }
+
+  return next;
 }
 
 export function combineMainPartsForSave(main: string, metcon: string) {
@@ -92,11 +111,11 @@ export function extractExercisesFromSessionDraft(draft: SessionDraft): Exercise[
       const base = createEmptyExercise();
       exercises.push({
         ...base,
-        id: item.id,
         name: item.text.trim(),
         sets: Number.parseInt(item.sets ?? '', 10) || base.sets,
         reps: item.reps?.trim() || base.reps,
         aimharderEjerId: item.aimharderEjerId,
+        youtubeVideoId: item.youtubeVideoId,
       });
     }
   }

@@ -1,44 +1,50 @@
-import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { ProgramSchedulePreview } from '@/components/trainer/ProgramSchedulePreview';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
-import {
-  buildAthleteCalendarItems,
-  loadAthleteScheduleSources,
-} from '@/lib/athleteSchedule';
+import { loadAthleteScheduleSources } from '@/lib/athleteSchedule';
 import { createEmptySessionDraft } from '@/lib/trainerSessionDraft';
 import { createPersonalizedPlanPreviewProgram } from '@/lib/personalizedPlanContent';
 import { openCalendarDay, openScheduledSession } from '@/lib/sessionNavigation';
-import type { Program } from '@/lib/types';
+import type { AthletePlan, Program, Workout } from '@/lib/types';
 
 interface AthleteScheduleCalendarProps {
   program?: Program;
+  /** Si se indica, el calendario solo muestra estos planes asignados. */
+  assignedPlans?: AthletePlan[];
   title?: string;
   subtitle?: string;
+  /** Oculta el título interno (p. ej. cuando va dentro de un CollapsibleSection). */
+  hideHeader?: boolean;
 }
 
 export function AthleteScheduleCalendar({
   program,
+  assignedPlans,
   title = 'Tu calendario',
-  subtitle = 'Pulsa un día o una sesión para registrar tu entreno',
+  subtitle,
+  hideHeader = false,
 }: AthleteScheduleCalendarProps) {
   const router = useRouter();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [plans, setPlans] = useState<Awaited<ReturnType<typeof loadAthleteScheduleSources>>['plans']>([]);
-  const [workouts, setWorkouts] = useState<Awaited<ReturnType<typeof loadAthleteScheduleSources>>['workouts']>([]);
+  const [loadedPlans, setLoadedPlans] = useState<AthletePlan[]>([]);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
+
+  const useAssignedOverride = assignedPlans !== undefined;
+  const plans = useAssignedOverride ? (assignedPlans ?? []) : loadedPlans;
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       if (!user?.id) {
-        setPlans([]);
+        setLoadedPlans([]);
         setWorkouts([]);
         setLoading(false);
         return;
@@ -46,13 +52,19 @@ export function AthleteScheduleCalendar({
 
       setLoading(true);
       try {
-        const data = await loadAthleteScheduleSources(user.id, program?.id);
+        const data = await loadAthleteScheduleSources(user.id, program?.id, {
+          skipPlans: useAssignedOverride,
+        });
         if (cancelled) return;
-        setPlans(data.plans);
+        if (!useAssignedOverride) {
+          setLoadedPlans(data.plans);
+        }
         setWorkouts(data.workouts);
       } catch {
         if (!cancelled) {
-          setPlans([]);
+          if (!useAssignedOverride) {
+            setLoadedPlans([]);
+          }
           setWorkouts([]);
         }
       } finally {
@@ -67,7 +79,7 @@ export function AthleteScheduleCalendar({
     return () => {
       cancelled = true;
     };
-  }, [user?.id, program?.id]);
+  }, [program?.id, useAssignedOverride, user?.id]);
 
   const calendarProgram = program ?? createPersonalizedPlanPreviewProgram('Mis entrenos');
   const emptyDraft = useMemo(() => createEmptySessionDraft(0), []);
@@ -89,14 +101,15 @@ export function AthleteScheduleCalendar({
   }
 
   return (
-    <View style={styles.wrap}>
-      <SectionHeader title={title} subtitle={subtitle} />
+    <View style={[styles.wrap, hideHeader && styles.wrapEmbedded]}>
+      {hideHeader ? null : <SectionHeader title={title} subtitle={subtitle} />}
       <ProgramSchedulePreview
         program={calendarProgram}
         workouts={workouts}
         draft={emptyDraft}
         isNewSession={false}
         athleteSchedule={calendarItems}
+        variant="athlete"
         onDayPress={(date) => openCalendarDay(router, date)}
         onSessionPress={(item) => openScheduledSession(router, item)}
       />
@@ -108,6 +121,9 @@ const styles = StyleSheet.create({
   wrap: {
     marginTop: spacing.lg,
     gap: spacing.md,
+  },
+  wrapEmbedded: {
+    marginTop: 0,
   },
   card: {
     marginTop: spacing.lg,

@@ -11,10 +11,12 @@ import {
   getLocalLeadRole,
   renameCrmStage,
   reorderCrmStages,
+  restoreCrmLead,
   saveCrmColumnOrder,
   setCrmLeadRole,
 } from '@/lib/trainerCrm';
 import { addCrmActivity } from '@/lib/trainerCrmActivity';
+import { createTrainerClient } from '@/lib/trainerClientService';
 import { createStaleRefresh } from '@/lib/staleRefresh';
 import type { AthleteSummary, CrmLeadPosition, CrmStage, UserRole } from '@/lib/types';
 
@@ -332,6 +334,85 @@ export function useTrainerCrmBoard() {
 
   const dismissRoleNotice = useCallback(() => setRoleNotice(null), []);
 
+  const createClient = useCallback(
+    async (input: { name: string; email: string; password: string }) => {
+      if (!trainerId) return 'No se pudo identificar al entrenador.';
+
+      const result = await createTrainerClient(input, isDemoMode);
+      if (result.error) return result.error;
+      if (!result.athleteId) return 'No se pudo crear el cliente.';
+
+      const firstStage = columns[0]?.stage;
+      if (!firstStage) return 'No hay columnas en el tablero.';
+
+      if (archivedLeadIds.has(result.athleteId)) {
+        const { error } = await restoreCrmLead(trainerId, result.athleteId, useLocalStore);
+        if (error) return error;
+        setArchivedLeadIds((prev) => {
+          const next = new Set(prev);
+          next.delete(result.athleteId!);
+          return next;
+        });
+      }
+
+      const targetColumn = columns.find((column) => column.stage.id === firstStage.id);
+      const existingIds = (targetColumn?.leads ?? [])
+        .map((lead) => lead.id)
+        .filter((id) => id !== result.athleteId);
+      const nextOrder = [result.athleteId, ...existingIds];
+
+      setPositions((prev) => {
+        const next = new Map(prev);
+        nextOrder.forEach((id, index) => next.set(id, { stageId: firstStage.id, position: index }));
+        return next;
+      });
+
+      await saveCrmColumnOrder(trainerId, firstStage.id, nextOrder, useLocalStore);
+
+      void addCrmActivity(
+        trainerId,
+        result.athleteId,
+        result.alreadyExisted ? 'Añadido al tablero' : 'Cliente creado',
+        'stage_change',
+        useLocalStore,
+      );
+
+      void refreshAthletes(true);
+      void load({ force: true, silent: true });
+
+      if (result.alreadyExisted) {
+        setRoleNotice({
+          kind: 'success',
+          message: `${input.name.trim()} ya existía y se ha añadido a "${firstStage.name}".`,
+        });
+        return null;
+      }
+
+      if (result.needsEmailConfirmation) {
+        setRoleNotice({
+          kind: 'success',
+          message: `${input.name.trim()} se ha creado. Debe confirmar su email antes de poder entrar.`,
+        });
+        return null;
+      }
+
+      setRoleNotice({
+        kind: 'success',
+        message: `${input.name.trim()} ya está en la columna "${firstStage.name}".`,
+      });
+      return null;
+    },
+    [
+      archivedLeadIds,
+      columns,
+      isDemoMode,
+      load,
+      refreshAthletes,
+      trainerId,
+      useLocalStore,
+    ],
+  );
+
   return {
     columns,
     isLoading: isLoading || athletesLoading,
@@ -339,6 +420,7 @@ export function useTrainerCrmBoard() {
     persistent,
     roleNotice,
     dismissRoleNotice,
+    setRoleNotice,
     refresh,
     moveLeadToStage,
     moveLeadToAdjacentStage,
@@ -348,5 +430,6 @@ export function useTrainerCrmBoard() {
     renameStage,
     removeStage,
     moveStage,
+    createClient,
   };
 }

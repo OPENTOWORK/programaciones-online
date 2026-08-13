@@ -12,6 +12,8 @@ import { isTrainerRole } from '@/lib/athleteService';
 import { safeGoBack } from '@/lib/navigation';
 import { createProgramCatalog } from '@/lib/programEditService';
 import { isTrainerEditableCategory, PLAN_DISPLAY_LABELS } from '@/lib/programService';
+import { formatStandardVenueDescription } from '@/lib/standardVenueCatalog';
+import type { StandardVenueId } from '@/lib/standardVenues';
 import type { ProgramCategory } from '@/lib/types';
 
 function parseCategory(value?: string | string[]): ProgramCategory | null {
@@ -20,12 +22,23 @@ function parseCategory(value?: string | string[]): ProgramCategory | null {
   return null;
 }
 
+function parseStandardVenue(value?: string | string[]): StandardVenueId | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === 'home' || raw === 'gym' || raw === 'calisthenics') return raw;
+  return undefined;
+}
+
 export default function CreateProgramScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const params = useLocalSearchParams<{ planId?: string | string[]; category?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    planId?: string | string[];
+    category?: string | string[];
+    standardVenue?: string | string[];
+  }>();
   const planId = Array.isArray(params.planId) ? params.planId[0] : params.planId;
   const category = parseCategory(params.category);
+  const standardVenue = parseStandardVenue(params.standardVenue);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -43,7 +56,9 @@ export default function CreateProgramScreen() {
     const result = await createProgramCatalog({
       planId,
       name,
-      description,
+      description: standardVenue
+        ? formatStandardVenueDescription(description, standardVenue)
+        : description,
       category,
     });
 

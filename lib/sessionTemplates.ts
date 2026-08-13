@@ -24,9 +24,13 @@ export function canSaveSessionAsTemplate(draft: SessionDraft) {
   return hasSessionBlockContent(draft);
 }
 
+function appendSection(current: string, incoming: string) {
+  return [current.trim(), incoming.trim()].filter(Boolean).join('\n\n');
+}
+
 /**
- * Aplica una plantilla sobre el borrador actual: sustituye bloques, duración y
- * días de entrenamiento, y conserva el nombre y el número de la sesión.
+ * Aplica una plantilla como sesión nueva: sustituye bloques/contenido y conserva
+ * el nombre y el número de la sesión destino.
  */
 export function applyTemplateToDraft(draft: SessionDraft, templateContent: string): SessionDraft {
   const parsed = parsePersonalizedPlanContent(templateContent);
@@ -42,6 +46,23 @@ export function applyTemplateToDraft(draft: SessionDraft, templateContent: strin
     exercises: parsed.exercises,
     schedule: parsed.schedule,
     dayLabel: formatScheduleSummary(parsed.schedule),
+  };
+}
+
+/**
+ * Inserta los bloques/ejercicios de una plantilla en la sesión actual sin
+ * reemplazarla entera.
+ */
+export function mergeTemplateIntoDraft(draft: SessionDraft, templateContent: string): SessionDraft {
+  const parsed = parsePersonalizedPlanContent(templateContent);
+
+  return {
+    ...draft,
+    warmup: appendSection(draft.warmup, parsed.warmup),
+    main: appendSection(draft.main, parsed.main),
+    metcon: appendSection(draft.metcon, parsed.metcon),
+    core: appendSection(draft.core, parsed.core),
+    cooldown: appendSection(draft.cooldown, parsed.cooldown),
   };
 }
 

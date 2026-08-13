@@ -28,6 +28,8 @@ interface ProgramSchedulePreviewProps {
   onSessionPress?: (item: SchedulePreviewItem) => void;
   /** Al pasarlo se muestra el botón para abrir el calendario a pantalla completa. */
   onExpand?: () => void;
+  /** Vista compacta para el atleta: semana entera visible de un vistazo. */
+  variant?: 'trainer' | 'athlete';
 }
 
 export function ProgramSchedulePreview({
@@ -43,8 +45,10 @@ export function ProgramSchedulePreview({
   onDayPress,
   onSessionPress,
   onExpand,
+  variant = 'trainer',
 }: ProgramSchedulePreviewProps) {
-  const [viewMode, setViewMode] = useState<ScheduleViewMode>('week');
+  const isAthlete = variant === 'athlete';
+  const [viewMode, setViewMode] = useState<ScheduleViewMode>(isAthlete ? 'day' : 'week');
   const [focusDate, setFocusDate] = useState(() => new Date());
 
   const items = useMemo(
@@ -80,29 +84,31 @@ export function ProgramSchedulePreview({
   );
 
   return (
-    <Card style={styles.panel}>
-      <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Vista de programación</Text>
-          <Text style={styles.subtitle}>
-            {onSessionPress
-              ? 'Pulsa un día o una sesión para abrir la vista previa'
-              : 'Previsualiza cómo verá el atleta el calendario'}
-          </Text>
+    <Card style={[styles.panel, isAthlete && styles.panelAthlete]}>
+      {!isAthlete ? (
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Vista de programación</Text>
+            <Text style={styles.subtitle}>
+              {onSessionPress
+                ? 'Pulsa un día o una sesión para abrir la vista previa'
+                : 'Previsualiza cómo verá el atleta el calendario'}
+            </Text>
+          </View>
+          {onExpand ? (
+            <Pressable
+              onPress={onExpand}
+              accessibilityLabel="Abrir calendario ampliado"
+              style={({ pressed }) => [styles.expandBtn, pressed && styles.expandBtnPressed]}
+            >
+              <Ionicons name="expand-outline" size={16} color={colors.accent} />
+              <Text style={styles.expandBtnText}>Vista ampliada</Text>
+            </Pressable>
+          ) : null}
         </View>
-        {onExpand ? (
-          <Pressable
-            onPress={onExpand}
-            accessibilityLabel="Abrir calendario ampliado"
-            style={({ pressed }) => [styles.expandBtn, pressed && styles.expandBtnPressed]}
-          >
-            <Ionicons name="expand-outline" size={16} color={colors.accent} />
-            <Text style={styles.expandBtnText}>Vista ampliada</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      ) : null}
 
-      <ScrollView style={styles.body} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+      {isAthlete ? (
         <ScheduleCalendarGrid
           items={items}
           viewMode={viewMode}
@@ -111,8 +117,21 @@ export function ProgramSchedulePreview({
           onFocusDateChange={setFocusDate}
           onDayPress={onDayPress}
           onSessionPress={onSessionPress}
+          size="athlete"
         />
-      </ScrollView>
+      ) : (
+        <ScrollView style={styles.body} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+          <ScheduleCalendarGrid
+            items={items}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            focusDate={focusDate}
+            onFocusDateChange={setFocusDate}
+            onDayPress={onDayPress}
+            onSessionPress={onSessionPress}
+          />
+        </ScrollView>
+      )}
     </Card>
   );
 }
@@ -123,6 +142,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     flex: 1,
     minHeight: 520,
+  },
+  panelAthlete: {
+    padding: spacing.md,
+    minHeight: 0,
   },
   header: {
     flexDirection: 'row',

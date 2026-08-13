@@ -1,17 +1,32 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text } from 'react-native';
 
 import { PlanCategoryContent } from '@/components/program/PlanCategoryContent';
+import { StandardVenueTabs } from '@/components/program/StandardVenueTabs';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, typography } from '@/constants/theme';
 import { usePrograms } from '@/hooks/usePrograms';
 import { normalizeRouteParam } from '@/lib/routeParams';
+import { isStandardVenueId, type StandardVenueId } from '@/lib/standardVenues';
+
+function resolveVenueParam(value?: string): StandardVenueId {
+  return isStandardVenueId(value) ? value : 'gym';
+}
 
 export default function PlanCategoryScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const planId = normalizeRouteParam(id) ?? '';
+  const params = useLocalSearchParams<{ id?: string | string[]; venue?: string | string[] }>();
+  const planId = normalizeRouteParam(params.id) ?? '';
+  const venueParam = normalizeRouteParam(params.venue);
   const { plans, isLoading, error } = usePrograms();
   const plan = plans.find((item) => item.id === planId);
+  const [selectedVenue, setSelectedVenue] = useState<StandardVenueId>(() => resolveVenueParam(venueParam));
+
+  useEffect(() => {
+    if (isStandardVenueId(venueParam)) {
+      setSelectedVenue(venueParam);
+    }
+  }, [venueParam]);
 
   if (isLoading && plans.length === 0) {
     return (
@@ -37,11 +52,20 @@ export default function PlanCategoryScreen() {
     );
   }
 
+  const isStandardPlan = plan.category === 'standard';
+
   return (
     <>
       <Stack.Screen options={{ title: plan.label }} />
       <ScreenWrapper>
-        <PlanCategoryContent planId={planId} plan={plan} />
+        {isStandardPlan ? (
+          <>
+            <StandardVenueTabs value={selectedVenue} onChange={setSelectedVenue} />
+            <PlanCategoryContent planId={planId} plan={plan} standardVenue={selectedVenue} />
+          </>
+        ) : (
+          <PlanCategoryContent planId={planId} plan={plan} />
+        )}
       </ScreenWrapper>
     </>
   );

@@ -21,6 +21,7 @@ import { AppIcon } from '@/components/ui/AppIcon';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { PromptModal } from '@/components/ui/PromptModal';
 import { CrmColumn, CRM_COLUMN_WIDTH } from '@/components/trainer/CrmColumn';
+import { CreateClientModal } from '@/components/trainer/CreateClientModal';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useTrainerCrmBoard } from '@/hooks/useTrainerCrmBoard';
 import { dropIndexForPosition, dropLineOffsetForIndex } from '@/lib/dragDropList';
@@ -46,6 +47,7 @@ export function CrmBoard() {
     persistent,
     roleNotice,
     dismissRoleNotice,
+    setRoleNotice,
     moveLeadToStage,
     moveLeadToAdjacentStage,
     reorderLeadWithinStage,
@@ -54,12 +56,15 @@ export function CrmBoard() {
     renameStage,
     removeStage,
     moveStage,
+    createClient,
   } = useTrainerCrmBoard();
 
   const [leadActions, setLeadActions] = useState<LeadActionsState>(null);
   const [columnActions, setColumnActions] = useState<ColumnActionsState>(null);
   const [prompt, setPrompt] = useState<PromptState>(null);
   const [leadToDelete, setLeadToDelete] = useState<DeleteLeadState>(null);
+  const [createClientOpen, setCreateClientOpen] = useState(false);
+  const [createClientSaving, setCreateClientSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [draggingAthleteId, setDraggingAthleteId] = useState<string | null>(null);
@@ -560,20 +565,30 @@ export function CrmBoard() {
         </View>
       ) : null}
 
-      <View style={styles.searchBar}>
-        <AppIcon name="search" size={16} color={colors.textMuted} />
-        <TextInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Buscar atleta por nombre o email..."
-          placeholderTextColor={colors.textMuted}
-          style={styles.searchInput}
-        />
-        {searchQuery ? (
-          <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-            <AppIcon name="close" size={16} color={colors.textMuted} />
-          </Pressable>
-        ) : null}
+      <View style={styles.toolbarRow}>
+        <View style={styles.searchBar}>
+          <AppIcon name="search" size={16} color={colors.textMuted} />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Buscar atleta por nombre o email..."
+            placeholderTextColor={colors.textMuted}
+            style={styles.searchInput}
+          />
+          {searchQuery ? (
+            <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+              <AppIcon name="close" size={16} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
+
+        <Pressable
+          onPress={() => setCreateClientOpen(true)}
+          style={({ pressed }) => [styles.createClientBtn, pressed && styles.createClientBtnPressed]}
+        >
+          <AppIcon name="add" size={16} color={colors.black} />
+          <Text style={styles.createClientBtnText}>Crear cliente</Text>
+        </Pressable>
       </View>
 
       <View ref={boardWrapperRef} collapsable={false} style={styles.boardWrapper}>
@@ -721,6 +736,23 @@ export function CrmBoard() {
           setPrompt(null);
         }}
       />
+
+      <CreateClientModal
+        visible={createClientOpen}
+        saving={createClientSaving}
+        onCancel={() => setCreateClientOpen(false)}
+        onConfirm={(input) => {
+          setCreateClientSaving(true);
+          void createClient(input).then((error) => {
+            setCreateClientSaving(false);
+            if (error) {
+              setRoleNotice({ kind: 'error', message: error });
+              return;
+            }
+            setCreateClientOpen(false);
+          });
+        }}
+      />
     </View>
   );
 }
@@ -775,7 +807,15 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 16,
   },
+  toolbarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -785,8 +825,26 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.sm + 2,
     height: 40,
-    marginBottom: spacing.sm,
     maxWidth: 360,
+  },
+  createClientBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    height: 40,
+    flexShrink: 0,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
+  },
+  createClientBtnPressed: {
+    opacity: 0.9,
+  },
+  createClientBtnText: {
+    ...typography.bodySmall,
+    color: colors.black,
+    fontWeight: '600',
   },
   searchInput: {
     flex: 1,

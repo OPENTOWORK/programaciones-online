@@ -3,9 +3,8 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { IconBadge } from '@/components/ui/AppIcon';
-import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAppointments } from '@/hooks/useAppointments';
 import {
@@ -26,16 +25,13 @@ export function ProfileAppointmentsCard() {
     : 0;
 
   return (
-    <Card style={styles.card}>
-      <SectionHeader
-        title="Citas"
-        subtitle={
-          isTrainer
-            ? 'Videollamadas con tus atletas'
-            : 'Videollamadas con tu entrenador'
-        }
-      />
-
+    <CollapsibleSection
+      title="Citas"
+      subtitle={
+        isTrainer ? 'Videollamadas con tus atletas' : 'Videollamadas con tu entrenador'
+      }
+      style={styles.card}
+    >
       {pendingForMe > 0 ? (
         <View style={styles.pendingRow}>
           <Badge
@@ -74,7 +70,7 @@ export function ProfileAppointmentsCard() {
         onPress={() => router.push('/profile/appointments')}
         style={styles.button}
       />
-    </Card>
+    </CollapsibleSection>
   );
 }
 

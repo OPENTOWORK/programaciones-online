@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -15,6 +16,7 @@ import {
   CalendarDayActionsMenu,
   type CalendarDayActionId,
 } from '@/components/trainer/CalendarDayActionsMenu';
+import { CreateSessionTemplateModal } from '@/components/trainer/CreateSessionTemplateModal';
 import { SessionTemplatePickerModal } from '@/components/trainer/SessionTemplatePickerModal';
 import { SessionInlineTextEditor } from '@/components/trainer/SessionInlineTextEditor';
 import { SessionDraftSummary } from '@/components/trainer/SessionDraftSummary';
@@ -24,6 +26,9 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { PopoverMenu, type PopoverAnchor } from '@/components/ui/PopoverMenu';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { useAuth } from '@/hooks/useAuth';
+import { useSessionTemplates } from '@/hooks/useSessionTemplates';
+import { isTrainerRole } from '@/lib/athleteService';
 import {
   formatDayLabel,
   itemsForDate,
@@ -32,12 +37,18 @@ import {
   type ScheduleViewMode,
 } from '@/lib/programSchedulePreview';
 import { buildScheduleCalendarItems, type ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
-import { applyTemplateToDraft } from '@/lib/sessionTemplates';
+import {
+  applyTemplateToDraft,
+  canSaveSessionAsTemplate,
+  mergeTemplateIntoDraft,
+} from '@/lib/sessionTemplates';
 import {
   applyInlineTextToSessionDraft,
   sessionDraftToInlineText,
 } from '@/lib/sessionInlineText';
-import { workoutToSessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
+import { createActivationDraftFor, workoutToSessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
+
+import { CalendarSessionTypePickerModal, type CalendarSessionType } from '@/components/trainer/CalendarSessionTypePickerModal';
 
 import {
   ScheduleCalendarGrid,
@@ -130,6 +141,8 @@ export function ScheduleCalendarModal({
   onSessionMoveToDate,
   onSessionReorderDay,
 }: ScheduleCalendarModalProps) {
+  const { user } = useAuth();
+  const isTrainer = isTrainerRole(user?.role);
   const { width, height } = useWindowDimensions();
   const isWideCalendar = width >= 960;
   const editorMaxWidth = Math.min(720, width - spacing.lg * 2);
@@ -164,6 +177,12 @@ export function ScheduleCalendarModal({
   const [copyDaySaving, setCopyDaySaving] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [templatePickerDate, setTemplatePickerDate] = useState<Date | null>(null);
+  const [templatePickerItem, setTemplatePickerItem] = useState<SchedulePreviewItem | null>(null);
+  const [templateApplying, setTemplateApplying] = useState(false);
+  const [createTemplateItem, setCreateTemplateItem] = useState<SchedulePreviewItem | null>(null);
+  const [createTemplateSaving, setCreateTemplateSaving] = useState(false);
+  const { create: createTemplate } = useSessionTemplates();
+  const [sessionTypePickerDate, setSessionTypePickerDate] = useState<Date | null>(null);
   const [deleteItem, setDeleteItem] = useState<SchedulePreviewItem | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [selectedSessionKeys, setSelectedSessionKeys] = useState<Set<string>>(() => new Set());
@@ -197,6 +216,33 @@ export function ScheduleCalendarModal({
     openEditorWithDraft(date, buildSessionDraft(date));
   };
 
+  const openActivationEditor = (date: Date) => {
+    if (!buildSessionDraft || !saveSession) return;
+    const base = buildSessionDraft(date);
+    openEditorWithDraft(date, createActivationDraftFor(base));
+  };
+
+  const requestCreateSession = (date: Date) => {
+    if (!buildSessionDraft || !saveSession) {
+      onCreateSession?.(date);
+      return;
+    }
+    setSessionTypePickerDate(date);
+  };
+
+  const handleSessionTypeSelect = (type: CalendarSessionType) => {
+    const date = sessionTypePickerDate;
+    setSessionTypePickerDate(null);
+    if (!date) return;
+
+    if (type === 'activation') {
+      openActivationEditor(date);
+      return;
+    }
+
+    openCreateEditor(date);
+  };
+
   const saveRestDay = async (date: Date) => {
     if (!buildRestDayDraft || !saveSession) {
       onDayAction?.('rest', { date, dayItems: [] });
@@ -222,6 +268,7 @@ export function ScheduleCalendarModal({
     setCopyDaySaving(false);
     setTemplatePickerOpen(false);
     setTemplatePickerDate(null);
+    setSessionTypePickerDate(null);
     setDeleteItem(null);
     setBulkDeleteOpen(false);
     setSelectedSessionKeys(new Set());
@@ -288,7 +335,7 @@ export function ScheduleCalendarModal({
     if (showDayActions) return;
     const dayItems = itemsForDate(items, date);
     if (dayItems.length === 0 && (canCreateInline || onCreateSession)) {
-      openCreateEditor(date);
+      requestCreateSession(date);
     }
   };
 
@@ -307,7 +354,7 @@ export function ScheduleCalendarModal({
     setDayMenu(null);
 
     if (action === 'session') {
-      openCreateEditor(date);
+      requestCreateSession(date);
       return;
     }
 
@@ -317,10 +364,11 @@ export function ScheduleCalendarModal({
     }
 
     if (action === 'template') {
-      if (!buildSessionDraft || !saveSession) {
+      if (!isTrainer || !buildSessionDraft || !saveSession) {
         onDayAction?.(action, { date, dayItems });
         return;
       }
+      setTemplatePickerItem(null);
       setTemplatePickerDate(date);
       setTemplatePickerOpen(true);
       return;
@@ -336,18 +384,48 @@ export function ScheduleCalendarModal({
     onDayAction?.(action, { date, dayItems });
   };
 
-  const handleTemplateSelect = (template: { content: string }) => {
-    if (!templatePickerDate || !buildSessionDraft) {
-      setTemplatePickerOpen(false);
-      setTemplatePickerDate(null);
+  const closeTemplatePicker = () => {
+    if (templateApplying) return;
+    setTemplatePickerOpen(false);
+    setTemplatePickerDate(null);
+    setTemplatePickerItem(null);
+  };
+
+  const handleTemplateSelect = async (template: { content: string }) => {
+    if (!saveSession) {
+      closeTemplatePicker();
       return;
     }
 
-    const date = templatePickerDate;
-    const draft = applyTemplateToDraft(buildSessionDraft(date), template.content);
-    setTemplatePickerOpen(false);
-    setTemplatePickerDate(null);
-    openEditorWithDraft(date, draft);
+    setTemplateApplying(true);
+    setFormError(null);
+
+    try {
+      if (templatePickerItem && loadSessionDraft) {
+        const item = templatePickerItem;
+        const draft = mergeTemplateIntoDraft(loadSessionDraft(item), template.content);
+        const result = await saveSession({ draft, date: item.date, item });
+        if (result) {
+          setFormError(result);
+          return;
+        }
+        closeTemplatePicker();
+        return;
+      }
+
+      if (templatePickerDate && buildSessionDraft) {
+        const date = templatePickerDate;
+        const draft = applyTemplateToDraft(buildSessionDraft(date), template.content);
+        const result = await saveSession({ draft, date });
+        if (result) {
+          setFormError(result);
+          return;
+        }
+        closeTemplatePicker();
+      }
+    } finally {
+      setTemplateApplying(false);
+    }
   };
 
   const openEditEditor = (item: SchedulePreviewItem) => {
@@ -553,6 +631,31 @@ export function ScheduleCalendarModal({
       });
     }
 
+    if (isTrainer && canEditInline) {
+      menuActions.push({
+        key: 'use-template',
+        label: 'Usar plantilla',
+        onPress: () => {
+          setMenu(null);
+          setTemplatePickerItem(menuItem);
+          setTemplatePickerDate(null);
+          setTemplatePickerOpen(true);
+        },
+      });
+
+      const sourceDraft = loadSessionDraft?.(menuItem);
+      if (sourceDraft && canSaveSessionAsTemplate(sourceDraft)) {
+        menuActions.push({
+          key: 'create-template',
+          label: 'Crear plantilla',
+          onPress: () => {
+            setMenu(null);
+            setCreateTemplateItem(menuItem);
+          },
+        });
+      }
+    }
+
     if (onSessionCopy) {
       menuActions.push({
         key: 'copy',
@@ -618,6 +721,15 @@ export function ScheduleCalendarModal({
     return (
       <View style={styles.detail}>
         <SessionDraftSummary draft={draft} />
+        {!editable && onSessionEdit ? (
+          <Pressable
+            onPress={() => onSessionEdit(item)}
+            style={({ pressed }) => [styles.detailEditBtn, pressed && styles.detailEditBtnPressed]}
+          >
+            <Ionicons name="play-outline" size={14} color={colors.accent} />
+            <Text style={styles.detailEditText}>Abrir sesión</Text>
+          </Pressable>
+        ) : null}
         {editable ? (
           <Pressable
             onPress={() => openInlineEditor(item)}
@@ -694,8 +806,18 @@ export function ScheduleCalendarModal({
     </View>
   ) : null;
 
+  const hasExpandedSessions = expandedItemIds.length > 0 || Boolean(inlineEditor);
+  /** Con sesiones desplegadas el cuadrante crece con el contenido en lugar de recortarse al alto de pantalla. */
+  const stretchCalendar = isWideCalendar && !hasExpandedSessions && !editor;
+
   const calendarPanel = (
-    <View style={[styles.calendarCard, isWideCalendar && styles.calendarCardFill]}>
+    <View
+      style={[
+        styles.calendarCard,
+        stretchCalendar && styles.calendarCardFill,
+        hasExpandedSessions && styles.calendarCardExpanded,
+      ]}
+    >
       <ScheduleCalendarGrid
         items={items}
         viewMode={viewMode}
@@ -709,7 +831,7 @@ export function ScheduleCalendarModal({
         onSessionPress={(item) => selectDate(item.date)}
         visiblePeriods={visiblePeriods}
         onVisiblePeriodsChange={(value) => setVisiblePeriods(Math.max(1, value))}
-        fill={isWideCalendar}
+        fill={stretchCalendar}
         expandedItemIds={expandedItemIds}
         onToggleItemExpanded={toggleExpandedItem}
         renderItemDetail={renderSessionDetail}
@@ -769,8 +891,12 @@ export function ScheduleCalendarModal({
 
       <ScrollView
         style={styles.calendarScroll}
-        contentContainerStyle={[styles.body, isWideCalendar && styles.bodyFill]}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.body,
+          stretchCalendar && styles.bodyFill,
+          hasExpandedSessions && styles.bodyExpanded,
+        ]}
+        showsVerticalScrollIndicator={hasExpandedSessions}
       >
         {calendarPanel}
       </ScrollView>
@@ -823,12 +949,43 @@ export function ScheduleCalendarModal({
         onConfirm={(targetDate) => void handleCopyDayConfirm(targetDate)}
       />
       <SessionTemplatePickerModal
-        visible={templatePickerOpen}
+        visible={isTrainer && templatePickerOpen}
+        onClose={closeTemplatePicker}
+        onSelect={(template) => void handleTemplateSelect(template)}
+        saving={templateApplying}
+        subtitle={
+          templatePickerItem
+            ? 'Se añadirán los bloques o ejercicios de la plantilla a esta sesión.'
+            : 'Se creará una sesión nueva en el día con los bloques de la plantilla.'
+        }
+      />
+      <CreateSessionTemplateModal
+        visible={isTrainer && createTemplateItem !== null}
+        draft={
+          createTemplateItem && loadSessionDraft ? loadSessionDraft(createTemplateItem) : null
+        }
+        saving={createTemplateSaving}
         onClose={() => {
-          setTemplatePickerOpen(false);
-          setTemplatePickerDate(null);
+          if (createTemplateSaving) return;
+          setCreateTemplateItem(null);
         }}
-        onSelect={handleTemplateSelect}
+        onConfirm={(input) => {
+          void (async () => {
+            setCreateTemplateSaving(true);
+            const result = await createTemplate(input.name, input.content);
+            setCreateTemplateSaving(false);
+            if (result.error) {
+              Alert.alert('No se pudo guardar', result.error);
+              return;
+            }
+            setCreateTemplateItem(null);
+          })();
+        }}
+      />
+      <CalendarSessionTypePickerModal
+        visible={sessionTypePickerDate !== null}
+        onClose={() => setSessionTypePickerDate(null)}
+        onSelect={handleSessionTypeSelect}
       />
       <ConfirmModal
         visible={deleteItem !== null}
@@ -961,6 +1118,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: '100%',
   },
+  bodyExpanded: {
+    flexGrow: 1,
+    paddingBottom: spacing.xxl,
+  },
   calendarScroll: {
     flex: 1,
   },
@@ -1028,10 +1189,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.md,
+    overflow: 'visible',
   },
   calendarCardFill: {
     flex: 1,
     minHeight: 0,
+  },
+  calendarCardExpanded: {
+    flexGrow: 1,
   },
   dayTitle: {
     ...typography.h3,

@@ -37,7 +37,11 @@ export function lookupExerciseVideoId(
   catalog: ExerciseVideoCatalog,
   name: string,
   aimharderEjerId?: number,
+  youtubeVideoId?: string,
 ): string | null {
+  const override = youtubeVideoId?.trim();
+  if (override) return override;
+
   if (aimharderEjerId != null) {
     const byId = catalog.byEjerId.get(aimharderEjerId);
     if (byId) return byId;

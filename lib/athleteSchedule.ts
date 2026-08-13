@@ -40,8 +40,12 @@ export interface CatalogProgramSchedule {
   workouts: Workout[];
 }
 
-export async function loadAthleteScheduleSources(userId: string, programId?: string) {
-  const plans = await fetchAthletePlansForUser(userId, 'personalized');
+export async function loadAthleteScheduleSources(
+  userId: string,
+  programId?: string,
+  options?: { skipPlans?: boolean },
+) {
+  const plans = options?.skipPlans ? [] : await fetchAthletePlansForUser(userId, 'personalized');
   let workouts: Workout[] = [];
 
   if (programId) {

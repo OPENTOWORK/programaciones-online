@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ProfileAppointmentsCard } from '@/components/appointments/ProfileAppointmentsCard';
@@ -7,9 +7,8 @@ import { IconBadge } from '@/components/ui/AppIcon';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { PrivacyPolicyLink } from '@/components/legal/PrivacyPolicyLink';
-import { Card } from '@/components/ui/Card';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
-import { SectionHeader } from '@/components/ui/SectionHeader';
 import { goalLabels, levelColors, colors, spacing, typography } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
@@ -53,6 +52,7 @@ function formatOptionalValue(value: string | number | undefined, suffix = '') {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { user, signOut, refreshUser, finishActiveProgram } = useAuth();
   const { plans: catalogPlans } = usePrograms();
   const {
@@ -66,6 +66,26 @@ export default function ProfileScreen() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [showFinishConfirm, setShowFinishConfirm] = useState<string | null>(null);
   const [finishingProgram, setFinishingProgram] = useState(false);
+  /** Remonta las secciones para dejarlas siempre cerradas al volver al perfil. */
+  const [sectionsKey, setSectionsKey] = useState(0);
+
+  const collapseSections = useCallback(() => {
+    setSectionsKey((current) => current + 1);
+    setShowFinishConfirm(null);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      collapseSections();
+    }, [collapseSections]),
+  );
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('tabPress', () => {
+      collapseSections();
+    });
+    return unsubscribe;
+  }, [collapseSections, navigation]);
 
   useFocusRefresh(
     () => {
@@ -166,131 +186,141 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {isAthlete && !intakeLoading ? (
-        <Card style={[styles.programCard, !intakeComplete && styles.intakeCardPending]}>
-          <SectionHeader
+      <View key={sectionsKey}>
+        {isAthlete && !intakeLoading ? (
+          <CollapsibleSection
             title="Formulario de bienvenida"
             subtitle={
               intakeComplete
                 ? 'Completado'
                 : 'Imprescindible para contactar con tu entrenador y empezar tu entrenamiento online'
             }
-          />
-          <Button
-            title={intakeComplete ? 'Ver / editar respuestas' : 'Rellenar formulario'}
-            variant={intakeComplete ? 'outline' : 'primary'}
-            onPress={() => router.push('/profile/intake-form')}
-          />
-        </Card>
-      ) : null}
-
-      <ProfileAppointmentsCard />
-
-      <Card style={styles.programCard}>
-        <SectionHeader title="Datos físicos" />
-        <InfoRow label="Altura" value={formatOptionalValue(user.height, ' cm')} />
-        <InfoRow label="Peso" value={formatOptionalValue(user.weight, ' kg')} />
-        <InfoRow label="Limitaciones" value={formatOptionalValue(user.injuries)} />
-      </Card>
-
-      {assignedPlansLoading ? (
-        <Card style={styles.programCard}>
-          <SectionHeader title="Planes asignados" subtitle="Preparados por tu entrenador" />
-          <ActivityIndicator color={colors.accent} style={styles.inlineLoader} />
-        </Card>
-      ) : hasAssignedPlans ? (
-        <Card style={styles.programCard}>
-          <SectionHeader title="Planes asignados" subtitle="Preparados por tu entrenador" />
-          {groupedPersonalizedPlans.map((group) => (
-            <AssignedPlanRow
-              key={group.id}
-              icon="personal"
-              title={group.title}
-              meta={`${group.sessions.length} sesión${group.sessions.length === 1 ? '' : 'es'} · ${ATHLETE_PLAN_TYPE_LABELS.personalized}`}
-              onPress={() => router.push(`/plan/${planCategoryRoute(catalogPlans, 'personalized')}`)}
+            style={[styles.programCard, !intakeComplete && styles.intakeCardPending]}
+          >
+            <Button
+              title={intakeComplete ? 'Ver / editar respuestas' : 'Rellenar formulario'}
+              variant={intakeComplete ? 'outline' : 'primary'}
+              onPress={() => router.push('/profile/intake-form')}
             />
-          ))}
-          {nutritionPlans.map((plan) => (
-            <AssignedPlanRow
-              key={plan.id}
-              icon="measure"
-              title={plan.title}
-              meta={ATHLETE_PLAN_TYPE_LABELS.nutrition}
-              onPress={() => router.push(`/plan/${planCategoryRoute(catalogPlans, 'nutrition')}`)}
-            />
-          ))}
-        </Card>
-      ) : null}
+          </CollapsibleSection>
+        ) : null}
 
-      {activePrograms.length > 0 ? (
-        <Card style={styles.programCard}>
-          <SectionHeader
-            title="Programación de catálogo"
-            subtitle={`${activePrograms.length} de 3 activas`}
-          />
-          {activePrograms.map((program, index) => (
-            <View key={program.id}>
-              {index > 0 ? <View style={styles.programDivider} /> : null}
-              {showFinishConfirm === program.id ? (
-                <View style={styles.confirmBox}>
-                  <Text style={styles.confirmTitle}>¿Finalizar "{finishingProgramName}"?</Text>
-                  <Text style={styles.confirmText}>
-                    Se marcará como completada y liberará un hueco para otra programación.
-                  </Text>
-                  <View style={styles.confirmActions}>
-                    <Button
-                      title="Cancelar"
-                      onPress={() => setShowFinishConfirm(null)}
-                      variant="outline"
-                      disabled={finishingProgram}
-                      style={styles.confirmBtn}
-                    />
-                    <Button
-                      title="Finalizar"
-                      onPress={() => confirmFinishProgram(program.id)}
-                      loading={finishingProgram}
-                      style={styles.confirmBtn}
-                    />
-                  </View>
+        <ProfileAppointmentsCard />
+
+        <CollapsibleSection title="Datos físicos" style={styles.programCard}>
+          <InfoRow label="Altura" value={formatOptionalValue(user.height, ' cm')} />
+          <InfoRow label="Peso" value={formatOptionalValue(user.weight, ' kg')} />
+          <InfoRow label="Limitaciones" value={formatOptionalValue(user.injuries)} />
+        </CollapsibleSection>
+
+        {isAthlete ? (
+          assignedPlansLoading ? (
+            <CollapsibleSection
+              title="Planes asignados"
+              subtitle="Preparados por tu entrenador"
+              style={styles.programCard}
+            >
+              <ActivityIndicator color={colors.accent} style={styles.inlineLoader} />
+            </CollapsibleSection>
+          ) : hasAssignedPlans ? (
+            <CollapsibleSection
+              title="Planes asignados"
+              subtitle="Preparados por tu entrenador"
+              style={styles.programCard}
+            >
+              {groupedPersonalizedPlans.map((group) => (
+                <AssignedPlanRow
+                  key={group.id}
+                  icon="personal"
+                  title={group.title}
+                  meta={`${group.sessions.length} sesión${group.sessions.length === 1 ? '' : 'es'} · ${ATHLETE_PLAN_TYPE_LABELS.personalized}`}
+                  onPress={() => router.push(`/plan/${planCategoryRoute(catalogPlans, 'personalized')}`)}
+                />
+              ))}
+              {nutritionPlans.map((plan) => (
+                <AssignedPlanRow
+                  key={plan.id}
+                  icon="measure"
+                  title={plan.title}
+                  meta={ATHLETE_PLAN_TYPE_LABELS.nutrition}
+                  onPress={() => router.push(`/plan/${planCategoryRoute(catalogPlans, 'nutrition')}`)}
+                />
+              ))}
+            </CollapsibleSection>
+          ) : null
+        ) : null}
+
+        {isAthlete ? (
+          activePrograms.length > 0 ? (
+            <CollapsibleSection
+              title="Programación de catálogo"
+              subtitle={`${activePrograms.length} de 3 activas`}
+              style={styles.programCard}
+            >
+              {activePrograms.map((program, index) => (
+                <View key={program.id}>
+                  {index > 0 ? <View style={styles.programDivider} /> : null}
+                  {showFinishConfirm === program.id ? (
+                    <View style={styles.confirmBox}>
+                      <Text style={styles.confirmTitle}>¿Finalizar "{finishingProgramName}"?</Text>
+                      <Text style={styles.confirmText}>
+                        Se marcará como completada y liberará un hueco para otra programación.
+                      </Text>
+                      <View style={styles.confirmActions}>
+                        <Button
+                          title="Cancelar"
+                          onPress={() => setShowFinishConfirm(null)}
+                          variant="outline"
+                          disabled={finishingProgram}
+                          style={styles.confirmBtn}
+                        />
+                        <Button
+                          title="Finalizar"
+                          onPress={() => confirmFinishProgram(program.id)}
+                          loading={finishingProgram}
+                          style={styles.confirmBtn}
+                        />
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.programRow}>
+                      <IconBadge name="programs" containerSize={32} size={16} />
+                      <View style={styles.programInfo}>
+                        <Text style={styles.programName}>{program.name}</Text>
+                        {activeProgramMeta(program) ? (
+                          <Text style={styles.programMeta}>{activeProgramMeta(program)}</Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.programActions}>
+                        <Pressable
+                          onPress={() => router.push(`/program/${program.id}`)}
+                          style={styles.continueLink}
+                        >
+                          <Text style={styles.continueLinkText}>Continuar</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleFinishProgram(program.id, program.name)}
+                          style={styles.finishRowLink}
+                        >
+                          <Text style={styles.finishRowLinkText}>Finalizar</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
                 </View>
-              ) : (
-                <View style={styles.programRow}>
-                  <IconBadge name="programs" containerSize={32} size={16} />
-                  <View style={styles.programInfo}>
-                    <Text style={styles.programName}>{program.name}</Text>
-                    {activeProgramMeta(program) ? (
-                      <Text style={styles.programMeta}>{activeProgramMeta(program)}</Text>
-                    ) : null}
-                  </View>
-                  <View style={styles.programActions}>
-                    <Pressable
-                      onPress={() => router.push(`/program/${program.id}`)}
-                      style={styles.continueLink}
-                    >
-                      <Text style={styles.continueLinkText}>Continuar</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => handleFinishProgram(program.id, program.name)}
-                      style={styles.finishRowLink}
-                    >
-                      <Text style={styles.finishRowLinkText}>Finalizar</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              )}
-            </View>
-          ))}
-        </Card>
-      ) : (
-        <Card style={styles.programCard}>
-          <SectionHeader title="Programación de catálogo" />
-          <Text style={styles.emptyProgram}>
-            {hasAssignedPlans
-              ? 'No tienes ninguna programación de catálogo activa. Tus planes personalizados aparecen arriba.'
-              : 'No tienes ninguna programación activa asignada.'}
-          </Text>
-        </Card>
-      )}
+              ))}
+            </CollapsibleSection>
+          ) : (
+            <CollapsibleSection title="Programación de catálogo" style={styles.programCard}>
+              <Text style={styles.emptyProgram}>
+                {hasAssignedPlans
+                  ? 'No tienes ninguna programación de catálogo activa. Tus planes personalizados aparecen arriba.'
+                  : 'No tienes ninguna programación activa asignada.'}
+              </Text>
+            </CollapsibleSection>
+          )
+        ) : null}
+      </View>
 
       <Button title="Editar perfil" onPress={handleEdit} variant="outline" style={styles.btn} />
 

@@ -20,7 +20,7 @@ const DAY_ACTIONS: CalendarDayAction[] = [
   { id: 'rest', label: 'Día de descanso', icon: 'flash-outline' },
   { id: 'nutrition', label: 'Nutrición', icon: 'nutrition-outline' },
   { id: 'copy', label: 'Copiar día', icon: 'copy-outline' },
-  { id: 'template', label: 'Desde plantilla', icon: 'calendar-outline' },
+  { id: 'template', label: 'Usar plantilla', icon: 'albums-outline' },
 ];
 
 const MENU_WIDTH = 148;

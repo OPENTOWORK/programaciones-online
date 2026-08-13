@@ -8,6 +8,8 @@ export interface SessionSchedule {
   weekdays: WeekdayIndex[];
   recurrence: SessionRecurrence;
   startDate?: string;
+  /** Orden dentro de un mismo día cuando hay varias sesiones. */
+  dayOrder?: number;
 }
 
 export const WEEKDAY_OPTIONS: Array<{ index: WeekdayIndex; label: string; short: string }> = [
@@ -123,12 +125,17 @@ export function normalizeSessionSchedule(
     (day): day is WeekdayIndex => day >= 0 && day <= 6,
   );
   const recurrence = schedule?.recurrence ?? base.recurrence;
+  const dayOrder =
+    typeof schedule?.dayOrder === 'number' && Number.isFinite(schedule.dayOrder)
+      ? schedule.dayOrder
+      : base.dayOrder;
   return {
     weekdays: weekdays.length > 0 ? [...new Set(weekdays)].sort() : base.weekdays,
     recurrence: VALID_RECURRENCES.has(recurrence as SessionRecurrence)
       ? (recurrence as SessionRecurrence)
       : 'weekly',
     startDate: schedule?.startDate ?? base.startDate,
+    dayOrder,
   };
 }
 
@@ -237,5 +244,6 @@ export function serializeScheduleForDb(schedule: SessionSchedule) {
     weekdays: schedule.weekdays,
     recurrence: schedule.recurrence,
     startDate: schedule.startDate ?? toLocalDateString(startOfDay(new Date())),
+    ...(typeof schedule.dayOrder === 'number' ? { dayOrder: schedule.dayOrder } : {}),
   };
 }

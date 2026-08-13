@@ -2,7 +2,6 @@ import { useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { AthletePlanCard } from '@/components/program/AthletePlanCard';
 import { PersonalizedPlanGroupCard } from '@/components/program/PersonalizedPlanGroupCard';
-import { AthleteScheduleCalendar } from '@/components/schedule/AthleteScheduleCalendar';
 import { ProgramCard } from '@/components/program/ProgramCard';
 import { ServicePlanEmptyCard } from '@/components/program/ServicePlanEmptyCard';
 import { TrainerCatalogPanel } from '@/components/trainer/TrainerCatalogPanel';
@@ -14,11 +13,14 @@ import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyAthletePlans } from '@/hooks/useAthletePlans';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
-import { usePrograms } from '@/hooks/usePrograms';import { isTrainerRole } from '@/lib/athleteService';
+import { usePrograms } from '@/hooks/usePrograms';
+import { isTrainerRole } from '@/lib/athleteService';
 import { isTrainerDesktopWeb } from '@/lib/platformAccess';
 import { isTrainerEditableCategory, type Plan } from '@/lib/programService';
 import { queueChatPrefill } from '@/lib/chatPrefill';
 import { groupPersonalizedPlans } from '@/lib/personalizedPlanGroups';
+import { resolveStandardVenuePrograms } from '@/lib/standardVenueCatalog';
+import type { StandardVenueId } from '@/lib/standardVenues';
 import {
   isServicePlanCategory,
   PERSONALIZED_GYM_PLAN_CONTENT,
@@ -33,15 +35,16 @@ function serviceCategoryToPlanType(category: 'personalized' | 'nutrition'): Athl
 interface PlanCategoryContentProps {
   planId: string;
   plan: Plan;
+  standardVenue?: StandardVenueId;
 }
 
-export function PlanCategoryContent({ planId, plan }: PlanCategoryContentProps) {
+export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategoryContentProps) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { user } = useAuth();
   const isTrainerDesktop = isTrainerDesktopWeb(user?.role);
   const useProgramGrid = isTrainerDesktop && width >= 960;
-  const { getByPlanId, getById, refresh } = usePrograms();
+  const { getByPlanId, refresh } = usePrograms();
   const isTrainer = isTrainerRole(user?.role);
   const { isComplete: intakeComplete, isLoading: intakeLoading } = useAthleteIntakeForm();
 
@@ -66,18 +69,23 @@ export function PlanCategoryContent({ planId, plan }: PlanCategoryContentProps) 
       }
     },
   );
-  const programs = getByPlanId(planId);
+  const programs = standardVenue
+    ? resolveStandardVenuePrograms(standardVenue, getByPlanId(planId), planId)
+    : getByPlanId(planId);
   const servicePlanContent = serviceCategory ? SERVICE_PLAN_CONTENT[serviceCategory] : null;
+  const isServiceRequestPlan =
+    serviceCategory === 'home_training' || serviceCategory === 'gym_training';
   const showAthleteAssignedPlans =
     !isTrainer &&
     athletePlanType &&
     (athletePlansLoading || myAthletePlans.length > 0);
   const showServiceEmptyCard =
     Boolean(servicePlanContent && serviceCategory) &&
-    programs.length === 0 &&
-    myAthletePlans.length === 0 &&
     !athletePlansLoading &&
-    (serviceCategory === 'home_training' || serviceCategory === 'gym_training' || !isTrainer);
+    ((isServiceRequestPlan && !isTrainer) ||
+      (programs.length === 0 &&
+        myAthletePlans.length === 0 &&
+        (serviceCategory === 'nutrition' || serviceCategory === 'personalized' || !isTrainer)));
   const showPersonalizedGymCard =
     serviceCategory === 'personalized' &&
     programs.length === 0 &&
@@ -101,13 +109,6 @@ export function PlanCategoryContent({ planId, plan }: PlanCategoryContentProps) 
       params: { prefill },
     });
   };
-
-  const showAthleteCalendar =
-    !isTrainer && (myAthletePlans.length > 0 || programs.length > 0 || Boolean(user?.currentProgramId));
-
-  const activeProgramForCalendar = user?.currentProgramId
-    ? getById(user.currentProgramId)
-    : programs[0];
 
   const groupedPersonalizedPlans = groupPersonalizedPlans(
     myAthletePlans.filter((item) => item.planType === 'personalized'),
@@ -134,11 +135,17 @@ export function PlanCategoryContent({ planId, plan }: PlanCategoryContentProps) 
         </View>
       ) : null}
 
-      {showAthleteCalendar ? (
-        <AthleteScheduleCalendar program={activeProgramForCalendar} />
-      ) : null}
-
-      {programs.length === 0 ? (
+      {isServiceRequestPlan && !isTrainer && servicePlanContent && serviceCategory ? (
+        <View style={styles.serviceCards}>
+          <ServicePlanEmptyCard
+            category={serviceCategory}
+            title={servicePlanContent.title}
+            text={servicePlanContent.text}
+            button={servicePlanContent.button}
+            onRequest={() => openTrainerChat(servicePlanContent.prefill)}
+          />
+        </View>
+      ) : programs.length === 0 ? (
         showServiceEmptyCard && servicePlanContent && serviceCategory ? (
           <View style={styles.serviceCards}>
             <ServicePlanEmptyCard
@@ -176,7 +183,7 @@ export function PlanCategoryContent({ planId, plan }: PlanCategoryContentProps) 
       )}
 
       {isTrainer && canEditCatalog ? (
-        <TrainerCatalogPanel planId={plan.id} category={plan.category} />
+        <TrainerCatalogPanel planId={plan.id} category={plan.category} standardVenue={standardVenue} />
       ) : null}
 
       {isTrainer && athletePlanType ? <TrainerPlansPanel activePlanType={athletePlanType} /> : null}

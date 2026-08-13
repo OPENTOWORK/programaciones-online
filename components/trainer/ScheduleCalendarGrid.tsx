@@ -12,6 +12,8 @@ import {
   type GestureResponderHandlers,
 } from 'react-native';
 
+import { AthleteWeekListView } from '@/components/schedule/AthleteWeekListView';
+
 import { DayActionsButton } from '@/components/trainer/CalendarDayActionsMenu';
 import type { PopoverAnchor } from '@/components/ui/PopoverMenu';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
@@ -31,7 +33,7 @@ import {
 } from '@/lib/programSchedulePreview';
 import { dropIndexForPosition, dropLineOffsetForIndex } from '@/lib/dragDropList';
 
-export type ScheduleCalendarSize = 'compact' | 'large';
+export type ScheduleCalendarSize = 'compact' | 'large' | 'athlete';
 
 /** Columna de un día medida en coordenadas de la ventana, como en el tablero del CRM. */
 interface ColumnBounds {
@@ -144,9 +146,21 @@ export function shiftSchedulePeriod(date: Date, viewMode: ScheduleViewMode, delt
   return shiftDay(date, delta);
 }
 
-function periodLabelFor(date: Date, viewMode: ScheduleViewMode) {
+const WEEKDAY_TINY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+function periodLabelFor(date: Date, viewMode: ScheduleViewMode, size: ScheduleCalendarSize = 'compact') {
   if (viewMode === 'month') return formatMonthLabel(date);
-  if (viewMode === 'week') return `Semana del ${formatDayLabel(getWeekDays(date)[0])}`;
+  if (viewMode === 'week') {
+    if (size === 'athlete') {
+      const days = getWeekDays(date);
+      const start = days[0];
+      const end = days[6];
+      const startLabel = start.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+      const endLabel = end.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+      return `${startLabel} – ${endLabel}`;
+    }
+    return `Semana del ${formatDayLabel(getWeekDays(date)[0])}`;
+  }
   return formatDayLabel(date);
 }
 
@@ -261,6 +275,7 @@ function SessionChip({
   draggable = false,
   detail,
   isDragging = false,
+  size = 'compact',
 }: {
   item: SchedulePreviewItem;
   onPress?: (item: SchedulePreviewItem) => void;
@@ -275,14 +290,17 @@ function SessionChip({
   draggable?: boolean;
   detail?: ReactNode;
   isDragging?: boolean;
+  size?: ScheduleCalendarSize;
 }) {
   const isActivation = item.kind === 'activation';
   const isRestDay = item.kind === 'rest';
+  const isAthlete = size === 'athlete';
 
   const title = (
     <Text
       style={[
         styles.sessionChipName,
+        isAthlete && styles.sessionChipNameAthlete,
         isActivation && styles.sessionChipNameActivation,
         isRestDay && styles.sessionChipNameRestDay,
       ]}
@@ -294,6 +312,7 @@ function SessionChip({
 
   const chipStyle = [
     styles.sessionChip,
+    isAthlete && styles.sessionChipAthlete,
     item.isCurrent && styles.sessionChipCurrent,
     item.isDraft && styles.sessionChipDraft,
     isActivation && styles.sessionChipActivation,
@@ -331,14 +350,19 @@ function SessionChip({
       </View>
 
       {!inlineEditing ? (
-        <Text style={styles.sessionChipMeta} numberOfLines={expanded ? 3 : 1}>
+        <Text
+          style={[styles.sessionChipMeta, isAthlete && styles.sessionChipMetaAthlete]}
+          numberOfLines={expanded ? 3 : 1}
+        >
           {isRestDay
             ? 'Descanso'
-            : `${item.estimatedDuration}${item.blockCount > 0 ? ` · ${item.blockCount} bloque${item.blockCount === 1 ? '' : 's'}` : ''}${
-                item.exerciseCount > 0
-                  ? ` · ${item.exerciseCount} ejercicio${item.exerciseCount === 1 ? '' : 's'}`
-                  : ''
-              }`}
+            : isAthlete
+              ? item.estimatedDuration
+              : `${item.estimatedDuration}${item.blockCount > 0 ? ` · ${item.blockCount} bloque${item.blockCount === 1 ? '' : 's'}` : ''}${
+                  item.exerciseCount > 0
+                    ? ` · ${item.exerciseCount} ejercicio${item.exerciseCount === 1 ? '' : 's'}`
+                    : ''
+                }`}
         </Text>
       ) : null}
       {item.isDraft ? <Text style={styles.sessionChipDraftLabel}>Borrador</Text> : null}
@@ -458,16 +482,24 @@ export function ScheduleCalendarGrid({
 
   return (
     <View style={fill ? styles.containerFill : undefined}>
-      <View style={styles.modeRow}>
+      <View style={[styles.modeRow, size === 'athlete' && styles.modeRowAthlete]}>
         {VIEW_MODES.map((mode) => {
           const active = viewMode === mode.id;
           return (
             <Pressable
               key={mode.id}
               onPress={() => onViewModeChange(mode.id)}
-              style={[styles.modeBtn, active && styles.modeBtnActive]}
+              style={[styles.modeBtn, size === 'athlete' && styles.modeBtnAthlete, active && styles.modeBtnActive]}
             >
-              <Text style={[styles.modeBtnText, active && styles.modeBtnTextActive]}>{mode.label}</Text>
+              <Text
+                style={[
+                  styles.modeBtnText,
+                  size === 'athlete' && styles.modeBtnTextAthlete,
+                  active && styles.modeBtnTextActive,
+                ]}
+              >
+                {mode.label}
+              </Text>
             </Pressable>
           );
         })}
@@ -477,8 +509,8 @@ export function ScheduleCalendarGrid({
         <Pressable onPress={() => navigate(-1)} style={styles.navBtn} accessibilityLabel="Anterior">
           <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
         </Pressable>
-        <Text style={[styles.periodLabel, size === 'large' && styles.periodLabelLarge]}>
-          {periodLabelFor(focusDate, viewMode)}
+        <Text style={[styles.periodLabel, size === 'large' && styles.periodLabelLarge, size === 'athlete' && styles.periodLabelAthlete]}>
+          {periodLabelFor(focusDate, viewMode, size)}
         </Text>
         <Pressable onPress={() => navigate(1)} style={styles.navBtn} accessibilityLabel="Siguiente">
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
@@ -491,7 +523,7 @@ export function ScheduleCalendarGrid({
           style={[styles.period, stretchPeriod && styles.periodFill, index > 0 && styles.periodStacked]}
         >
           {index > 0 ? (
-            <Text style={styles.periodSectionLabel}>{periodLabelFor(periodDate, viewMode)}</Text>
+            <Text style={styles.periodSectionLabel}>{periodLabelFor(periodDate, viewMode, size)}</Text>
           ) : null}
 
           {viewMode === 'month' ? (
@@ -589,7 +621,7 @@ function MonthView({
 }) {
   const days = getMonthGrid(focusDate);
   const weekdayLabels = getWeekdayShortLabels();
-  const visibleSessions = size === 'large' ? 4 : 2;
+  const visibleSessions = size === 'large' ? 4 : size === 'athlete' ? 1 : 2;
 
   return (
     <View>
@@ -613,6 +645,7 @@ function MonthView({
               style={[
                 styles.monthCell,
                 size === 'large' && styles.monthCellLarge,
+                size === 'athlete' && styles.monthCellAthlete,
                 !inMonth && styles.monthCellMuted,
                 onDayPress && styles.monthCellPressable,
                 selected && styles.monthCellSelected,
@@ -635,13 +668,16 @@ function MonthView({
                       style={[
                         styles.monthSessionDot,
                         size === 'large' && styles.monthSessionDotLarge,
+                        size === 'athlete' && styles.monthSessionDotAthlete,
                         item.isCurrent && styles.monthSessionDotCurrent,
                         item.kind === 'activation' && styles.monthSessionDotActivation,
                         item.kind === 'rest' && styles.monthSessionDotRestDay,
                       ]}
-                      numberOfLines={1}
+                      numberOfLines={size === 'athlete' ? 2 : 1}
                     >
-                      {item.name}
+                      {size === 'athlete' && dayItems.length > 1
+                        ? `${dayItems.length} sesiones`
+                        : item.name}
                     </Text>
                   </Pressable>
                 ) : (
@@ -650,17 +686,20 @@ function MonthView({
                     style={[
                       styles.monthSessionDot,
                       size === 'large' && styles.monthSessionDotLarge,
+                      size === 'athlete' && styles.monthSessionDotAthlete,
                       item.isCurrent && styles.monthSessionDotCurrent,
                       item.kind === 'activation' && styles.monthSessionDotActivation,
                       item.kind === 'rest' && styles.monthSessionDotRestDay,
                     ]}
-                    numberOfLines={1}
+                    numberOfLines={size === 'athlete' ? 2 : 1}
                   >
-                    {item.name}
+                    {size === 'athlete' && dayItems.length > 1
+                      ? `${dayItems.length} sesiones`
+                      : item.name}
                   </Text>
                 ),
               )}
-              {dayItems.length > visibleSessions ? (
+              {size !== 'athlete' && dayItems.length > visibleSessions ? (
                 <Text style={styles.monthMore}>+{dayItems.length - visibleSessions}</Text>
               ) : null}
             </Wrapper>
@@ -887,6 +926,7 @@ function WeekView({
     const canSelect = Boolean(sessionSelection && isSelectableCalendarSession(item));
     const chipProps = {
       item,
+      size,
       onPress: onSessionPress,
       expanded,
       onToggleExpanded: onToggleItemExpanded ? () => onToggleItemExpanded(item) : undefined,
@@ -917,16 +957,30 @@ function WeekView({
     return <SessionChip key={itemKey} {...chipProps} />;
   };
 
+  if (size === 'athlete') {
+    return (
+      <AthleteWeekListView
+        focusDate={focusDate}
+        items={items}
+        onDayPress={onDayPress}
+        onSessionPress={onSessionPress}
+      />
+    );
+  }
+
   return (
     <View style={[styles.weekGridWrapper, fill && styles.weekGridWrapperFill]}>
       <View
         collapsable={false}
-        style={[styles.weekGrid, fill && styles.weekGridFill]}
+        style={[styles.weekGrid, fill && styles.weekGridFill, size === 'athlete' && styles.weekGridAthlete]}
         onLayout={canDrag ? measureColumnBounds : undefined}
       >
         {days.map((day) => {
         const dayItems = itemsForDate(items, day);
-        const weekday = WEEKDAY_SHORT_LABELS[day.getDay() === 0 ? 6 : day.getDay() - 1];
+        const weekday =
+          size === 'athlete'
+            ? WEEKDAY_TINY_LABELS[day.getDay() === 0 ? 6 : day.getDay() - 1]
+            : WEEKDAY_SHORT_LABELS[day.getDay() === 0 ? 6 : day.getDay() - 1];
         const selected = isSameDate(day, selectedDate);
         const hint = dropHint && isSameDate(day, dropHint.date) ? dropHint : null;
         const isDragSource = Boolean(
@@ -936,6 +990,9 @@ function WeekView({
         const hasInlineEditor = Boolean(
           inlineEditingKey && dayItems.some((entry) => scheduleItemKey(entry) === inlineEditingKey),
         );
+        const hasExpandedSession = dayItems.some((entry) =>
+          expandedItemIds?.includes(scheduleItemKey(entry)),
+        );
         return (
           <View
             key={day.toISOString()}
@@ -944,7 +1001,9 @@ function WeekView({
             style={[
               styles.weekColumn,
               size === 'large' && styles.weekColumnLarge,
+              size === 'athlete' && styles.weekColumnAthlete,
               fill && styles.weekColumnFill,
+              !fill && hasExpandedSession && styles.weekColumnExpanded,
               selected && styles.weekColumnSelected,
               hasInlineEditor && styles.weekColumnInlineEditing,
               isDragSource && styles.weekColumnDragSource,
@@ -961,8 +1020,12 @@ function WeekView({
               ]}
             >
               <View style={styles.weekColumnHeaderMain}>
-                <Text style={styles.weekColumnDay}>{weekday}</Text>
-                <Text style={styles.weekColumnDate}>{day.getDate()}</Text>
+                <Text style={[styles.weekColumnDay, size === 'athlete' && styles.weekColumnDayAthlete]}>
+                  {weekday}
+                </Text>
+                <Text style={[styles.weekColumnDate, size === 'athlete' && styles.weekColumnDateAthlete]}>
+                  {day.getDate()}
+                </Text>
               </View>
               {onDayActionsPress ? (
                 <DayActionsButton
@@ -981,13 +1044,25 @@ function WeekView({
                       pressed && styles.weekEmptyPressed,
                     ]}
                   >
-                    <Text style={[styles.weekEmpty, hint && styles.weekEmptyDropTarget]}>
-                      {hint ? 'Soltar aquí' : 'Sin sesión'}
+                    <Text
+                      style={[
+                        styles.weekEmpty,
+                        size === 'athlete' && styles.weekEmptyAthlete,
+                        hint && styles.weekEmptyDropTarget,
+                      ]}
+                    >
+                      {hint ? 'Soltar aquí' : size === 'athlete' ? '·' : 'Sin sesión'}
                     </Text>
                   </Pressable>
                 ) : (
-                  <Text style={[styles.weekEmpty, hint && styles.weekEmptyDropTarget]}>
-                    {hint ? 'Soltar aquí' : 'Sin sesión'}
+                  <Text
+                    style={[
+                      styles.weekEmpty,
+                      size === 'athlete' && styles.weekEmptyAthlete,
+                      hint && styles.weekEmptyDropTarget,
+                    ]}
+                  >
+                    {hint ? 'Soltar aquí' : size === 'athlete' ? '·' : 'Sin sesión'}
                   </Text>
                 )
               ) : (
@@ -1187,6 +1262,15 @@ const styles = StyleSheet.create({
   modeBtnTextActive: {
     color: colors.accent,
   },
+  modeRowAthlete: {
+    marginBottom: spacing.sm,
+  },
+  modeBtnAthlete: {
+    paddingVertical: 6,
+  },
+  modeBtnTextAthlete: {
+    fontSize: 11,
+  },
   navRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1217,6 +1301,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
+  periodLabelAthlete: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
   monthWeekdays: {
     flexDirection: 'row',
     marginBottom: spacing.xs,
@@ -1243,6 +1331,10 @@ const styles = StyleSheet.create({
   monthCellLarge: {
     minHeight: 112,
     padding: spacing.xs,
+  },
+  monthCellAthlete: {
+    minHeight: 58,
+    padding: 2,
   },
   monthCellMuted: {
     backgroundColor: `${colors.surfaceLight}88`,
@@ -1280,6 +1372,12 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginBottom: 2,
   },
+  monthSessionDotAthlete: {
+    fontSize: 10,
+    lineHeight: 13,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
   monthSessionDotCurrent: {
     color: colors.accent,
     fontWeight: '700',
@@ -1301,6 +1399,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
     overflow: 'visible',
+    alignItems: 'stretch',
+  },
+  weekGridAthlete: {
+    gap: 4,
   },
   weekGridWrapper: {
     position: 'relative',
@@ -1344,6 +1446,16 @@ const styles = StyleSheet.create({
     minHeight: 320,
     padding: spacing.sm,
   },
+  weekColumnAthlete: {
+    minWidth: 0,
+    minHeight: 108,
+    padding: 4,
+    gap: 4,
+  },
+  weekColumnExpanded: {
+    minHeight: 0,
+    alignSelf: 'stretch',
+  },
   weekColumnInlineEditing: {
     minHeight: 560,
     alignSelf: 'stretch',
@@ -1380,10 +1492,18 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontWeight: '700',
   },
+  weekColumnDayAthlete: {
+    fontSize: 10,
+    lineHeight: 12,
+  },
   weekColumnDate: {
     ...typography.bodySmall,
     color: colors.text,
     fontWeight: '700',
+  },
+  weekColumnDateAthlete: {
+    fontSize: 13,
+    lineHeight: 16,
   },
   weekColumnDropTarget: {
     borderColor: colors.accent,
@@ -1397,6 +1517,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  weekEmptyAthlete: {
+    marginTop: 4,
+    fontSize: 16,
+    lineHeight: 18,
+    opacity: 0.35,
   },
   weekEmptyDropTarget: {
     color: colors.accent,
@@ -1418,6 +1544,10 @@ const styles = StyleSheet.create({
     padding: spacing.xs,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  sessionChipAthlete: {
+    padding: 4,
+    borderRadius: 6,
   },
   sessionChipHeader: {
     flexDirection: 'row',
@@ -1484,6 +1614,7 @@ const styles = StyleSheet.create({
   sessionChipExpanded: {
     borderColor: colors.accent,
     backgroundColor: colors.background,
+    flexShrink: 0,
   },
   sessionChipInlineEditing: {
     flexGrow: 1,
@@ -1494,6 +1625,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    flexShrink: 0,
   },
   sessionChipDetailInline: {
     flexGrow: 1,
@@ -1536,6 +1668,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  sessionChipNameAthlete: {
+    fontSize: 10,
+    lineHeight: 12,
+  },
   sessionChipNameActivation: {
     color: colors.activation,
   },
@@ -1547,6 +1683,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
     lineHeight: 14,
+  },
+  sessionChipMetaAthlete: {
+    fontSize: 9,
+    lineHeight: 11,
+    marginTop: 1,
   },
   sessionChipDraftLabel: {
     ...typography.caption,

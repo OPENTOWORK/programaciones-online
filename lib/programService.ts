@@ -1,3 +1,4 @@
+import { parseStandardVenueFromDescription } from '@/lib/standardVenueCatalog';
 import type { AppIconName } from '@/constants/icons';
 import type { Program, ProgramCategory, ProgramGoal } from '@/lib/types';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -120,19 +121,21 @@ function mapPrograma(
 ): Program {
   const category = mapPlanCategory(planLabel);
   const looseSessions = isLooseSessionCatalog(row.name);
+  const { venue, description } = parseStandardVenueFromDescription(row.descripcion);
 
   return {
     id: row.id,
     name: row.name,
     planId: row.id_planes,
     category,
+    standardVenue: venue ?? (category === 'standard' ? 'gym' : undefined),
     level: inferLevel(category),
     duration: 'Por definir' as Program['duration'],
     goal: inferGoal(row.name),
     sessionsPerWeek: looseSessions ? 0 : 3,
     status: 'disponible',
     icon: inferIcon(row.name),
-    description: row.descripcion?.trim() || `Programación del plan ${planLabel}.`,
+    description: description || `Programación del plan ${planLabel}.`,
     equipment: [],
     trainingDays: [],
     weeks: [],

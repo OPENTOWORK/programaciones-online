@@ -1,0 +1,459 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useMemo, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import {
+  draftToTaggedBlocks,
+  getSessionSectionLabel,
+  taggedBlocksToDraft,
+  type TaggedWorkoutBlock,
+} from '@/lib/sessionBlockSections';
+import { canSaveSessionAsTemplate, sessionDraftToTemplateContent } from '@/lib/sessionTemplates';
+import type { SessionDraft } from '@/lib/trainerSessionDraft';
+import {
+  formatBlockItemLineForDisplay,
+  getBlockTypeConfig,
+  type WorkoutBlockItemDraft,
+} from '@/lib/workoutBlockBuilder';
+
+interface CreateSessionTemplateModalProps {
+  visible: boolean;
+  draft: SessionDraft | null;
+  saving?: boolean;
+  onClose: () => void;
+  onConfirm: (input: { name: string; content: string }) => void;
+}
+
+function blockTitle(block: TaggedWorkoutBlock) {
+  const config = getBlockTypeConfig(block.type);
+  if (block.type === 'free_text') {
+    return block.title?.trim() || 'Texto libre';
+  }
+  return [block.title?.trim(), config.label, block.timing.trim()].filter(Boolean).join(' · ');
+}
+
+function selectableItems(block: TaggedWorkoutBlock) {
+  if (block.type === 'free_text') return [] as WorkoutBlockItemDraft[];
+  return block.items.filter((item) => item.text.trim());
+}
+
+function buildTemplateDraft(
+  blocks: TaggedWorkoutBlock[],
+  selectedBlockIds: Set<string>,
+  selectedItemIds: Set<string>,
+  base: SessionDraft,
+): SessionDraft {
+  const selectedBlocks: TaggedWorkoutBlock[] = [];
+
+  for (const block of blocks) {
+    if (block.type === 'free_text') {
+      if (selectedBlockIds.has(block.id)) selectedBlocks.push(block);
+      continue;
+    }
+
+    const items = selectableItems(block).filter((item) => selectedItemIds.has(item.id));
+    if (items.length === 0) continue;
+    selectedBlocks.push({ ...block, items });
+  }
+
+  return taggedBlocksToDraft(
+    selectedBlocks,
+    new Set(selectedBlocks.map((block) => block.id)),
+    { ...base, name: base.name, estimatedDuration: '' },
+    { preserveSections: true },
+  );
+}
+
+export function CreateSessionTemplateModal({
+  visible,
+  draft,
+  saving = false,
+  onClose,
+  onConfirm,
+}: CreateSessionTemplateModalProps) {
+  const blocks = useMemo(() => (draft ? draftToTaggedBlocks(draft) : []), [draft]);
+  const [name, setName] = useState('');
+  const [selectedBlockIds, setSelectedBlockIds] = useState<Set<string>>(() => new Set());
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (!visible || !draft) return;
+    setName('');
+    setSelectedBlockIds(new Set());
+    setSelectedItemIds(new Set());
+  }, [draft, visible]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, TaggedWorkoutBlock[]>();
+    for (const block of blocks) {
+      const label = getSessionSectionLabel(block.section);
+      const list = map.get(label) ?? [];
+      list.push(block);
+      map.set(label, list);
+    }
+    return [...map.entries()];
+  }, [blocks]);
+
+  const selectedExerciseCount = selectedItemIds.size;
+  const selectedFreeTextCount = selectedBlockIds.size;
+  const selectedCount = selectedExerciseCount + selectedFreeTextCount;
+  const canSave = Boolean(draft && name.trim() && selectedCount > 0 && !saving);
+
+  const isBlockChecked = (block: TaggedWorkoutBlock) => {
+    if (block.type === 'free_text') return selectedBlockIds.has(block.id);
+    const items = selectableItems(block);
+    return items.length > 0 && items.every((item) => selectedItemIds.has(item.id));
+  };
+
+  const isBlockPartial = (block: TaggedWorkoutBlock) => {
+    if (block.type === 'free_text') return false;
+    const items = selectableItems(block);
+    const selected = items.filter((item) => selectedItemIds.has(item.id)).length;
+    return selected > 0 && selected < items.length;
+  };
+
+  const toggleBlock = (block: TaggedWorkoutBlock) => {
+    if (block.type === 'free_text') {
+      setSelectedBlockIds((current) => {
+        const next = new Set(current);
+        if (next.has(block.id)) next.delete(block.id);
+        else next.add(block.id);
+        return next;
+      });
+      return;
+    }
+
+    const items = selectableItems(block);
+    const allSelected = items.every((item) => selectedItemIds.has(item.id));
+    setSelectedItemIds((current) => {
+      const next = new Set(current);
+      for (const item of items) {
+        if (allSelected) next.delete(item.id);
+        else next.add(item.id);
+      }
+      return next;
+    });
+  };
+
+  const toggleItem = (itemId: string) => {
+    setSelectedItemIds((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    const nextBlocks = new Set<string>();
+    const nextItems = new Set<string>();
+    for (const block of blocks) {
+      if (block.type === 'free_text') {
+        nextBlocks.add(block.id);
+        continue;
+      }
+      for (const item of selectableItems(block)) nextItems.add(item.id);
+    }
+    setSelectedBlockIds(nextBlocks);
+    setSelectedItemIds(nextItems);
+  };
+
+  const selectNone = () => {
+    setSelectedBlockIds(new Set());
+    setSelectedItemIds(new Set());
+  };
+
+  const handleConfirm = () => {
+    if (!draft || !canSave) return;
+    const content = sessionDraftToTemplateContent(
+      buildTemplateDraft(blocks, selectedBlockIds, selectedItemIds, {
+        ...draft,
+        name: name.trim(),
+      }),
+    );
+    onConfirm({ name: name.trim(), content });
+  };
+
+  const selectionLabel = [
+    selectedExerciseCount > 0
+      ? `${selectedExerciseCount} ejercicio${selectedExerciseCount === 1 ? '' : 's'}`
+      : null,
+    selectedFreeTextCount > 0
+      ? `${selectedFreeTextCount} bloque${selectedFreeTextCount === 1 ? '' : 's'} de texto`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.overlay} onPress={saving ? undefined : onClose}>
+        <Pressable style={styles.sheet} onPress={(event) => event.stopPropagation()}>
+          <Text style={styles.title}>Crear plantilla</Text>
+          <Text style={styles.subtitle}>
+            Elige ejercicios o bloques concretos. No se guarda la sesión entera.
+          </Text>
+
+          <Input
+            value={name}
+            onChangeText={setName}
+            placeholder="Nombre de la plantilla"
+            style={styles.nameInput}
+          />
+
+          {!draft || !canSaveSessionAsTemplate(draft) || blocks.length === 0 ? (
+            <Text style={styles.hint}>Esta sesión no tiene bloques ni ejercicios para guardar.</Text>
+          ) : (
+            <>
+              <View style={styles.selectionBar}>
+                <Text style={styles.selectionCount}>
+                  {selectedCount === 0 ? 'Nada seleccionado' : selectionLabel}
+                </Text>
+                <View style={styles.selectionActions}>
+                  <Pressable onPress={selectAll} hitSlop={8}>
+                    <Text style={styles.selectionLink}>Todos</Text>
+                  </Pressable>
+                  <Pressable onPress={selectNone} hitSlop={8}>
+                    <Text style={styles.selectionLink}>Ninguno</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+                {grouped.map(([sectionLabel, sectionBlocks]) => (
+                  <View key={sectionLabel} style={styles.section}>
+                    <Text style={styles.sectionLabel}>{sectionLabel}</Text>
+                    {sectionBlocks.map((block) => {
+                      const checked = isBlockChecked(block);
+                      const partial = isBlockPartial(block);
+                      const items = selectableItems(block);
+                      const iconName = checked
+                        ? 'checkbox'
+                        : partial
+                          ? 'checkbox-outline'
+                          : 'square-outline';
+
+                      return (
+                        <View
+                          key={block.id}
+                          style={[
+                            styles.blockCard,
+                            (checked || partial) && styles.blockCardChecked,
+                          ]}
+                        >
+                          <Pressable
+                            onPress={() => toggleBlock(block)}
+                            style={({ pressed }) => [
+                              styles.blockRow,
+                              pressed && styles.rowPressed,
+                            ]}
+                          >
+                            <Ionicons
+                              name={iconName}
+                              size={22}
+                              color={checked || partial ? colors.accent : colors.textMuted}
+                            />
+                            <View style={styles.blockCopy}>
+                              <Text style={styles.blockTitle} numberOfLines={2}>
+                                {blockTitle(block)}
+                              </Text>
+                              {block.type === 'free_text' && block.timing.trim() ? (
+                                <Text style={styles.blockPreview} numberOfLines={2}>
+                                  {block.timing.trim()}
+                                </Text>
+                              ) : null}
+                            </View>
+                          </Pressable>
+
+                          {items.map((item) => {
+                            const itemChecked = selectedItemIds.has(item.id);
+                            const line = formatBlockItemLineForDisplay(item, block.type);
+                            return (
+                              <Pressable
+                                key={item.id}
+                                onPress={() => toggleItem(item.id)}
+                                style={({ pressed }) => [
+                                  styles.itemRow,
+                                  itemChecked && styles.itemRowChecked,
+                                  pressed && styles.rowPressed,
+                                ]}
+                              >
+                                <Ionicons
+                                  name={itemChecked ? 'checkbox' : 'square-outline'}
+                                  size={18}
+                                  color={itemChecked ? colors.accent : colors.textMuted}
+                                />
+                                <Text style={styles.itemText} numberOfLines={2}>
+                                  {line || item.text.trim()}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      );
+                    })}
+                  </View>
+                ))}
+              </ScrollView>
+            </>
+          )}
+
+          <View style={styles.actions}>
+            <Button
+              title="Cancelar"
+              variant="outline"
+              onPress={onClose}
+              disabled={saving}
+              style={styles.actionBtn}
+            />
+            <Button
+              title="Guardar plantilla"
+              onPress={handleConfirm}
+              loading={saving}
+              disabled={!canSave}
+              style={styles.actionBtn}
+            />
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  sheet: {
+    maxHeight: '88%',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  title: {
+    ...typography.h3,
+    color: colors.text,
+  },
+  subtitle: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+  nameInput: {
+    marginBottom: 0,
+  },
+  hint: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    paddingVertical: spacing.md,
+  },
+  selectionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  selectionCount: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '700',
+    flex: 1,
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  selectionLink: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  list: {
+    maxHeight: 360,
+  },
+  section: {
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  sectionLabel: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 2,
+  },
+  blockCard: {
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
+    marginBottom: spacing.xs,
+  },
+  blockCardChecked: {
+    borderColor: `${colors.accent}88`,
+    backgroundColor: `${colors.accent}08`,
+  },
+  blockRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.sm,
+  },
+  blockCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  blockTitle: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  blockPreview: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 16,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingRight: spacing.sm,
+    paddingLeft: spacing.lg + spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  itemRowChecked: {
+    backgroundColor: `${colors.accent}12`,
+  },
+  itemText: {
+    ...typography.caption,
+    color: colors.text,
+    flex: 1,
+    lineHeight: 16,
+  },
+  rowPressed: {
+    opacity: 0.9,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  actionBtn: {
+    flex: 1,
+  },
+});

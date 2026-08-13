@@ -1,10 +1,12 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AthleteCurrentSchedule } from '@/components/home/AthleteCurrentSchedule';
 import { HomeBrandShowcase } from '@/components/home/HomeBrandShowcase';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { isTrainerRole } from '@/lib/athleteService';
 
 function formatToday() {
   return new Date().toLocaleDateString('es-ES', {
@@ -19,6 +21,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const firstName = user?.name?.split(' ')[0] ?? 'atleta';
+  const isTrainer = isTrainerRole(user?.role);
 
   return (
     <ScreenWrapper>
@@ -37,7 +40,10 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      <HomeBrandShowcase />
+      <View style={styles.body}>
+        <HomeBrandShowcase />
+        {!isTrainer ? <AthleteCurrentSchedule /> : null}
+      </View>
     </ScreenWrapper>
   );
 }
@@ -72,4 +78,7 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   avatarText: { ...typography.body, color: colors.black, fontWeight: '700' },
+  body: {
+    gap: spacing.lg,
+  },
 });

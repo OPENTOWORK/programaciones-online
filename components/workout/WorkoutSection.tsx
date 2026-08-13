@@ -30,8 +30,16 @@ interface WorkoutSectionProps {
   sectionKey?: string;
   completedItems?: Record<string, boolean>;
   onToggleItem?: (key: string) => void;
-  onExercisePress?: (exerciseName: string, aimharderEjerId?: number) => void;
-  hasExerciseVideo?: (exerciseName: string, aimharderEjerId?: number) => boolean;
+  onExercisePress?: (
+    exerciseName: string,
+    aimharderEjerId?: number,
+    youtubeVideoId?: string,
+  ) => void;
+  hasExerciseVideo?: (
+    exerciseName: string,
+    aimharderEjerId?: number,
+    youtubeVideoId?: string,
+  ) => boolean;
   activeExerciseName?: string;
 }
 
@@ -54,8 +62,16 @@ interface BlockItemsProps {
   sectionKey?: string;
   completedItems?: Record<string, boolean>;
   onToggleItem?: (key: string) => void;
-  onExercisePress?: (exerciseName: string, aimharderEjerId?: number) => void;
-  hasExerciseVideo?: (exerciseName: string, aimharderEjerId?: number) => boolean;
+  onExercisePress?: (
+    exerciseName: string,
+    aimharderEjerId?: number,
+    youtubeVideoId?: string,
+  ) => void;
+  hasExerciseVideo?: (
+    exerciseName: string,
+    aimharderEjerId?: number,
+    youtubeVideoId?: string,
+  ) => boolean;
   activeExerciseName?: string;
 }
 
@@ -77,7 +93,8 @@ function BlockItems({
       {items.map((item, index) => {
         const exerciseName = parseExerciseLabelFromBlockItem(item);
         const display = parseBlockItemForDisplay(item);
-        const showVideo = hasExerciseVideo?.(exerciseName) ?? false;
+        const showVideo =
+          hasExerciseVideo?.(exerciseName, undefined, display.youtubeVideoId) ?? false;
         const itemKey = sectionKey ? `${sectionKey}:b${blockIndex}:i${index}` : '';
         const isChecked = itemKey ? !!completedItems?.[itemKey] : false;
         const showCheckbox = Boolean(itemKey && (onToggleItem || completedItems));
@@ -86,7 +103,7 @@ function BlockItems({
           activeExerciseName?.toLowerCase() === exerciseName.toLowerCase();
 
         const openVideo = () => {
-          if (showVideo) onExercisePress?.(exerciseName);
+          if (showVideo) onExercisePress?.(exerciseName, undefined, display.youtubeVideoId);
         };
 
         return (

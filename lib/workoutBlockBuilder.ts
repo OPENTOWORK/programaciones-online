@@ -1,4 +1,9 @@
 import {
+  formatWorkoutItemVideoSuffix,
+  parseWorkoutItemVideoId,
+  stripWorkoutItemVideoMarker,
+} from '@/lib/workoutItemVideo';
+import {
   hasBulletList,
   isKnownBlockLabel,
   isStructuredWorkoutContent,
@@ -42,6 +47,7 @@ export interface WorkoutBlockItemDraft {
   /** Repeticiones máximas: un 3 aquí es un 3RM. */
   rm?: string;
   loadMetric?: MovementLoadMetric;
+  youtubeVideoId?: string;
 }
 
 export type MovementLoadMetric =
@@ -331,7 +337,7 @@ function formatLoadSuffix(item: WorkoutBlockItemDraft) {
   return load ? ` · ${load}` : '';
 }
 
-export function formatBlockItemLine(item: WorkoutBlockItemDraft, blockType?: WorkoutBlockType): string {
+function buildBlockItemLine(item: WorkoutBlockItemDraft, blockType?: WorkoutBlockType): string {
   const name = item.text.trim();
   if (!name) return '';
 
@@ -352,8 +358,22 @@ export function formatBlockItemLine(item: WorkoutBlockItemDraft, blockType?: Wor
   }
 
   if (reps) return `${name}: ${reps} reps${load}`;
-
   return loadOnly ? `${name}: ${loadOnly}` : name;
+}
+
+/** Línea completa para guardar o editar, con el marcador @video si el vídeo viene del selector. */
+export function formatBlockItemLine(item: WorkoutBlockItemDraft, blockType?: WorkoutBlockType): string {
+  const line = buildBlockItemLine(item, blockType);
+  if (!line) return '';
+  return `${line}${formatWorkoutItemVideoSuffix(item.youtubeVideoId)}`;
+}
+
+/** Vista de solo lectura: oculta el marcador @video añadido por el selector, pero conserva el texto pegado a mano. */
+export function formatBlockItemLineForDisplay(
+  item: WorkoutBlockItemDraft,
+  blockType?: WorkoutBlockType,
+): string {
+  return buildBlockItemLine(item, blockType);
 }
 
 export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft, 'id'> {
@@ -374,10 +394,12 @@ export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft
   const trimmed = line.trim();
   if (!trimmed) return empty;
 
-  const colonIndex = trimmed.indexOf(':');
-  const name = colonIndex > 0 ? trimmed.slice(0, colonIndex).trim() : trimmed;
-  const prescription = colonIndex > 0 ? trimmed.slice(colonIndex + 1).trim() : '';
-  const result = { ...empty, text: name };
+  const youtubeVideoId = parseWorkoutItemVideoId(trimmed);
+  const withoutVideo = stripWorkoutItemVideoMarker(trimmed);
+  const colonIndex = withoutVideo.indexOf(':');
+  const name = colonIndex > 0 ? withoutVideo.slice(0, colonIndex).trim() : withoutVideo;
+  const prescription = colonIndex > 0 ? withoutVideo.slice(colonIndex + 1).trim() : '';
+  const result = { ...empty, text: name, youtubeVideoId };
 
   if (!prescription) return result;
 
@@ -698,6 +720,7 @@ export function sanitizeWorkoutBlock(block: WorkoutBlockDraft): WorkoutBlockDraf
         percent: item.percent?.trim() ?? '',
         rm: item.rm?.trim() ?? '',
         loadMetric: getMovementLoadMetric(item),
+        youtubeVideoId: item.youtubeVideoId?.trim() || undefined,
       }))
       .filter((item) => item.text),
   };

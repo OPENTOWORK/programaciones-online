@@ -17,6 +17,8 @@ import {
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ExerciseNamePickerModal } from '@/components/trainer/ExerciseNamePickerModal';
+import { ExerciseVideoPickerModal } from '@/components/trainer/ExerciseVideoPickerModal';
 import { borderRadius, colors, shadows, spacing, typography } from '@/constants/theme';
 import { getBlockAccent } from '@/lib/workoutContentParser';
 import {
@@ -195,6 +197,9 @@ function MovementRow({
 }) {
   const usesSeries = blockUsesSeries(blockType);
   const loadMetric = getMovementLoadMetric(item);
+  const [videoPickerOpen, setVideoPickerOpen] = useState(false);
+  const [namePickerOpen, setNamePickerOpen] = useState(false);
+  const hasVideo = Boolean(item.youtubeVideoId?.trim());
 
   const setLoadMetric = (metric: MovementLoadMetric) => {
     onUpdate({
@@ -235,6 +240,14 @@ function MovementRow({
           placeholderTextColor={colors.textMuted}
           style={[styles.input, styles.itemNameInput]}
         />
+        <Pressable
+          onPress={() => setNamePickerOpen(true)}
+          hitSlop={8}
+          style={({ pressed }) => [styles.libraryNameBtn, pressed && styles.libraryNameBtnPressed]}
+          accessibilityLabel="Buscar ejercicio en la biblioteca"
+        >
+          <Ionicons name="search-outline" size={16} color={colors.accent} />
+        </Pressable>
         <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Quitar ejercicio">
           <Ionicons name="close-circle-outline" size={18} color={colors.textMuted} />
         </Pressable>
@@ -311,7 +324,55 @@ function MovementRow({
             />
           </View>
         ) : null}
+
+        <View style={styles.videoField}>
+          <Text style={styles.metricLabel}>Vídeo</Text>
+          <Pressable
+            onPress={() => setVideoPickerOpen(true)}
+            style={({ pressed }) => [
+              styles.videoBtn,
+              hasVideo && styles.videoBtnActive,
+              pressed && styles.videoBtnPressed,
+            ]}
+            accessibilityLabel={hasVideo ? 'Editar vídeo del ejercicio' : 'Añadir vídeo del ejercicio'}
+          >
+            <Ionicons
+              name={hasVideo ? 'videocam' : 'videocam-outline'}
+              size={16}
+              color={hasVideo ? colors.accent : colors.textMuted}
+            />
+            <Text style={[styles.videoBtnText, hasVideo && styles.videoBtnTextActive]}>
+              {hasVideo ? 'Editar' : 'Añadir'}
+            </Text>
+          </Pressable>
+        </View>
       </View>
+
+      <ExerciseNamePickerModal
+        visible={namePickerOpen}
+        currentName={item.text}
+        onCancel={() => setNamePickerOpen(false)}
+        onConfirm={(option) => {
+          setNamePickerOpen(false);
+          onUpdate({
+            text: option.name,
+            aimharderEjerId: option.aimharderEjerId,
+          });
+        }}
+      />
+
+      <ExerciseVideoPickerModal
+        visible={videoPickerOpen}
+        exerciseName={item.text}
+        currentVideoId={item.youtubeVideoId}
+        onCancel={() => setVideoPickerOpen(false)}
+        onConfirm={(selection) => {
+          setVideoPickerOpen(false);
+          onUpdate({
+            youtubeVideoId: selection?.youtubeVideoId,
+          });
+        }}
+      />
     </View>
   );
 }
@@ -1269,6 +1330,19 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 120,
   },
+  libraryNameBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: `${colors.accent}55`,
+    backgroundColor: `${colors.accent}12`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  libraryNameBtnPressed: {
+    opacity: 0.85,
+  },
   movementMetricsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1313,6 +1387,36 @@ const styles = StyleSheet.create({
   loadValueInput: {
     minHeight: 36,
     paddingVertical: 6,
+  },
+  videoField: {
+    minWidth: 88,
+  },
+  videoBtn: {
+    minHeight: 36,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  videoBtnActive: {
+    borderColor: colors.accent,
+    backgroundColor: `${colors.accent}18`,
+  },
+  videoBtnPressed: {
+    opacity: 0.92,
+  },
+  videoBtnText: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  videoBtnTextActive: {
+    color: colors.text,
   },
   loadMetricPicker: {
     flexDirection: 'row',

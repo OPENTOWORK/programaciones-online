@@ -1,4 +1,5 @@
 import { parseExerciseLabelFromBlockItem } from '@/lib/exerciseName';
+import { parseWorkoutItemVideoId, stripWorkoutItemVideoMarker } from '@/lib/workoutItemVideo';
 
 export interface BlockItemDisplay {
   name: string;
@@ -6,6 +7,7 @@ export interface BlockItemDisplay {
   load?: string;
   /** "Carga" no encaja cuando la prescripción es por tiempo. */
   loadLabel?: 'Carga' | 'Tiempo';
+  youtubeVideoId?: string;
 }
 
 export interface TimingDisplayPart {
@@ -28,12 +30,14 @@ function normalizeLoadUnit(unit?: string) {
 
 export function parseBlockItemForDisplay(line: string): BlockItemDisplay {
   const trimmed = line.trim();
-  const name = parseExerciseLabelFromBlockItem(trimmed);
-  const colonIndex = trimmed.indexOf(':');
-  let prescription = colonIndex > 0 ? trimmed.slice(colonIndex + 1).trim() : '';
+  const youtubeVideoId = parseWorkoutItemVideoId(trimmed);
+  const working = stripWorkoutItemVideoMarker(trimmed);
+  const name = parseExerciseLabelFromBlockItem(working);
+  const colonIndex = working.indexOf(':');
+  let prescription = colonIndex > 0 ? working.slice(colonIndex + 1).trim() : '';
 
   if (!prescription) {
-    return { name };
+    return { name, youtubeVideoId };
   }
 
   let load: string | undefined;
@@ -66,6 +70,7 @@ export function parseBlockItemForDisplay(line: string): BlockItemDisplay {
     quantity: prescription || undefined,
     load,
     loadLabel: load ? loadLabel ?? 'Carga' : undefined,
+    youtubeVideoId,
   };
 }
 

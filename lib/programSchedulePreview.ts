@@ -6,7 +6,7 @@ import {
   type SessionSchedule,
 } from '@/lib/sessionSchedule';
 import type { Program, Workout } from '@/lib/types';
-import { defaultDayOrder, type SessionDraft, type SessionKind } from '@/lib/trainerSessionDraft';
+import { defaultDayOrder, sessionKindFromWorkoutName, type SessionDraft, type SessionKind } from '@/lib/trainerSessionDraft';
 
 export type ScheduleViewMode = 'month' | 'week' | 'day';
 
@@ -122,6 +122,8 @@ function workoutPreviewItem(
     exerciseCount: workout.exercises.length,
     isCurrent: options.isCurrent,
     isDraft: options.isDraft,
+    kind: sessionKindFromWorkoutName(workout.name),
+    dayOrder: workout.schedule?.dayOrder,
   };
 }
 

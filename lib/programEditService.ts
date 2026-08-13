@@ -1,4 +1,10 @@
 import { mockPrograms, mockWorkouts } from '@/lib/mockData';
+import {
+  formatStandardVenueDescription,
+  getVenuePlaceholderSlot,
+  isVenuePlaceholderProgram,
+  parseStandardVenueFromDescription,
+} from '@/lib/standardVenueCatalog';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { Exercise, Program, Workout } from '@/lib/types';
 import {
@@ -138,6 +144,31 @@ export function getDemoCatalog() {
   return { programs: demoPrograms, workouts: demoWorkouts };
 }
 
+export async function ensureVenueCatalogProgram(
+  placeholder: Program,
+): Promise<{ program?: Program; error?: string }> {
+  if (!isVenuePlaceholderProgram(placeholder)) {
+    return { program: placeholder };
+  }
+
+  if (!placeholder.planId) {
+    return { error: 'Falta el plan asociado' };
+  }
+
+  const slotInfo = getVenuePlaceholderSlot(placeholder.id);
+  if (!slotInfo) {
+    return { error: 'No se pudo identificar la programación de este espacio' };
+  }
+
+  const { venue, slot } = slotInfo;
+  return createProgramCatalog({
+    planId: placeholder.planId,
+    name: slot.name,
+    description: formatStandardVenueDescription(slot.description, venue),
+    category: 'standard',
+  });
+}
+
 export async function createProgramCatalog(
   input: ProgramCatalogCreate,
 ): Promise<{ program?: Program; error?: string }> {
@@ -151,6 +182,8 @@ export async function createProgramCatalog(
   }
 
   if (!isSupabaseConfigured) {
+    const description = input.description?.trim() || 'Programación creada por el entrenador.';
+    const { venue, description: cleanedDescription } = parseStandardVenueFromDescription(description);
     const program: Program = {
       id: createDemoId('prog'),
       name: trimmedName,
@@ -162,10 +195,11 @@ export async function createProgramCatalog(
       sessionsPerWeek: 3,
       status: 'disponible',
       icon: 'programs',
-      description: input.description?.trim() || 'Programación creada por el entrenador.',
+      description: cleanedDescription,
       equipment: [],
       trainingDays: [],
       weeks: [],
+      standardVenue: venue ?? (input.category === 'standard' ? 'gym' : undefined),
     };
 
     demoPrograms = [program, ...demoPrograms];
@@ -187,6 +221,9 @@ export async function createProgramCatalog(
 
   if (error || !data) return { error: error?.message ?? 'No se pudo crear la programación' };
 
+  const rawDescription = data.descripcion?.trim() || input.description?.trim() || 'Programación creada por el entrenador.';
+  const { venue, description: cleanedDescription } = parseStandardVenueFromDescription(rawDescription);
+
   return {
     program: {
       id: data.id,
@@ -199,10 +236,11 @@ export async function createProgramCatalog(
       sessionsPerWeek: 3,
       status: 'disponible',
       icon: 'programs',
-      description: data.descripcion?.trim() || input.description?.trim() || 'Programación creada por el entrenador.',
+      description: cleanedDescription,
       equipment: [],
       trainingDays: [],
       weeks: [],
+      standardVenue: venue ?? (input.category === 'standard' ? 'gym' : undefined),
     },
   };
 }
@@ -301,10 +339,6 @@ export async function createWorkoutCatalog(
       schedule: input.schedule,
     },
   };
-}
-
-function isDraftExerciseId(exerciseId: string) {
-  return exerciseId.startsWith('draft-ex-');
 }
 
 export async function updateProgramCatalog(
@@ -408,38 +442,37 @@ export async function updateWorkoutCatalog(
     return { error: 'No se pudo guardar la sesión. Revisa tus permisos de entrenador.' };
   }
 
-  for (const [sortOrder, exercise] of update.exercises.entries()) {
-    if (isDraftExerciseId(exercise.id)) {
-      const { error: insertError } = await supabase.from('entrenos_ejercicios').insert({
-        entreno_id: workoutId,
-        sort_order: sortOrder,
-        ...exerciseToRow(exercise),
-      });
+  const { data: existingExercises, error: existingExercisesError } = await supabase
+    .from('entrenos_ejercicios')
+    .select('id')
+    .eq('entreno_id', workoutId)
+    .order('sort_order');
 
-      if (insertError) return { error: insertError.message };
+  if (existingExercisesError) return { error: existingExercisesError.message };
+
+  for (const [sortOrder, exercise] of update.exercises.entries()) {
+    const row = {
+      sort_order: sortOrder,
+      ...exerciseToRow(exercise),
+    };
+    const existingId = existingExercises?.[sortOrder]?.id;
+
+    if (existingId) {
+      const { error: exerciseError } = await supabase
+        .from('entrenos_ejercicios')
+        .update(row)
+        .eq('id', existingId);
+
+      if (exerciseError) return { error: exerciseError.message };
       continue;
     }
 
-    const { data: exerciseData, error: exerciseError } = await supabase
-      .from('entrenos_ejercicios')
-      .update({
-        sort_order: sortOrder,
-        ...exerciseToRow(exercise),
-      })
-      .eq('id', exercise.id)
-      .select('id')
-      .maybeSingle();
+    const { error: insertError } = await supabase.from('entrenos_ejercicios').insert({
+      entreno_id: workoutId,
+      ...row,
+    });
 
-    if (exerciseError) return { error: exerciseError.message };
-    if (!exerciseData) {
-      const { error: insertError } = await supabase.from('entrenos_ejercicios').insert({
-        entreno_id: workoutId,
-        sort_order: sortOrder,
-        ...exerciseToRow(exercise),
-      });
-
-      if (insertError) return { error: insertError.message };
-    }
+    if (insertError) return { error: insertError.message };
   }
 
   return {};

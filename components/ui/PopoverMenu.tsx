@@ -19,7 +19,7 @@ interface PopoverMenuProps {
   onClose: () => void;
 }
 
-const MENU_WIDTH = 190;
+const MENU_WIDTH = 210;
 const GAP = 6;
 const SCREEN_MARGIN = spacing.sm;
 

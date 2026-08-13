@@ -74,6 +74,13 @@ export function createRestDayDraft(sessionIndex = 0): SessionDraft {
 }
 
 /** Hereda el calendario de su sesión y nace sin bloques para rellenarla más tarde. */
+export function sessionKindFromWorkoutName(name: string): SessionKind | undefined {
+  const trimmed = name.trim();
+  if (trimmed === ACTIVATION_SESSION_NAME) return 'activation';
+  if (trimmed === REST_DAY_SESSION_NAME) return 'rest';
+  return undefined;
+}
+
 export function createActivationDraftFor(session: SessionDraft): SessionDraft {
   return {
     ...session,
@@ -138,6 +145,7 @@ function serializeExercisesAsStrengthBlock(exercises: Exercise[]) {
       sets: String(exercise.sets),
       reps: exercise.reps,
       aimharderEjerId: exercise.aimharderEjerId,
+      youtubeVideoId: exercise.youtubeVideoId,
     })),
   });
   return serializeWorkoutBlocks([block]);
@@ -174,5 +182,7 @@ export function workoutToSessionDraft(workout: Workout, sessionIndex = 0): Sessi
     cooldown: workout.cooldown,
     exercises: [],
     schedule: parseScheduleFromWorkout(workout, sessionIndex),
+    dayOrder: workout.schedule?.dayOrder,
+    kind: sessionKindFromWorkoutName(workout.name),
   };
 }

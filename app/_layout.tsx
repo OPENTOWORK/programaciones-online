@@ -56,8 +56,10 @@ function RootNavigator() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="auth" options={{ headerShown: false }} />
           <Stack.Screen name="tabs" options={{ headerShown: false }} />
-          <Stack.Screen name="plan/[id]" options={{ title: 'Programación' }} />
-          <Stack.Screen name="program/[id]" options={{ title: 'Programación' }} />
+          <Stack.Screen name="plan/[id]/index" options={{ title: 'Programación' }} />
+          <Stack.Screen name="plan/[id]/[venue]" options={{ title: 'Estándar' }} />
+          <Stack.Screen name="program/[id]/index" options={{ title: 'Programación' }} />
+          <Stack.Screen name="program/[id]/info" options={{ title: 'Ficha de la programación' }} />
           <Stack.Screen name="workout/[id]" options={{ title: 'Sesión' }} />
           <Stack.Screen name="library" options={{ title: 'Biblioteca de ejercicios' }} />
           <Stack.Screen name="calendar/[date]" options={{ title: 'Día de entreno' }} />
@@ -72,6 +74,7 @@ function RootNavigator() {
           <Stack.Screen name="trainer/chat/[id]" options={{ title: 'Chat con atleta' }} />
           <Stack.Screen name="trainer/plan/create" options={{ title: 'Nuevo plan' }} />
           <Stack.Screen name="trainer/plan/[id]" options={{ title: 'Plan del atleta' }} />
+          <Stack.Screen name="trainer/template/index" options={{ title: 'Plantillas de sesión' }} />
           <Stack.Screen name="trainer/template/[id]" options={{ title: 'Plantilla de sesión' }} />
           <Stack.Screen name="trainer/program/create" options={{ title: 'Nueva programación' }} />
           <Stack.Screen name="trainer/program/[id]/edit" options={{ title: 'Editar programación' }} />

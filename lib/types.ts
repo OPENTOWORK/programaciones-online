@@ -1,5 +1,6 @@
 import type { AppIconName } from '@/constants/icons';
 import type { SessionSchedule } from '@/lib/sessionSchedule';
+import type { StandardVenueId } from '@/lib/standardVenues';
 
 export type FitnessLevel = 'principiante' | 'intermedio' | 'avanzado';
 export type ProgramGoal = 'fuerza' | 'hipertrofia' | 'pérdida de grasa' | 'rendimiento' | 'movilidad';
@@ -58,6 +59,8 @@ export interface Program {
   name: string;
   planId?: string;
   category: ProgramCategory;
+  /** Solo para el plan Estándar: espacio donde se publica la programación. */
+  standardVenue?: StandardVenueId;
   level: FitnessLevel;
   duration: ProgramDuration;
   goal?: ProgramGoal;

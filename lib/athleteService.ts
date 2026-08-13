@@ -147,6 +147,28 @@ export async function fetchAthleteById(athleteId: string): Promise<AthleteSummar
   };
 }
 
+/** Busca un atleta por email para añadirlo al tablero sin duplicar cuentas. */
+export async function findAthleteProfileByEmail(email: string): Promise<AthleteSummary | null> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !isSupabaseConfigured) return null;
+
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  const atletaRoleId = await fetchAtletaRoleId(supabase);
+  if (!atletaRoleId) return null;
+
+  const { data, error } = await supabase
+    .from(PERFIL_TABLE)
+    .select('id, name, email, nivel, objetivo, altura, peso, lesiones')
+    .eq('id_roles', atletaRoleId)
+    .ilike('email', normalized)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapAthleteRow(data);
+}
+
 /**
  * Perfiles de los leads del CRM que ya no tienen rol atleta (promocionados a entrenador),
  * porque `fetchAthletes` los deja fuera por definición.

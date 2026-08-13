@@ -19,10 +19,11 @@ import { PromptModal } from '@/components/ui/PromptModal';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useSessionTemplates } from '@/hooks/useSessionTemplates';
 import type { SessionTemplate } from '@/lib/sessionTemplateService';
+import { CreateSessionTemplateModal } from '@/components/trainer/CreateSessionTemplateModal';
 import {
-  applyTemplateToDraft,
   canSaveSessionAsTemplate,
   describeSessionTemplate,
+  mergeTemplateIntoDraft,
   sessionDraftToTemplateContent,
 } from '@/lib/sessionTemplates';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
@@ -98,7 +99,8 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
   const [listOpen, setListOpen] = useState(false);
   const [optionsFor, setOptionsFor] = useState<SessionTemplate | null>(null);
   const [renaming, setRenaming] = useState<SessionTemplate | null>(null);
-  const [saveOpen, setSaveOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   if (!isTrainer) return null;
@@ -112,16 +114,12 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
   };
 
   const applyTemplate = (template: SessionTemplate) => {
-    onChange(applyTemplateToDraft(draft, template.content));
+    onChange(mergeTemplateIntoDraft(draft, template.content));
     setListOpen(false);
     setOptionsFor(null);
-    setNotice(`Plantilla "${template.name}" aplicada. Ajusta lo que necesites antes de guardar.`);
-  };
-
-  const handleCreate = async (name: string) => {
-    setSaveOpen(false);
-    const result = await create(name, sessionDraftToTemplateContent(draft));
-    if (!result.error) setNotice(`Plantilla "${name}" guardada.`);
+    setNotice(
+      `Plantilla "${template.name}" añadida a esta sesión. Ajusta lo que necesites antes de guardar.`,
+    );
   };
 
   const handleRename = async (name: string) => {
@@ -155,10 +153,10 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
     <Card style={styles.card}>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <Text style={styles.title}>Plantillas de sesión</Text>
+          <Text style={styles.title}>Plantillas</Text>
           <Text style={styles.subtitle}>
-            Reutiliza sesiones que ya tengas montadas. Al aplicar una se sustituyen los bloques, la
-            duración y los días; el nombre y el número de sesión se mantienen.
+            Guarda bloques o ejercicios sueltos y reutilízalos en cualquier sesión. Al usar una
+            plantilla, su contenido se añade a la sesión actual.
           </Text>
         </View>
         {templates.length > 0 ? <Text style={styles.count}>{templates.length}</Text> : null}
@@ -180,11 +178,11 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
           style={styles.actionButton}
         />
         <Button
-          title="Guardar esta sesión como plantilla"
+          title="Guardar bloques/ejercicios como plantilla"
           variant="outline"
-          onPress={() => setSaveOpen(true)}
-          loading={saving}
-          disabled={!canSave || saving}
+          onPress={() => setCreateOpen(true)}
+          loading={saving || createSaving}
+          disabled={!canSave || saving || createSaving}
           style={styles.actionButton}
         />
         <Button
@@ -197,14 +195,14 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
 
       {templates.length === 0 && !isLoading ? (
         <Text style={styles.hint}>
-          Todavía no tienes plantillas. Créala desde cero con «Crear plantilla nueva» o monta los
-          bloques de esta sesión y guárdala para reutilizarla con cualquier atleta.
+          Todavía no tienes plantillas. Elige bloques o ejercicios de esta sesión y guárdalos, o
+          créala desde cero.
         </Text>
       ) : null}
 
       {!canSave && templates.length > 0 ? (
         <Text style={styles.hint}>
-          Confirma algún bloque para poder guardar esta sesión como plantilla.
+          Confirma algún bloque para poder guardar ejercicios o bloques como plantilla.
         </Text>
       ) : null}
 
@@ -221,7 +219,7 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
           <Pressable style={styles.sheet} onPress={(event) => event.stopPropagation()}>
             <Text style={styles.sheetTitle}>Tus plantillas</Text>
             <Text style={styles.sheetSubtitle}>
-              Toca una plantilla para cargarla en esta sesión y editarla.
+              Toca una plantilla para añadir sus bloques o ejercicios a esta sesión.
             </Text>
             <ScrollView style={styles.sheetList} contentContainerStyle={styles.sheetListContent}>
               {templates.map((template) => (
@@ -260,7 +258,7 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
         actions={[
           {
             key: 'apply',
-            label: 'Cargar en esta sesión',
+            label: 'Añadir a esta sesión',
             onPress: () => optionsFor && applyTemplate(optionsFor),
           },
           {
@@ -270,7 +268,7 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
           },
           {
             key: 'overwrite',
-            label: 'Actualizar con la sesión actual',
+            label: 'Sobrescribir con el contenido actual',
             disabled: !canSave,
             onPress: () => optionsFor && void handleOverwrite(optionsFor),
           },
@@ -292,14 +290,27 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
         ]}
       />
 
-      <PromptModal
-        visible={saveOpen}
-        title="Guardar como plantilla"
-        placeholder="Ej. Fuerza tren superior"
-        initialValue={draft.name}
-        confirmLabel="Guardar plantilla"
-        onCancel={() => setSaveOpen(false)}
-        onConfirm={(value) => void handleCreate(value)}
+      <CreateSessionTemplateModal
+        visible={createOpen}
+        draft={draft}
+        saving={createSaving}
+        onClose={() => {
+          if (createSaving) return;
+          setCreateOpen(false);
+        }}
+        onConfirm={(input) => {
+          void (async () => {
+            setCreateSaving(true);
+            const result = await create(input.name, input.content);
+            setCreateSaving(false);
+            if (result.error) {
+              setNotice(result.error);
+              return;
+            }
+            setCreateOpen(false);
+            setNotice(`Plantilla "${input.name}" guardada.`);
+          })();
+        }}
       />
 
       <PromptModal

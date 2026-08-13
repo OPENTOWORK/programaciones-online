@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, typography } from '@/constants/theme';
 import { SESSION_BLOCK_SECTIONS } from '@/lib/sessionBlockSections';
 import {
-  formatBlockItemLine,
+  formatBlockItemLineForDisplay,
   getBlockTypeConfig,
   parseWorkoutBlocksFromText,
   type WorkoutBlockDraft,
@@ -43,7 +43,7 @@ export function SessionDraftSummary({ draft }: { draft: SessionDraft }) {
             }
 
             const lines = block.items
-              .map((item) => formatBlockItemLine(item, block.type))
+              .map((item) => formatBlockItemLineForDisplay(item, block.type))
               .filter((line) => line.trim());
 
             return (

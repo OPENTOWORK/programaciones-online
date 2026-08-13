@@ -6,14 +6,16 @@ import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing, typography } from '@/constants/theme';
 import { PLAN_DISPLAY_LABELS } from '@/lib/programService';
+import type { StandardVenueId } from '@/lib/standardVenues';
 import type { ProgramCategory } from '@/lib/types';
 
 interface TrainerCatalogPanelProps {
   planId: string;
   category: ProgramCategory;
+  standardVenue?: StandardVenueId;
 }
 
-export function TrainerCatalogPanel({ planId, category }: TrainerCatalogPanelProps) {
+export function TrainerCatalogPanel({ planId, category, standardVenue }: TrainerCatalogPanelProps) {
   const router = useRouter();
   const planLabel = PLAN_DISPLAY_LABELS[category] ?? 'Programación';
 
@@ -29,7 +31,11 @@ export function TrainerCatalogPanel({ planId, category }: TrainerCatalogPanelPro
         onPress={() =>
           router.push({
             pathname: '/trainer/program/create',
-            params: { planId, category },
+            params: {
+              planId,
+              category,
+              ...(standardVenue ? { standardVenue } : {}),
+            },
           })
         }
         style={styles.actionButton}
