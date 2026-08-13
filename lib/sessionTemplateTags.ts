@@ -1,4 +1,5 @@
 export const SESSION_TEMPLATE_ZONE_TAGS = [
+  'All',
   'Tren inferior',
   'Tren superior',
   'Core',

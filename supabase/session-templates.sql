@@ -10,7 +10,7 @@ create table if not exists public.trainer_session_templates (
   content text not null,
   tag text check (
     tag is null
-    or tag in ('Tren inferior', 'Tren superior', 'Core', 'Metcon', 'Descanso')
+    or tag in ('All', 'Tren inferior', 'Tren superior', 'Core', 'Metcon', 'Descanso')
   ),
   format_tag text check (
     format_tag is null

@@ -141,7 +141,7 @@ export default function TrainerSessionTemplatesScreen() {
           <Text style={styles.emptyTitle}>Sin plantillas todavía</Text>
           <Text style={styles.emptyText}>
             Crea plantillas desde el menú de una sesión y asígnales una etiqueta (Tren inferior,
-            Tren superior, Core, Metcon o Descanso).
+            All, Tren superior, Core, Metcon o Descanso).
           </Text>
         </Card>
       ) : (
