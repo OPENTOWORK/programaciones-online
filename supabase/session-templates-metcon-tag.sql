@@ -1,7 +1,4 @@
--- Etiqueta de agrupación para plantillas de sesión.
-alter table public.trainer_session_templates
-  add column if not exists tag text;
-
+-- Añade Metcon a las etiquetas de zona de plantillas.
 alter table public.trainer_session_templates
   drop constraint if exists trainer_session_templates_tag_check;
 
@@ -18,6 +15,3 @@ alter table public.trainer_session_templates
       'Descanso'
     )
   );
-
-create index if not exists trainer_session_templates_tag_idx
-  on public.trainer_session_templates (trainer_id, tag, name);

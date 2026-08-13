@@ -2,6 +2,7 @@ export const SESSION_TEMPLATE_ZONE_TAGS = [
   'Tren inferior',
   'Tren superior',
   'Core',
+  'Metcon',
   'Activación',
   'Descanso',
 ] as const;
