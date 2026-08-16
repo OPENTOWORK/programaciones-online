@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Alert,
@@ -37,6 +38,7 @@ import {
   type ScheduleViewMode,
 } from '@/lib/programSchedulePreview';
 import { buildScheduleCalendarItems, type ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
+import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
 import {
   canSaveSessionAsTemplate,
   mergeTemplatesIntoDraft,
@@ -128,6 +130,7 @@ export function ScheduleCalendarModal({
   presentation = 'modal',
   headerAction,
   onSessionEdit,
+  onSessionPreview,
   onCreateSession,
   buildSessionDraft,
   buildRestDayDraft,
@@ -140,6 +143,7 @@ export function ScheduleCalendarModal({
   onSessionMoveToDate,
   onSessionReorderDay,
 }: ScheduleCalendarModalProps) {
+  const router = useRouter();
   const { user } = useAuth();
   const isTrainer = isTrainerRole(user?.role);
   const { width, height } = useWindowDimensions();
@@ -562,7 +566,15 @@ export function ScheduleCalendarModal({
     return null;
   };
 
-  const hasSessionMenu = Boolean(onSessionCopy || onSessionDelete || loadSessionDraft || onSessionEdit || saveSession);
+  const hasSessionMenu = Boolean(
+    onSessionCopy ||
+      onSessionDelete ||
+      loadSessionDraft ||
+      onSessionEdit ||
+      onSessionPreview ||
+      saveSession ||
+      isTrainer,
+  );
 
   const handleSessionMoveToDate = async (
     item: SchedulePreviewItem,
@@ -606,7 +618,15 @@ export function ScheduleCalendarModal({
     setBulkDeleting(true);
     setFormError(null);
     try {
+      // Una sesión recurrente de catálogo aparece varios días con el mismo id: borrar una vez basta.
+      const seenIds = new Set<string>();
       for (const item of selectedItems) {
+        const deleteId = item.id.startsWith('plan:')
+          ? item.id.replace(/:\d{4}-\d{2}-\d{2}$/, '')
+          : parseSchedulePreviewItemKey(item.id).sourceId;
+        if (seenIds.has(deleteId)) continue;
+        seenIds.add(deleteId);
+
         const result = await onSessionDelete(item);
         if (result) {
           setFormError(result);
@@ -642,6 +662,33 @@ export function ScheduleCalendarModal({
         onPress: () => {
           setMenu(null);
           openEditEditor(menuItem);
+        },
+      });
+    }
+
+    if (isTrainer || onSessionPreview) {
+      menuActions.push({
+        key: 'preview',
+        label: 'Visualizar',
+        onPress: () => {
+          setMenu(null);
+          if (onSessionPreview) {
+            onSessionPreview(menuItem);
+            return;
+          }
+          if (onClose && presentation === 'modal') onClose();
+          openTrainerPreviewSession(router, menuItem, {
+            program: source.program,
+            workouts: source.workouts,
+            draft: source.draft,
+            editingWorkoutId: source.editingWorkoutId,
+            isNewSession: source.isNewSession,
+            additionalDrafts: source.additionalDrafts?.map((entry) => ({
+              id: entry.id,
+              draft: entry.draft,
+            })),
+            athleteSchedule: source.athleteSchedule,
+          });
         },
       });
     }
@@ -1036,7 +1083,7 @@ export function ScheduleCalendarModal({
       <ConfirmModal
         visible={bulkDeleteOpen}
         title="Eliminar sesiones seleccionadas"
-        message={`¿Eliminar ${selectedItems.length} sesión${selectedItems.length === 1 ? '' : 'es'} del plan del atleta?`}
+        message={`¿Eliminar ${selectedItems.length} sesión${selectedItems.length === 1 ? '' : 'es'} seleccionada${selectedItems.length === 1 ? '' : 's'}?`}
         checkboxLabel="Entiendo que estas sesiones se eliminarán permanentemente"
         confirmLabel={`Eliminar ${selectedItems.length} sesión${selectedItems.length === 1 ? '' : 'es'}`}
         destructive

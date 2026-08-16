@@ -41,6 +41,9 @@ interface WorkoutSectionProps {
     youtubeVideoId?: string,
   ) => boolean;
   activeExerciseName?: string;
+  onSendExerciseVideo?: (exerciseKey: string, exerciseName: string) => void;
+  uploadingExerciseKey?: string | null;
+  sentExerciseKeys?: Set<string> | string[];
 }
 
 function TimingPartPill({ part, accentText }: { part: TimingDisplayPart; accentText: string }) {
@@ -73,6 +76,15 @@ interface BlockItemsProps {
     youtubeVideoId?: string,
   ) => boolean;
   activeExerciseName?: string;
+  onSendExerciseVideo?: (exerciseKey: string, exerciseName: string) => void;
+  uploadingExerciseKey?: string | null;
+  sentExerciseKeys?: Set<string> | string[];
+}
+
+function hasSentVideo(sentExerciseKeys: Set<string> | string[] | undefined, key: string) {
+  if (!sentExerciseKeys) return false;
+  if (sentExerciseKeys instanceof Set) return sentExerciseKeys.has(key);
+  return sentExerciseKeys.includes(key);
 }
 
 function BlockItems({
@@ -85,6 +97,9 @@ function BlockItems({
   onExercisePress,
   hasExerciseVideo,
   activeExerciseName,
+  onSendExerciseVideo,
+  uploadingExerciseKey,
+  sentExerciseKeys,
 }: BlockItemsProps) {
   if (items.length === 0) return null;
 
@@ -101,6 +116,9 @@ function BlockItems({
         const isActive =
           Boolean(activeExerciseName) &&
           activeExerciseName?.toLowerCase() === exerciseName.toLowerCase();
+        const canSendVideo = Boolean(onSendExerciseVideo && itemKey && exerciseName.trim());
+        const isUploadingThis = Boolean(uploadingExerciseKey && uploadingExerciseKey === itemKey);
+        const alreadySent = hasSentVideo(sentExerciseKeys, itemKey);
 
         const openVideo = () => {
           if (showVideo) onExercisePress?.(exerciseName, undefined, display.youtubeVideoId);
@@ -160,19 +178,49 @@ function BlockItems({
                   </View>
                 ) : null}
               </Pressable>
+              <View style={styles.itemActions}>
+                {showVideo ? (
+                  <Pressable onPress={openVideo} style={styles.itemVideoPressable}>
+                    <Text style={styles.itemVideoHint}>
+                      {isActive ? 'Reproduciendo arriba' : 'Ver vídeo'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {canSendVideo ? (
+                  <Pressable
+                    onPress={() => onSendExerciseVideo?.(itemKey, exerciseName)}
+                    disabled={isUploadingThis}
+                    style={styles.itemVideoPressable}
+                    accessibilityLabel="Enviar vídeo del ejercicio"
+                  >
+                    <Text style={[styles.itemSendHint, isUploadingThis && styles.itemSendHintMuted]}>
+                      {isUploadingThis
+                        ? 'Subiendo…'
+                        : alreadySent
+                          ? 'Enviar otro vídeo'
+                          : 'Enviar vídeo'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+            <View style={styles.itemSideActions}>
               {showVideo ? (
-                <Pressable onPress={openVideo} style={styles.itemVideoPressable}>
-                  <Text style={styles.itemVideoHint}>
-                    {isActive ? 'Reproduciendo arriba' : 'Ver vídeo'}
-                  </Text>
+                <Pressable onPress={openVideo} style={styles.itemPlayBtn} accessibilityLabel="Ver vídeo">
+                  <AppIcon name="play" size={18} color={accentText} outlined />
+                </Pressable>
+              ) : null}
+              {canSendVideo ? (
+                <Pressable
+                  onPress={() => onSendExerciseVideo?.(itemKey, exerciseName)}
+                  disabled={isUploadingThis}
+                  style={styles.itemPlayBtn}
+                  accessibilityLabel="Grabar y enviar vídeo"
+                >
+                  <AppIcon name="camera" size={18} color={accentText} outlined />
                 </Pressable>
               ) : null}
             </View>
-            {showVideo ? (
-              <Pressable onPress={openVideo} style={styles.itemPlayBtn} accessibilityLabel="Ver vídeo">
-                <AppIcon name="play" size={18} color={accentText} outlined />
-              </Pressable>
-            ) : null}
           </View>
         );
       })}
@@ -304,11 +352,25 @@ export function WorkoutSection({
   onExercisePress,
   hasExerciseVideo,
   activeExerciseName,
+  onSendExerciseVideo,
+  uploadingExerciseKey,
+  sentExerciseKeys,
 }: WorkoutSectionProps) {
   if (!content?.trim()) return null;
 
   const structured = isStructuredWorkoutContent(content);
   const blocks = structured ? parseWorkoutContent(content) : [];
+  const itemProps = {
+    sectionKey,
+    completedItems,
+    onToggleItem,
+    onExercisePress,
+    hasExerciseVideo,
+    activeExerciseName,
+    onSendExerciseVideo,
+    uploadingExerciseKey,
+    sentExerciseKeys,
+  };
 
   return (
     <Card style={[styles.card, variant === 'featured' ? styles.cardFeatured : undefined]}>
@@ -326,12 +388,7 @@ export function WorkoutSection({
               key={`${block.label}-${index}`}
               block={block}
               blockIndex={index}
-              sectionKey={sectionKey}
-              completedItems={completedItems}
-              onToggleItem={onToggleItem}
-              onExercisePress={onExercisePress}
-              hasExerciseVideo={hasExerciseVideo}
-              activeExerciseName={activeExerciseName}
+              {...itemProps}
             />
           ))}
         </View>
@@ -543,6 +600,23 @@ const styles = StyleSheet.create({
     color: colors.accent,
     marginTop: 2,
     fontWeight: '600',
+  },
+  itemSendHint: {
+    ...typography.caption,
+    color: colors.accentBlue,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  itemSendHintMuted: {
+    color: colors.textMuted,
+  },
+  itemActions: {
+    gap: 2,
+    marginTop: 2,
+  },
+  itemSideActions: {
+    alignItems: 'center',
+    gap: 2,
   },
   itemVideoPressable: {
     alignSelf: 'flex-start',

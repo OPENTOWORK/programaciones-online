@@ -15,11 +15,18 @@ export function buildPlanAssignedMessage(
     return `Plan nutricional asignado: ${quoted}`;
   }
 
+  const typeLabel =
+    planType === 'home_training'
+      ? 'Entrenamiento a domicilio'
+      : planType === 'gym_training'
+        ? 'Programación para gimnasio'
+        : 'Plan personalizado';
+
   if (sessionNumber > 1) {
     return `Sesión ${sessionNumber} añadida al plan ${quoted}`;
   }
 
-  return `Plan personalizado asignado: ${quoted}`;
+  return `${typeLabel} asignado: ${quoted}`;
 }
 
 export function buildMessageSentActivity(text: string): string {

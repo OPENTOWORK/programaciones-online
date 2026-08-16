@@ -23,15 +23,6 @@ export function ActiveProgramCard({ active, dense = false }: ActiveProgramCardPr
           {active.program.name}
         </Text>
       </View>
-      <View style={[styles.nextWorkout, dense && styles.nextWorkoutDense]}>
-        <Text style={styles.nextLabel}>Próximo entrenamiento</Text>
-        <Text style={[styles.nextName, dense && styles.nextNameDense]} numberOfLines={dense ? 1 : undefined}>
-          {active.nextWorkout.name}
-        </Text>
-        <Text style={styles.nextMeta}>
-          {active.nextWorkout.dayLabel} · {active.nextWorkout.estimatedDuration}
-        </Text>
-      </View>
     </LinearGradient>
   );
 }
@@ -60,13 +51,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     fontWeight: '700',
   },
-  nextWorkoutDense: {
-    marginTop: spacing.xs,
-  },
-  nextNameDense: {
-    ...typography.bodySmall,
-    marginTop: 2,
-  },
   label: { ...typography.caption, color: colors.accent, fontWeight: '700', textTransform: 'uppercase' },
   titleRow: {
     flexDirection: 'row',
@@ -75,8 +59,4 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
   },
   name: { ...typography.h3, color: colors.text, flex: 1 },
-  nextWorkout: { marginTop: spacing.sm },
-  nextLabel: { ...typography.caption, color: colors.textMuted },
-  nextName: { ...typography.body, color: colors.text, fontWeight: '600', marginTop: 4 },
-  nextMeta: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 },
 });

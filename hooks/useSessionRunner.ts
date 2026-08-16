@@ -119,6 +119,40 @@ export function useSessionRunner({ userId, workout, logLookup, isDemoMode }: Use
     return true;
   };
 
+  /** Crea o actualiza el log sin marcar la sesión como terminada (p. ej. antes de subir un video). */
+  const ensureLog = async (): Promise<{ logId?: string; error?: string }> => {
+    if (logId) return { logId };
+
+    if (!userId && !isDemoMode) {
+      return { error: 'Debes iniciar sesión para subir un video.' };
+    }
+
+    const result = await saveSessionLog({
+      userId: userId ?? 'demo-user',
+      entrenoId: logLookup.entrenoId,
+      athletePlanId: logLookup.athletePlanId,
+      programId: workout.programId,
+      scheduledDate: logLookup.scheduledDate,
+      workoutName: workout.name,
+      feelings,
+      completedItems: completedKeys(completed),
+      workout,
+      markCompleted: false,
+    });
+
+    if (result.error) {
+      setError(result.error);
+      return { error: result.error };
+    }
+
+    if (result.log) {
+      setLogId(result.log.id);
+      return { logId: result.log.id };
+    }
+
+    return { error: 'No se pudo crear el registro de la sesión' };
+  };
+
   return {
     checklist,
     completed,
@@ -127,6 +161,7 @@ export function useSessionRunner({ userId, workout, logLookup, isDemoMode }: Use
     setFeelings,
     toggleItem,
     save,
+    ensureLog,
     loadingLog,
     saving,
     error,

@@ -1,27 +1,18 @@
-import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { ActiveProgramCard } from '@/components/progress/ActiveProgramCard';
 import { MotivationBanner } from '@/components/progress/MotivationBanner';
 import { ProgressOverview } from '@/components/progress/ProgressOverview';
 import { ProgressPhotos } from '@/components/progress/ProgressPhotos';
 import { TrainerFeedbackCard } from '@/components/progress/TrainerFeedbackCard';
-import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
-import { useActiveProgram } from '@/hooks/useActiveProgram';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useProgress } from '@/hooks/useProgress';
 
 export default function ProgressScreen() {
-  const router = useRouter();
   const { progress, refresh } = useProgress();
-  const { actives, refresh: refreshActivePrograms } = useActiveProgram();
-  useFocusRefresh(
-    () => refresh(),
-    () => refreshActivePrograms(),
-  );
+  useFocusRefresh(() => refresh());
 
   const weeklyValue =
     progress.weeklyTarget > 0
@@ -64,29 +55,6 @@ export default function ProgressScreen() {
             },
           ]}
         />
-
-        {actives.length > 0 ? (
-          <View style={styles.block}>
-            <Text style={styles.sectionTitle}>Programación activa</Text>
-            <Text style={styles.sectionSubtitle}>{actives.length} de 3 activas</Text>
-            {actives.map((active) => (
-              <ActiveProgramCard key={active.program.id} active={active} dense />
-            ))}
-          </View>
-        ) : (
-          <Card style={styles.emptyProgramsCard}>
-            <Text style={styles.emptyProgramsTitle}>Sin programación activa</Text>
-            <Text style={styles.emptyProgramsText}>
-              Empieza una programación para ver aquí tu próximo entrenamiento.
-            </Text>
-            <Button
-              title="Ver programaciones"
-              onPress={() => router.push('/tabs/programs')}
-              style={styles.denseButton}
-              textStyle={styles.denseButtonText}
-            />
-          </Card>
-        )}
 
         <View style={styles.block}>
           <Text style={styles.sectionTitle}>Historial reciente</Text>
@@ -139,34 +107,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     fontWeight: '700',
-  },
-  sectionSubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  emptyProgramsCard: {
-    padding: spacing.sm + 2,
-    gap: spacing.xs,
-    marginBottom: 0,
-  },
-  emptyProgramsTitle: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  emptyProgramsText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-  denseButton: {
-    minHeight: 40,
-    marginTop: spacing.xs,
-    paddingVertical: spacing.sm,
-  },
-  denseButtonText: {
-    fontSize: 13,
   },
   denseCard: {
     padding: spacing.sm + 2,

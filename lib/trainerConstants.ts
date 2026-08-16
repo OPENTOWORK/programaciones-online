@@ -68,4 +68,27 @@ export function isServicePlanCategory(category?: string): category is ServicePla
 export const ATHLETE_PLAN_TYPE_LABELS: Record<AthletePlanType, string> = {
   personalized: 'Plan personalizado',
   nutrition: 'Plan nutricional',
+  home_training: 'Entrenamiento a domicilio',
+  gym_training: 'Programación para gimnasio',
 };
+
+export const CREATE_ATHLETE_PLAN_LABELS: Record<AthletePlanType, string> = {
+  personalized: 'Crear plan personalizado',
+  nutrition: 'Crear plan nutricional',
+  home_training: 'Crear entrenamiento a domicilio',
+  gym_training: 'Crear programación para gimnasio',
+};
+
+export function isAthletePlanType(value?: string | null): value is AthletePlanType {
+  return (
+    value === 'personalized' ||
+    value === 'nutrition' ||
+    value === 'home_training' ||
+    value === 'gym_training'
+  );
+}
+
+/** Planes con sesiones de entrenamiento (no nutrición ni calendario a domicilio). */
+export function isSessionBasedAthletePlanType(planType?: AthletePlanType | null): boolean {
+  return planType === 'personalized' || planType === 'gym_training';
+}

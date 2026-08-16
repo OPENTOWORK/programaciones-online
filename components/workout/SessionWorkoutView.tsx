@@ -1,25 +1,33 @@
-import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { ExerciseRow } from '@/components/workout/ExerciseRow';
 import { ExerciseVideoPanel } from '@/components/workout/ExerciseVideoPanel';
 import { SessionLogVideos } from '@/components/workout/SessionLogVideos';
 import { WorkoutSection } from '@/components/workout/WorkoutSection';
+import { ActionSheetModal } from '@/components/ui/ActionSheetModal';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing, typography } from '@/constants/theme';
+import { useSessionVideos } from '@/hooks/useSessionVideos';
+import type { SessionWorkoutContent } from '@/hooks/useSessionRunner';
 import { normalizeExerciseName } from '@/lib/exerciseName';
 import { formatSessionSectionTitle } from '@/lib/personalizedPlanContent';
-import type { SessionWorkoutContent } from '@/hooks/useSessionRunner';
 import type { ChecklistItem } from '@/lib/sessionChecklist';
+import type { SessionVideoSource } from '@/lib/sessionVideoPicker';
 
 type ActiveVideo = {
   key: string;
   name: string;
   videoId: string;
+};
+
+type SendTarget = {
+  key: string;
+  name: string;
 };
 
 interface SessionWorkoutViewProps {
@@ -42,6 +50,8 @@ interface SessionWorkoutViewProps {
   readOnlySubtitle?: string;
   logId?: string;
   userId?: string;
+  ensureLog?: () => Promise<{ logId?: string; error?: string }>;
+  onLogEnsured?: (logId: string) => void;
 }
 
 export function SessionWorkoutView({
@@ -64,8 +74,30 @@ export function SessionWorkoutView({
   readOnlySubtitle,
   logId,
   userId,
+  ensureLog,
+  onLogEnsured,
 }: SessionWorkoutViewProps) {
   const [activeVideo, setActiveVideo] = useState<ActiveVideo | null>(null);
+  const [sendTarget, setSendTarget] = useState<SendTarget | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const {
+    videos,
+    isLoading: videosLoading,
+    isUploading,
+    uploadingExerciseKey,
+    error: videosError,
+    uploadVideo,
+    removeVideo,
+  } = useSessionVideos(logId, userId);
+
+  const sentExerciseKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const video of videos) {
+      if (video.exerciseKey) keys.add(video.exerciseKey);
+    }
+    return keys;
+  }, [videos]);
 
   const completedTotal = checklist.filter((item) => completed[item.key]).length;
   const total = checklist.length;
@@ -81,6 +113,24 @@ export function SessionWorkoutView({
     setActiveVideo((current) => (current?.key === key ? null : { key, name, videoId }));
   };
 
+  const handleUpload = async (source: SessionVideoSource, target?: SendTarget | null) => {
+    setLocalError(null);
+    const result = await uploadVideo({
+      source,
+      exerciseKey: target?.key,
+      exerciseName: target?.name,
+      ensureLogId: ensureLog,
+    });
+
+    if (result.logId && result.logId !== logId) {
+      onLogEnsured?.(result.logId);
+    }
+
+    if (result.error) {
+      setLocalError(result.error);
+    }
+  };
+
   const sectionProps = (sectionKey: string) => ({
     sectionKey,
     completedItems: completed,
@@ -90,11 +140,20 @@ export function SessionWorkoutView({
     hasExerciseVideo: (name: string, aimharderEjerId?: number, youtubeVideoId?: string) =>
       hasVideo(name, aimharderEjerId, youtubeVideoId),
     activeExerciseName: activeVideo?.name,
+    onSendExerciseVideo: readOnly
+      ? undefined
+      : (exerciseKey: string, exerciseName: string) => {
+          setSendTarget({ key: exerciseKey, name: exerciseName });
+        },
+    uploadingExerciseKey: readOnly ? null : uploadingExerciseKey,
+    sentExerciseKeys: readOnly ? undefined : sentExerciseKeys,
   });
 
   if (loadingLog) {
     return <ActivityIndicator color={colors.accent} style={styles.loader} />;
   }
+
+  const displayError = localError || videosError || error;
 
   return (
     <View>
@@ -159,6 +218,13 @@ export function SessionWorkoutView({
                       exercise.youtubeVideoId,
                     )
                   }
+                  onSendVideo={
+                    readOnly
+                      ? undefined
+                      : () => setSendTarget({ key, name: exercise.name })
+                  }
+                  isSendingVideo={!readOnly && uploadingExerciseKey === key}
+                  hasSentVideo={!readOnly && sentExerciseKeys.has(key)}
                 />
               </View>
             );
@@ -189,10 +255,14 @@ export function SessionWorkoutView({
           />
 
           <SessionLogVideos
-            logId={logId}
-            userId={userId}
+            videos={videos}
+            isLoading={videosLoading}
+            isUploading={isUploading && !uploadingExerciseKey}
+            error={videosError}
+            onUpload={(source) => void handleUpload(source)}
+            onRemove={(videoId) => void removeVideo(videoId)}
             readOnly={false}
-            requiresSavedLog
+            canUpload
           />
 
           {saved ? (
@@ -207,10 +277,52 @@ export function SessionWorkoutView({
           )}
         </>
       ) : (
-        <SessionLogVideos logId={logId} readOnly compact={false} />
+        <SessionLogVideos
+          videos={videos}
+          isLoading={videosLoading}
+          readOnly
+          compact={false}
+        />
       )}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {displayError ? <Text style={styles.error}>{displayError}</Text> : null}
+
+      <ActionSheetModal
+        visible={Boolean(sendTarget)}
+        title={sendTarget ? `Vídeo · ${sendTarget.name}` : 'Enviar vídeo'}
+        subtitle={
+          Platform.OS === 'web'
+            ? 'Elige un vídeo de tu dispositivo para enviárselo a tu entrenador.'
+            : 'Graba cómo haces el ejercicio o elige un vídeo de la galería.'
+        }
+        onClose={() => setSendTarget(null)}
+        actions={[
+          ...(Platform.OS === 'web'
+            ? []
+            : [
+                {
+                  key: 'camera',
+                  label: isUploading ? 'Abriendo cámara…' : 'Grabar con la cámara',
+                  disabled: isUploading,
+                  onPress: () => {
+                    const target = sendTarget;
+                    setSendTarget(null);
+                    void handleUpload('camera', target);
+                  },
+                },
+              ]),
+          {
+            key: 'library',
+            label: isUploading ? 'Subiendo…' : Platform.OS === 'web' ? 'Elegir vídeo' : 'Elegir de la galería',
+            disabled: isUploading,
+            onPress: () => {
+              const target = sendTarget;
+              setSendTarget(null);
+              void handleUpload('library', target);
+            },
+          },
+        ]}
+      />
     </View>
   );
 }

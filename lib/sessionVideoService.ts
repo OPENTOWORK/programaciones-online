@@ -8,12 +8,14 @@ export interface SessionLogVideo {
   mimeType: string;
   url: string;
   createdAt: string;
+  exerciseKey?: string | null;
+  exerciseName?: string | null;
 }
 
 const TABLE = 'session_log_videos';
 const BUCKET = 'session-videos';
 const SIGNED_URL_TTL = 60 * 60;
-const MAX_VIDEOS_PER_LOG = 5;
+const MAX_VIDEOS_PER_LOG = 30;
 
 const demoVideos = new Map<string, SessionLogVideo[]>();
 
@@ -65,6 +67,8 @@ function mapRow(
     file_name: string;
     mime_type: string;
     created_at: string;
+    exercise_key?: string | null;
+    exercise_name?: string | null;
   },
   url: string,
 ): SessionLogVideo {
@@ -76,6 +80,8 @@ function mapRow(
     mimeType: row.mime_type,
     url,
     createdAt: row.created_at,
+    exerciseKey: row.exercise_key ?? null,
+    exerciseName: row.exercise_name ?? null,
   };
 }
 
@@ -91,7 +97,7 @@ export async function fetchSessionVideos(logId: string): Promise<SessionLogVideo
 
   const { data, error } = await supabase
     .from(TABLE)
-    .select('id, workout_log_id, user_id, storage_path, file_name, mime_type, created_at')
+    .select('id, workout_log_id, user_id, storage_path, file_name, mime_type, exercise_key, exercise_name, created_at')
     .eq('workout_log_id', logId)
     .order('created_at', { ascending: false });
 
@@ -109,6 +115,8 @@ export async function fetchSessionVideos(logId: string): Promise<SessionLogVideo
           file_name: row.file_name as string,
           mime_type: row.mime_type as string,
           created_at: row.created_at as string,
+          exercise_key: (row.exercise_key as string | null | undefined) ?? null,
+          exercise_name: (row.exercise_name as string | null | undefined) ?? null,
         },
         url,
       );
@@ -122,11 +130,15 @@ export async function uploadSessionVideo(input: {
   uri: string;
   mimeType: string;
   fileName: string;
+  exerciseKey?: string;
+  exerciseName?: string;
 }): Promise<{ error?: string; video?: SessionLogVideo }> {
   const safeName = sanitizeFileName(input.fileName);
   const ext = extensionFromMime(input.mimeType);
   const storageFileName = `${Date.now()}-${safeName.includes('.') ? safeName : `${safeName}.${ext}`}`;
   const storagePath = `${input.userId}/${input.logId}/${storageFileName}`;
+  const exerciseKey = input.exerciseKey?.trim() || null;
+  const exerciseName = input.exerciseName?.trim() || null;
 
   if (!isSupabaseConfigured) {
     const existing = demoVideos.get(input.logId) ?? [];
@@ -142,6 +154,8 @@ export async function uploadSessionVideo(input: {
       mimeType: input.mimeType,
       url: input.uri,
       createdAt: new Date().toISOString(),
+      exerciseKey,
+      exerciseName,
     };
     demoVideos.set(input.logId, [video, ...existing]);
     return { video };
@@ -187,13 +201,19 @@ export async function uploadSessionVideo(input: {
         storage_path: storagePath,
         file_name: safeName,
         mime_type: input.mimeType,
+        exercise_key: exerciseKey,
+        exercise_name: exerciseName,
       })
-      .select('id, workout_log_id, user_id, file_name, mime_type, created_at')
+      .select('id, workout_log_id, user_id, file_name, mime_type, exercise_key, exercise_name, created_at')
       .single();
 
     if (error || !data) {
       await supabase.storage.from(BUCKET).remove([storagePath]);
-      return { error: error?.message ?? 'No se pudo registrar el video' };
+      const message = error?.message ?? 'No se pudo registrar el video';
+      if (message.toLowerCase().includes('exercise_key') || message.toLowerCase().includes('exercise_name')) {
+        return { error: 'Falta migrar columnas de ejercicio. Ejecuta: npm run supabase:session-videos-exercise' };
+      }
+      return { error: message };
     }
 
     const url = await signedUrlForPath(supabase, storagePath);
@@ -206,6 +226,8 @@ export async function uploadSessionVideo(input: {
           file_name: data.file_name as string,
           mime_type: data.mime_type as string,
           created_at: data.created_at as string,
+          exercise_key: (data.exercise_key as string | null | undefined) ?? null,
+          exercise_name: (data.exercise_name as string | null | undefined) ?? null,
         },
         url,
       ),

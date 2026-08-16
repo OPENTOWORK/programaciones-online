@@ -4,6 +4,7 @@ import { AthletePlanCard } from '@/components/program/AthletePlanCard';
 import { PersonalizedPlanGroupCard } from '@/components/program/PersonalizedPlanGroupCard';
 import { ProgramCard } from '@/components/program/ProgramCard';
 import { ServicePlanEmptyCard } from '@/components/program/ServicePlanEmptyCard';
+import { HomeTrainingCalendarPanel } from '@/components/homeTraining/HomeTrainingCalendarPanel';
 import { TrainerCatalogPanel } from '@/components/trainer/TrainerCatalogPanel';
 import { TrainerPlansPanel } from '@/components/trainer/TrainerPlansPanel';
 import { Card } from '@/components/ui/Card';
@@ -23,12 +24,15 @@ import { resolveStandardVenuePrograms } from '@/lib/standardVenueCatalog';
 import type { StandardVenueId } from '@/lib/standardVenues';
 import {
   isServicePlanCategory,
+  isSessionBasedAthletePlanType,
   PERSONALIZED_GYM_PLAN_CONTENT,
   SERVICE_PLAN_CONTENT,
   type AthletePlanType,
 } from '@/lib/trainerConstants';
 
-function serviceCategoryToPlanType(category: 'personalized' | 'nutrition'): AthletePlanType {
+function serviceCategoryToPlanType(
+  category: 'personalized' | 'nutrition' | 'gym_training',
+): AthletePlanType {
   return category;
 }
 
@@ -50,8 +54,11 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
 
   const canEditCatalog = isTrainer && isTrainerEditableCategory(plan.category);
   const serviceCategory = isServicePlanCategory(plan.category) ? plan.category : undefined;
+  const isHomeTraining = serviceCategory === 'home_training';
   const athletePlanType =
-    serviceCategory === 'personalized' || serviceCategory === 'nutrition'
+    serviceCategory === 'personalized' ||
+    serviceCategory === 'nutrition' ||
+    serviceCategory === 'gym_training'
       ? serviceCategoryToPlanType(serviceCategory)
       : undefined;
 
@@ -73,19 +80,21 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
     ? resolveStandardVenuePrograms(standardVenue, getByPlanId(planId), planId)
     : getByPlanId(planId);
   const servicePlanContent = serviceCategory ? SERVICE_PLAN_CONTENT[serviceCategory] : null;
-  const isServiceRequestPlan =
-    serviceCategory === 'home_training' || serviceCategory === 'gym_training';
+  const isServiceRequestPlan = serviceCategory === 'gym_training';
   const showAthleteAssignedPlans =
     !isTrainer &&
+    !isHomeTraining &&
     athletePlanType &&
     (athletePlansLoading || myAthletePlans.length > 0);
   const showServiceEmptyCard =
     Boolean(servicePlanContent && serviceCategory) &&
+    !isTrainer &&
+    !isHomeTraining &&
     !athletePlansLoading &&
-    ((isServiceRequestPlan && !isTrainer) ||
+    myAthletePlans.length === 0 &&
+    (isServiceRequestPlan ||
       (programs.length === 0 &&
-        myAthletePlans.length === 0 &&
-        (serviceCategory === 'nutrition' || serviceCategory === 'personalized' || !isTrainer)));
+        (serviceCategory === 'nutrition' || serviceCategory === 'personalized')));
   const showPersonalizedGymCard =
     serviceCategory === 'personalized' &&
     programs.length === 0 &&
@@ -111,9 +120,13 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
   };
 
   const groupedPersonalizedPlans = groupPersonalizedPlans(
-    myAthletePlans.filter((item) => item.planType === 'personalized'),
+    myAthletePlans.filter((item) => isSessionBasedAthletePlanType(item.planType)),
   );
   const nutritionPlans = myAthletePlans.filter((item) => item.planType === 'nutrition');
+
+  if (isHomeTraining) {
+    return <HomeTrainingCalendarPanel />;
+  }
 
   return (
     <>
@@ -135,7 +148,7 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
         </View>
       ) : null}
 
-      {isServiceRequestPlan && !isTrainer && servicePlanContent && serviceCategory ? (
+      {isServiceRequestPlan && !isTrainer && servicePlanContent && serviceCategory && myAthletePlans.length === 0 ? (
         <View style={styles.serviceCards}>
           <ServicePlanEmptyCard
             category={serviceCategory}

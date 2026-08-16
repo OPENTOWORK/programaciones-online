@@ -11,6 +11,8 @@ interface ScreenWrapperProps {
   style?: ViewStyle;
   padded?: boolean;
   scrollRef?: RefObject<ScrollView | null>;
+  /** Si es false, no vuelve arriba al enfocar la pantalla. */
+  resetScrollOnFocus?: boolean;
 }
 
 export function ScreenWrapper({
@@ -19,16 +21,17 @@ export function ScreenWrapper({
   style,
   padded = true,
   scrollRef: externalScrollRef,
+  resetScrollOnFocus = true,
 }: ScreenWrapperProps) {
   const internalScrollRef = useRef<ScrollView>(null);
   const scrollRef = externalScrollRef ?? internalScrollRef;
 
   useFocusEffect(
     useCallback(() => {
-      if (!scrollable) return;
+      if (!scrollable || !resetScrollOnFocus) return;
 
       scrollRef.current?.scrollTo({ y: 0, animated: false });
-    }, [scrollable]),
+    }, [resetScrollOnFocus, scrollable]),
   );
 
   const content = scrollable ? (

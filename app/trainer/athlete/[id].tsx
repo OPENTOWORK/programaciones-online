@@ -20,20 +20,33 @@ import {
   createPersonalizedPlanPreviewProgram,
   parsePersonalizedPlanContent,
   serializePersonalizedPlanContent,
+  validatePersonalizedPlanDraft,
 } from '@/lib/personalizedPlanContent';
 import { getNextSessionNumber, groupPersonalizedPlans, splitAssignedPlans, type PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
 import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
 import { moveCalendarSessionToDate } from '@/lib/moveCalendarSession';
+import { hasSessionBlockContent } from '@/lib/sessionBlockSections';
 import { formatScheduleSummary, toLocalDateString, toWeekdayIndex } from '@/lib/sessionSchedule';
-import { createEmptySessionDraft, renameSessionCopy, type SessionDraft } from '@/lib/trainerSessionDraft';
+import {
+  createEmptySessionDraft,
+  createRestDayDraft,
+  isActivationSessionDraft,
+  isRestDaySessionDraft,
+  renameSessionCopy,
+  type SessionDraft,
+} from '@/lib/trainerSessionDraft';
+import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
 import { fetchAthleteSessionLogs } from '@/lib/sessionLogService';
 import { markAthleteDetailAlertsRead } from '@/lib/trainerAthleteAlerts';
 import type { AthletePlan } from '@/lib/types';
 import { AthleteSessionLogCard } from '@/components/trainer/AthleteSessionLogCard';
 import { AthleteFeedbackPanel } from '@/components/trainer/AthleteFeedbackPanel';
-import { ScheduleCalendarModal } from '@/components/trainer/ScheduleCalendarModal';
+import {
+  ScheduleCalendarModal,
+  type CalendarSessionSaveInput,
+} from '@/components/trainer/ScheduleCalendarModal';
 import { AssignedPlansList } from '@/components/program/AssignedPlansList';
 import { IntakeAnswersTable } from '@/components/trainer/IntakeAnswersTable';
 
@@ -228,8 +241,11 @@ export default function AthleteDetailScreen() {
     return parsePersonalizedPlanContent(session.content, (session.sessionNumber ?? 1) - 1);
   };
 
-  const planIdFromCalendarItem = (item: SchedulePreviewItem) =>
-    item.id.startsWith('plan:') ? item.id.split(':')[1] : undefined;
+  const planIdFromCalendarItem = (item: SchedulePreviewItem) => {
+    if (!item.id.startsWith('plan:')) return undefined;
+    const rest = item.id.slice('plan:'.length);
+    return rest.replace(/:\d{4}-\d{2}-\d{2}$/, '') || undefined;
+  };
 
   const refreshCalendarGroup = useCallback(async () => {
     if (!calendarGroup || !id || !user?.id) return;
@@ -387,6 +403,50 @@ export default function AthleteDetailScreen() {
     if (!planId) return;
     setCalendarGroup(null);
     router.push({ pathname: '/trainer/plan/[id]', params: { id: planId, edit: '1' } });
+  };
+
+  const saveCalendarSession = async ({ draft, date, item }: CalendarSessionSaveInput) => {
+    const draftError = validatePersonalizedPlanDraft(draft);
+    if (draftError) return draftError;
+    if (
+      !isActivationSessionDraft(draft) &&
+      !isRestDaySessionDraft(draft) &&
+      !hasSessionBlockContent(draft)
+    ) {
+      return 'Añade al menos un bloque de entrenamiento.';
+    }
+
+    const scheduledDraft = applyDateToDraft(draft, date);
+    const planId = item ? planIdFromCalendarItem(item) : undefined;
+    const source = calendarGroup?.sessions.find((session) => session.id === planId);
+
+    if (source) {
+      const result = await updatePlan(source.id, {
+        athleteId: source.athleteId,
+        planType: source.planType,
+        title: source.title,
+        content: serializePersonalizedPlanContent(scheduledDraft, source.sessionNumber ?? 1),
+      });
+      if (result.error) return result.error;
+      await refreshCalendarGroup();
+      return null;
+    }
+
+    if (!calendarGroup || !id) return 'No se pudo guardar la sesión.';
+
+    const sessionNumber = getNextSessionNumber(calendarGroup.sessions);
+    const result = await createPlan({
+      athleteId: id,
+      planType: calendarGroup.sessions[0]?.planType ?? 'personalized',
+      title: calendarGroup.title,
+      content: serializePersonalizedPlanContent(scheduledDraft, sessionNumber),
+      planGroupId: calendarGroup.planGroupId,
+      sessionNumber,
+      athleteName: athlete?.name,
+    });
+    if (result.error) return result.error;
+    await refreshCalendarGroup();
+    return null;
   };
 
   const openNutritionPlanEditor = (planId: string) => {
@@ -686,6 +746,15 @@ export default function AthleteDetailScreen() {
         subtitle={`Sesiones programadas de ${athlete.name}. Despliega una sesión para ver su contenido.`}
         source={calendarSource}
         loadSessionDraft={loadCalendarSessionDraft}
+        buildSessionDraft={(date) =>
+          applyDateToDraft(
+            createEmptySessionDraft(getNextSessionNumber(calendarGroup?.sessions ?? []) - 1),
+            date,
+          )
+        }
+        buildRestDayDraft={(date) => applyDateToDraft(createRestDayDraft(0), date)}
+        saveSession={saveCalendarSession}
+        onSessionPreview={(item) => openTrainerPreviewSession(router, item, calendarSource)}
         onSessionEdit={openCalendarSession}
         onSessionCopy={handleCalendarCopy}
         onCopyDayToDate={handleCopyDayToDate}

@@ -39,10 +39,24 @@ interface PersonalizedPlanSessionLayoutProps {
   onPendingBlocksChange?: (hasPending: boolean) => void;
   /** Borrador inicial para crear un entreno desde el calendario ampliado. */
   onBuildSessionDraftForDate?: (date: Date) => SessionDraft;
+  /** Borrador de día de descanso para la fecha elegida. */
+  onBuildRestDayDraftForDate?: (date: Date) => SessionDraft;
   /** Borrador de una sesión del calendario para editarla sin salir de él. */
   onLoadCalendarSessionDraft?: (item: SchedulePreviewItem) => SessionDraft | null;
   /** Guarda el entreno creado o editado desde el calendario ampliado. */
   onSaveCalendarSession?: (input: CalendarSessionSaveInput) => Promise<string | null> | string | null;
+  onSessionCopy?: (item: SchedulePreviewItem) => Promise<string | null> | string | null;
+  onSessionDelete?: (item: SchedulePreviewItem) => Promise<string | null> | string | null;
+  onSessionMoveToDate?: (
+    item: SchedulePreviewItem,
+    date: Date,
+    dayItems?: SchedulePreviewItem[],
+  ) => Promise<string | null> | string | null;
+  onSessionReorderDay?: (
+    date: Date,
+    orderedItems: SchedulePreviewItem[],
+  ) => Promise<string | null> | string | null;
+  onSessionEdit?: (item: SchedulePreviewItem) => void;
 }
 
 export function PersonalizedPlanSessionLayout({
@@ -60,8 +74,14 @@ export function PersonalizedPlanSessionLayout({
   canConfirmSession = false,
   onPendingBlocksChange,
   onBuildSessionDraftForDate,
+  onBuildRestDayDraftForDate,
   onLoadCalendarSessionDraft,
   onSaveCalendarSession,
+  onSessionCopy,
+  onSessionDelete,
+  onSessionMoveToDate,
+  onSessionReorderDay,
+  onSessionEdit,
 }: PersonalizedPlanSessionLayoutProps) {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -154,15 +174,21 @@ export function PersonalizedPlanSessionLayout({
         visible={calendarOpen}
         onClose={() => setCalendarOpen(false)}
         title={planTitle.trim() || 'Calendario de la programación'}
-        subtitle="Pulsa un día para ver sus entrenamientos, modificarlos o crear uno nuevo."
+        subtitle="Mismo calendario que en Programaciones: edita, visualiza, escribe, usa plantillas, copia o elimina varias sesiones."
         source={calendarSource}
         onSessionPreview={(item) => {
           setCalendarOpen(false);
           openTrainerPreviewSession(router, item, previewState);
         }}
+        onSessionEdit={onSessionEdit}
         buildSessionDraft={onBuildSessionDraftForDate}
+        buildRestDayDraft={onBuildRestDayDraftForDate}
         loadSessionDraft={onLoadCalendarSessionDraft}
         saveSession={onSaveCalendarSession}
+        onSessionCopy={onSessionCopy}
+        onSessionDelete={onSessionDelete}
+        onSessionMoveToDate={onSessionMoveToDate}
+        onSessionReorderDay={onSessionReorderDay}
       />
     </View>
   );

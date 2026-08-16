@@ -4,7 +4,7 @@ create table if not exists public.athlete_plans (
   id uuid primary key default gen_random_uuid(),
   athlete_id uuid not null references auth.users(id) on delete cascade,
   trainer_id uuid not null references auth.users(id) on delete cascade,
-  plan_type text not null check (plan_type in ('personalized', 'nutrition')),
+  plan_type text not null check (plan_type in ('personalized', 'nutrition', 'home_training', 'gym_training')),
   title text not null,
   content text not null,
   created_at timestamptz not null default now(),

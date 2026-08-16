@@ -1,4 +1,6 @@
+import { buildAthleteCalendarItems, type CatalogProgramSchedule } from '@/lib/athleteSchedule';
 import { combineMainPartsForSave, extractExercisesFromSessionDraft } from '@/lib/sessionBlockSections';
+import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import {
   buildSchedulePreviewItems,
   itemsForDate,
@@ -7,7 +9,7 @@ import {
   type SchedulePreviewItem,
 } from '@/lib/programSchedulePreview';
 import type { SessionWorkoutContent } from '@/hooks/useSessionRunner';
-import type { Program, Workout } from '@/lib/types';
+import type { AthletePlan, Program, Workout } from '@/lib/types';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
 
 export type TrainerPreviewState = {
@@ -18,6 +20,12 @@ export type TrainerPreviewState = {
   isNewSession: boolean;
   planTitle?: string;
   additionalDrafts?: Array<{ id: string; draft: SessionDraft }>;
+  athleteSchedule?: {
+    plans: AthletePlan[];
+    workouts: Workout[];
+    program?: Program;
+    catalogPrograms?: CatalogProgramSchedule[];
+  };
 };
 
 const store = new Map<string, TrainerPreviewState>();
@@ -108,6 +116,14 @@ function resolvePreviewDraft(state: TrainerPreviewState, item: SchedulePreviewIt
 }
 
 export function buildTrainerPreviewItems(state: TrainerPreviewState, focusDate: Date) {
+  if (state.athleteSchedule) {
+    return buildAthleteCalendarItems({
+      ...state.athleteSchedule,
+      focusDate,
+      viewMode: 'day',
+    });
+  }
+
   const base = buildSchedulePreviewItems({
     program: state.program,
     workouts: state.workouts,
@@ -139,10 +155,50 @@ export function buildTrainerPreviewItems(state: TrainerPreviewState, focusDate: 
   return base.concat(extra);
 }
 
+function resolveAthleteScheduleSession(
+  state: TrainerPreviewState,
+  item: SchedulePreviewItem,
+): SessionWorkoutContent | null {
+  const schedule = state.athleteSchedule;
+  if (!schedule) return null;
+
+  if (item.id.startsWith('plan:')) {
+    const planId = item.id.split(':')[1];
+    const plan = schedule.plans.find((entry) => entry.id === planId);
+    if (!plan) return null;
+    return draftToPreviewWorkout(
+      parsePersonalizedPlanContent(plan.content, (plan.sessionNumber ?? 1) - 1),
+      item.name || plan.title,
+    );
+  }
+
+  const { sourceId } = parseSchedulePreviewItemKey(item.id);
+  const catalogWorkouts = [
+    ...schedule.workouts,
+    ...(schedule.catalogPrograms ?? []).flatMap((entry) => entry.workouts),
+  ];
+  const workout = catalogWorkouts.find((entry) => entry.id === sourceId || entry.id === item.id);
+  if (!workout) return null;
+
+  return {
+    name: workout.name,
+    estimatedDuration: workout.estimatedDuration,
+    warmup: workout.warmup,
+    main: workout.main,
+    core: workout.core,
+    cooldown: workout.cooldown,
+    exercises: workout.exercises,
+    programId: workout.programId,
+  };
+}
+
 export function resolveTrainerPreviewSession(
   state: TrainerPreviewState,
   item: SchedulePreviewItem,
 ): SessionWorkoutContent {
+  const fromAthleteSchedule = resolveAthleteScheduleSession(state, item);
+  if (fromAthleteSchedule) return fromAthleteSchedule;
+
   const previewDraft = resolvePreviewDraft(state, item);
   if (previewDraft) {
     return draftToPreviewWorkout(previewDraft, state.planTitle);

@@ -21,7 +21,13 @@ import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useSessionTemplates } from '@/hooks/useSessionTemplates';
 import { safeGoBack } from '@/lib/navigation';
 import type { SessionTemplate } from '@/lib/sessionTemplateService';
-import { groupTemplatesByTag } from '@/lib/sessionTemplateTags';
+import {
+  groupTemplatesByTag,
+  SESSION_TEMPLATE_FORMAT_TAGS,
+  SESSION_TEMPLATE_ZONE_TAGS,
+  type SessionTemplateFormatTag,
+  type SessionTemplateTag,
+} from '@/lib/sessionTemplateTags';
 import { describeSessionTemplate } from '@/lib/sessionTemplates';
 
 function confirmDelete(name: string, onConfirm: () => void) {
@@ -92,7 +98,18 @@ export default function TrainerSessionTemplatesScreen() {
   const { templates, isLoading, saving, persistent, error, isTrainer, remove } =
     useSessionTemplates();
   const [optionsFor, setOptionsFor] = useState<SessionTemplate | null>(null);
-  const groups = useMemo(() => groupTemplatesByTag(templates), [templates]);
+  const [zoneFilter, setZoneFilter] = useState<SessionTemplateTag | null>(null);
+  const [formatFilter, setFormatFilter] = useState<SessionTemplateFormatTag | null>(null);
+
+  const filteredTemplates = useMemo(() => {
+    return templates.filter((template) => {
+      if (zoneFilter && template.tag !== zoneFilter) return false;
+      if (formatFilter && template.formatTag !== formatFilter) return false;
+      return true;
+    });
+  }, [templates, zoneFilter, formatFilter]);
+
+  const groups = useMemo(() => groupTemplatesByTag(filteredTemplates), [filteredTemplates]);
 
   if (!isTrainer) {
     return (
@@ -117,7 +134,7 @@ export default function TrainerSessionTemplatesScreen() {
     <ScreenWrapper>
       <SectionHeader
         title="Plantillas"
-        subtitle="Organizadas por etiqueta. Despliega cada grupo para ver los ejercicios."
+        subtitle="Filtra por zona o formato y despliega cada grupo para ver los ejercicios."
       />
 
       {!persistent ? (
@@ -134,14 +151,70 @@ export default function TrainerSessionTemplatesScreen() {
         style={styles.createButton}
       />
 
+      {templates.length > 0 ? (
+        <Card style={styles.filterCard}>
+          <Text style={styles.tagLabel}>Zona</Text>
+          <View style={styles.tagRow}>
+            {SESSION_TEMPLATE_ZONE_TAGS.map((option) => {
+              const selected = zoneFilter === option;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => setZoneFilter(selected ? null : option)}
+                  style={({ pressed }) => [
+                    styles.tagChip,
+                    selected && styles.tagChipSelected,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.tagLabel}>Formato</Text>
+          <View style={styles.tagRow}>
+            {SESSION_TEMPLATE_FORMAT_TAGS.map((option) => {
+              const selected = formatFilter === option;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => setFormatFilter(selected ? null : option)}
+                  style={({ pressed }) => [
+                    styles.tagChip,
+                    selected && styles.tagChipSelected,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Card>
+      ) : null}
+
       {isLoading ? (
         <ActivityIndicator color={colors.accent} style={styles.loader} />
       ) : templates.length === 0 ? (
         <Card style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Sin plantillas todavía</Text>
           <Text style={styles.emptyText}>
-            Crea plantillas desde el menú de una sesión y asígnales una etiqueta (Tren inferior,
-            All, Tren superior, Core, Metcon o Descanso).
+            Crea plantillas desde el menú de una sesión y asígnales una etiqueta (All, Tren inferior,
+            Tren superior, Core, Metcon o Descanso).
+          </Text>
+        </Card>
+      ) : filteredTemplates.length === 0 ? (
+        <Card style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>Sin resultados</Text>
+          <Text style={styles.emptyText}>
+            No hay plantillas con ese filtro. Quita zona o formato tocando otra vez la etiqueta
+            activa.
           </Text>
         </Card>
       ) : (
@@ -208,7 +281,43 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   createButton: {
+    marginBottom: spacing.md,
+  },
+  filterCard: {
     marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  tagLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  tagChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background,
+  },
+  tagChipSelected: {
+    borderColor: colors.accent,
+    backgroundColor: `${colors.accent}18`,
+  },
+  tagChipText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  tagChipTextSelected: {
+    color: colors.accent,
   },
   loader: {
     marginTop: spacing.xl,

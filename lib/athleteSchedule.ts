@@ -6,6 +6,7 @@ import { fetchProgramsByIds } from '@/lib/programService';
 import { fetchActiveProgramsForUser } from '@/lib/userProgramService';
 import { fetchWorkoutsByProgram } from '@/lib/workoutService';
 import { ACTIVATION_SESSION_NAME, REST_DAY_SESSION_NAME, defaultDayOrder } from '@/lib/trainerSessionDraft';
+import { isSessionBasedAthletePlanType } from '@/lib/trainerConstants';
 import type { AthletePlan, Program, Workout } from '@/lib/types';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
 
@@ -45,7 +46,8 @@ export async function loadAthleteScheduleSources(
   programId?: string,
   options?: { skipPlans?: boolean },
 ) {
-  const plans = options?.skipPlans ? [] : await fetchAthletePlansForUser(userId, 'personalized');
+  const allUserPlans = options?.skipPlans ? [] : await fetchAthletePlansForUser(userId);
+  const plans = allUserPlans.filter((plan) => isSessionBasedAthletePlanType(plan.planType));
   let workouts: Workout[] = [];
 
   if (programId) {
@@ -55,14 +57,18 @@ export async function loadAthleteScheduleSources(
   return { plans, workouts };
 }
 
-/** Planes personalizados y catálogo activo del atleta, para la vista del entrenador. */
+/** Planes personalizados del atleta + catálogo activo (solo lectura informativa aparte). */
 export async function loadTrainerAthleteScheduleSources(athleteId: string) {
   const [allPlans, activePrograms] = await Promise.all([
     fetchAthletePlansForAthlete(athleteId),
     fetchActiveProgramsForUser(athleteId),
   ]);
 
-  const personalizedPlans = allPlans.filter((plan) => plan.planType === 'personalized');
+  // Planes propios del atleta (personalizado / gimnasio / etc.): editables en su calendario.
+  const personalizedPlans = allPlans.filter((plan) => isSessionBasedAthletePlanType(plan.planType));
+
+  // Programaciones de catálogo a las que está apuntado: viven en Programaciones, no se mezclan
+  // en el editor del calendario del atleta.
   const programIds = activePrograms.map((program) => program.id);
   const programsById = await fetchProgramsByIds(programIds);
 

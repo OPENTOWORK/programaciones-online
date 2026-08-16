@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -5,8 +6,18 @@ import { AppIcon } from '@/components/ui/AppIcon';
 import { Card } from '@/components/ui/Card';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
+import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
+import { useMyAthletePlans } from '@/hooks/useAthletePlans';
+import { useAuth } from '@/hooks/useAuth';
+import { useFocusRefresh } from '@/hooks/useFocusRefresh';
+import { isTrainerRole } from '@/lib/athleteService';
+import { queueChatPrefill } from '@/lib/chatPrefill';
 import type { Plan } from '@/lib/programService';
 import type { ProgramCategory } from '@/lib/types';
+import {
+  isServicePlanCategory,
+  SERVICE_PLAN_CONTENT,
+} from '@/lib/trainerConstants';
 
 const PLAN_ICONS: Partial<Record<ProgramCategory, AppIconName>> = {
   personalized: 'personal',
@@ -17,12 +28,61 @@ const PLAN_ICONS: Partial<Record<ProgramCategory, AppIconName>> = {
   gym_training: 'phase',
 };
 
+const REQUEST_GREEN = '#22C55E';
+
 interface CategoryTabsProps {
   plans: Plan[];
 }
 
 export function CategoryTabs({ plans }: CategoryTabsProps) {
   const router = useRouter();
+  const { user } = useAuth();
+  const isTrainer = isTrainerRole(user?.role);
+  const { isComplete: intakeComplete, isLoading: intakeLoading } = useAthleteIntakeForm();
+  const { plans: personalizedPlans, refresh: refreshPersonalizedPlans } =
+    useMyAthletePlans(isTrainer ? undefined : 'personalized');
+
+  useFocusRefresh(() => {
+    if (!isTrainer) {
+      void refreshPersonalizedPlans();
+    }
+  });
+
+  const hasPersonalizedPlan = useMemo(
+    () => !isTrainer && personalizedPlans.some((plan) => plan.planType === 'personalized'),
+    [isTrainer, personalizedPlans],
+  );
+
+  const openRequest = (category: ProgramCategory) => {
+    if (!isServicePlanCategory(category)) return;
+
+    const prefill = SERVICE_PLAN_CONTENT[category].prefill;
+    queueChatPrefill(prefill);
+
+    if (!isTrainer && !intakeLoading && !intakeComplete) {
+      router.push({
+        pathname: '/profile/intake-form',
+        params: { returnTo: 'trainer' },
+      });
+      return;
+    }
+
+    router.push({
+      pathname: '/tabs/trainer',
+      params: { prefill },
+    });
+  };
+
+  const openPlan = (planId: string) => {
+    router.push(`/plan/${planId}`);
+  };
+
+  const openHomeCalendar = () => {
+    router.push({
+      pathname: '/tabs/home',
+      params: { focus: 'calendar' },
+    });
+  };
 
   return (
     <Card style={styles.card}>
@@ -30,11 +90,15 @@ export function CategoryTabs({ plans }: CategoryTabsProps) {
       <View style={styles.list}>
         {plans.map((plan) => {
           const icon = PLAN_ICONS[plan.category] ?? 'programs';
+          const showRequest = isServicePlanCategory(plan.category);
+          const showViewProgramming =
+            plan.category === 'personalized' && hasPersonalizedPlan;
+          const actionLabel = showViewProgramming ? 'Ver programación' : 'Solicitar';
 
           return (
             <Pressable
               key={plan.id}
-              onPress={() => router.push(`/plan/${plan.id}`)}
+              onPress={() => openPlan(plan.id)}
               style={({ pressed }) => [styles.option, pressed && styles.optionPressed]}
             >
               <View style={styles.iconWrap}>
@@ -43,6 +107,26 @@ export function CategoryTabs({ plans }: CategoryTabsProps) {
               <Text style={styles.optionText} numberOfLines={2}>
                 {plan.label}
               </Text>
+              {showRequest ? (
+                <Pressable
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    if (showViewProgramming) {
+                      openHomeCalendar();
+                      return;
+                    }
+                    openRequest(plan.category);
+                  }}
+                  style={({ pressed }) => [
+                    styles.requestBtn,
+                    pressed && styles.requestBtnPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${actionLabel} ${plan.label}`}
+                >
+                  <Text style={styles.requestBtnText}>{actionLabel}</Text>
+                </Pressable>
+              ) : null}
               <View style={styles.radio}>
                 <Text style={styles.chevron}>›</Text>
               </View>
@@ -99,6 +183,22 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '600',
     flex: 1,
+  },
+  requestBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+    backgroundColor: REQUEST_GREEN,
+    flexShrink: 0,
+  },
+  requestBtnPressed: {
+    opacity: 0.88,
+  },
+  requestBtnText: {
+    ...typography.caption,
+    color: colors.black,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   radio: {
     width: 18,

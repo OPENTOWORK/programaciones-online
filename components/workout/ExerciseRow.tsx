@@ -12,6 +12,9 @@ interface ExerciseRowProps {
   isVideoActive?: boolean;
   onToggle?: () => void;
   onOpenVideo?: () => void;
+  onSendVideo?: () => void;
+  isSendingVideo?: boolean;
+  hasSentVideo?: boolean;
 }
 
 function formatExerciseDetail(exercise: Exercise): string {
@@ -25,6 +28,9 @@ export function ExerciseRow({
   isVideoActive = false,
   onToggle,
   onOpenVideo,
+  onSendVideo,
+  isSendingVideo = false,
+  hasSentVideo = false,
 }: ExerciseRowProps) {
   return (
     <View
@@ -53,17 +59,17 @@ export function ExerciseRow({
         </View>
       )}
 
-      <Pressable
-        onPress={() => {
-          if (hasVideo) {
-            onOpenVideo?.();
-            return;
-          }
-          onToggle?.();
-        }}
-        style={styles.contentPressable}
-      >
-        <View style={styles.content}>
+      <View style={styles.content}>
+        <Pressable
+          onPress={() => {
+            if (hasVideo) {
+              onOpenVideo?.();
+              return;
+            }
+            onToggle?.();
+          }}
+          style={styles.contentPressable}
+        >
           <View style={styles.nameRow}>
             <Text style={[styles.name, completed && styles.nameCompleted]}>{exercise.name}</Text>
             {hasVideo ? <AppIcon name="play" size={18} color={colors.accent} outlined /> : null}
@@ -80,8 +86,22 @@ export function ExerciseRow({
               <Text style={styles.notes}>{exercise.notes}</Text>
             </View>
           ) : null}
-        </View>
-      </Pressable>
+        </Pressable>
+
+        {onSendVideo ? (
+          <Pressable
+            onPress={onSendVideo}
+            disabled={isSendingVideo}
+            style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]}
+            accessibilityLabel="Grabar y enviar vídeo del ejercicio"
+          >
+            <AppIcon name="camera" size={16} color={colors.accentBlue} outlined />
+            <Text style={styles.sendText}>
+              {isSendingVideo ? 'Subiendo…' : hasSentVideo ? 'Enviar otro vídeo' : 'Enviar vídeo'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -132,6 +152,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    gap: spacing.xs,
   },
   nameRow: {
     flexDirection: 'row',
@@ -170,5 +191,26 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.accentBlue,
     flex: 1,
+  },
+  sendBtn: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm,
+    backgroundColor: `${colors.accentBlue}14`,
+    borderWidth: 1,
+    borderColor: `${colors.accentBlue}44`,
+  },
+  sendBtnPressed: {
+    opacity: 0.85,
+  },
+  sendText: {
+    ...typography.caption,
+    color: colors.accentBlue,
+    fontWeight: '700',
   },
 });

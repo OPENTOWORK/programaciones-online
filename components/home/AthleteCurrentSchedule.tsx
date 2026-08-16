@@ -13,6 +13,7 @@ import { usePrograms } from '@/hooks/usePrograms';
 import { isTrainerRole } from '@/lib/athleteService';
 import { groupPersonalizedPlans } from '@/lib/personalizedPlanGroups';
 import { isVenuePlaceholderProgram } from '@/lib/standardVenueCatalog';
+import { isSessionBasedAthletePlanType } from '@/lib/trainerConstants';
 import type { AthletePlan, Program } from '@/lib/types';
 
 const NO_ASSIGNED_PLANS: AthletePlan[] = [];
@@ -21,14 +22,18 @@ const NO_ASSIGNED_PLANS: AthletePlan[] = [];
  * Calendario del atleta + desplegable de programación actual (planes asignados
  * y programaciones de catálogo activas).
  */
-export function AthleteCurrentSchedule() {
+export function AthleteCurrentSchedule({
+  preferPersonalized = false,
+  forceExpanded = false,
+}: {
+  preferPersonalized?: boolean;
+  forceExpanded?: boolean;
+} = {}) {
   const navigation = useNavigation();
   const { user, refreshUser } = useAuth();
   const { getById } = usePrograms();
   const isTrainer = isTrainerRole(user?.role);
-  const { plans: myAthletePlans, refresh: refreshAthletePlans } = useMyAthletePlans(
-    isTrainer ? undefined : 'personalized',
-  );
+  const { plans: myAthletePlans, refresh: refreshAthletePlans } = useMyAthletePlans();
   /** Remonta menús para dejarlos siempre cerrados al volver al inicio. */
   const [menusKey, setMenusKey] = useState(0);
 
@@ -38,16 +43,18 @@ export function AthleteCurrentSchedule() {
 
   useFocusEffect(
     useCallback(() => {
+      if (forceExpanded) return;
       collapseMenus();
-    }, [collapseMenus]),
+    }, [collapseMenus, forceExpanded]),
   );
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('tabPress', () => {
+      if (forceExpanded) return;
       collapseMenus();
     });
     return unsubscribe;
-  }, [collapseMenus, navigation]);
+  }, [collapseMenus, forceExpanded, navigation]);
 
   useFocusRefresh(() => {
     if (!isTrainer) {
@@ -86,7 +93,9 @@ export function AthleteCurrentSchedule() {
     () =>
       isTrainer
         ? []
-        : groupPersonalizedPlans(myAthletePlans.filter((item) => item.planType === 'personalized')),
+        : groupPersonalizedPlans(
+            myAthletePlans.filter((item) => isSessionBasedAthletePlanType(item.planType)),
+          ),
     [isTrainer, myAthletePlans],
   );
 
@@ -121,6 +130,11 @@ export function AthleteCurrentSchedule() {
     }
 
     setSelectedCalendarId((current) => {
+      if (preferPersonalized) {
+        const personalized = calendarOptions.find((option) => option.kind === 'plan');
+        if (personalized) return personalized.id;
+      }
+
       if (current && calendarOptions.some((option) => option.id === current)) {
         return current;
       }
@@ -134,7 +148,7 @@ export function AthleteCurrentSchedule() {
 
       return calendarOptions[0]?.id;
     });
-  }, [calendarOptions, user?.currentProgramId]);
+  }, [calendarOptions, preferPersonalized, user?.currentProgramId]);
 
   const selectedCalendar = calendarOptions.find((option) => option.id === selectedCalendarId);
 
@@ -149,7 +163,7 @@ export function AthleteCurrentSchedule() {
 
   return (
     <View style={styles.wrap} key={menusKey}>
-      <CollapsibleSection title="Tu calendario" defaultExpanded={false}>
+      <CollapsibleSection title="Tu calendario" defaultExpanded>
         <AthleteScheduleCalendar
           program={activeProgramForCalendar}
           assignedPlans={assignedPlansForCalendar}

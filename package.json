@@ -54,6 +54,7 @@
     "supabase:workout-logs": "node scripts/ensure-workout-logs.mjs",
     "supabase:session-logs": "node scripts/apply-session-logs.mjs",
     "supabase:session-videos": "node scripts/apply-session-videos.mjs",
+    "supabase:session-videos-exercise": "node scripts/apply-session-videos-exercise.mjs",
     "seed:standard-programs": "node scripts/apply-standard-catalog-programs.mjs",
     "seed:standard-sessions": "node scripts/apply-standard-catalog-sessions.mjs",
     "supabase:athlete-intake-form": "node scripts/apply-athlete-intake-form.mjs",

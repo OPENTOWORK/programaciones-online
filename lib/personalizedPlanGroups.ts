@@ -1,5 +1,12 @@
 import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
+import {
+  formatScheduleSummary,
+  formatScheduleWeekdays,
+  scheduleDayKey,
+  type SessionSchedule,
+} from '@/lib/sessionSchedule';
 import { ACTIVATION_SESSION_NAME, REST_DAY_SESSION_NAME, defaultDayOrder } from '@/lib/trainerSessionDraft';
+import { isSessionBasedAthletePlanType } from '@/lib/trainerConstants';
 import type { AthletePlan } from '@/lib/types';
 
 export interface PersonalizedPlanGroup {
@@ -8,6 +15,14 @@ export interface PersonalizedPlanGroup {
   title: string;
   athleteId: string;
   trainerId: string;
+  sessions: AthletePlan[];
+}
+
+export interface PersonalizedPlanDayGroup {
+  key: string;
+  title: string;
+  subtitle: string;
+  schedule: SessionSchedule;
   sessions: AthletePlan[];
 }
 
@@ -33,6 +48,74 @@ export function getSessionLabel(plan: AthletePlan, fallbackIndex = 0) {
   return `Sesión ${getSessionNumber(plan, fallbackIndex)}`;
 }
 
+function formatOnceDayTitle(schedule: SessionSchedule) {
+  const weekdayLabel = formatScheduleWeekdays(schedule);
+  if (!schedule.startDate) return weekdayLabel;
+
+  const date = new Date(`${schedule.startDate}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return weekdayLabel;
+
+  const dayMonth = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  return `${weekdayLabel} · ${dayMonth}`;
+}
+
+export function getPlanDayTitle(schedule: SessionSchedule) {
+  if (schedule.recurrence === 'once') {
+    return formatOnceDayTitle(schedule);
+  }
+  return formatScheduleWeekdays(schedule);
+}
+
+export function getPlanDaySubtitle(schedule: SessionSchedule) {
+  if (schedule.recurrence === 'once') return 'Una sola vez';
+  const summary = formatScheduleSummary(schedule);
+  const parts = summary.split('·').map((part) => part.trim());
+  return parts[1] ?? summary;
+}
+
+function daySortValue(schedule: SessionSchedule) {
+  const firstWeekday = schedule.weekdays[0] ?? 0;
+  const start = schedule.startDate ?? '';
+  return `${String(firstWeekday).padStart(2, '0')}|${start}|${schedule.recurrence}`;
+}
+
+/** Agrupa sesiones del mismo día de entreno (activación + sesión, etc.). */
+export function groupPersonalizedSessionsByDay(sessions: AthletePlan[]): PersonalizedPlanDayGroup[] {
+  const days = new Map<string, PersonalizedPlanDayGroup>();
+
+  sessions.forEach((session, index) => {
+    const draft = parsePersonalizedPlanContent(session.content, getSessionNumber(session, index) - 1);
+    const key = scheduleDayKey(draft.schedule);
+    const existing = days.get(key);
+
+    if (existing) {
+      existing.sessions.push(session);
+      return;
+    }
+
+    days.set(key, {
+      key,
+      title: getPlanDayTitle(draft.schedule),
+      subtitle: getPlanDaySubtitle(draft.schedule),
+      schedule: draft.schedule,
+      sessions: [session],
+    });
+  });
+
+  return [...days.values()]
+    .map((day) => ({
+      ...day,
+      sessions: [...day.sessions].sort((left, right) => {
+        const leftDraft = parsePersonalizedPlanContent(left.content, getSessionNumber(left) - 1);
+        const rightDraft = parsePersonalizedPlanContent(right.content, getSessionNumber(right) - 1);
+        const byOrder = defaultDayOrder(leftDraft) - defaultDayOrder(rightDraft);
+        if (byOrder !== 0) return byOrder;
+        return getSessionNumber(left) - getSessionNumber(right);
+      }),
+    }))
+    .sort((left, right) => daySortValue(left.schedule).localeCompare(daySortValue(right.schedule)));
+}
+
 export function sortPlansBySession(plans: AthletePlan[]) {
   return [...plans].sort((left, right) => {
     const bySession = getSessionNumber(left) - getSessionNumber(right);
@@ -51,7 +134,7 @@ export function groupPersonalizedPlans(plans: AthletePlan[]): PersonalizedPlanGr
   const groups = new Map<string, PersonalizedPlanGroup>();
 
   for (const plan of plans) {
-    if (plan.planType !== 'personalized') continue;
+    if (!isSessionBasedAthletePlanType(plan.planType)) continue;
 
     const id = getPlanGroupId(plan);
     const existing = groups.get(id);

@@ -16,6 +16,7 @@ import { useAthlete, useAthletes } from '@/hooks/useAthletes';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
 import { fetchAthletePlansForAthlete } from '@/lib/athletePlanService';
 import { createEmptyNutritionPlan } from '@/lib/nutritionPlanContent';
+import { moveCalendarSessionToDate } from '@/lib/moveCalendarSession';
 import { safeGoBack } from '@/lib/navigation';
 import { pickPlanPdf, type PickedPlanPdf } from '@/lib/planPdfPicker';
 import {
@@ -32,6 +33,7 @@ import {
 import { hasSessionBlockContent } from '@/lib/sessionBlockSections';
 import { needsActivationForDraft } from '@/lib/planActivation';
 import { parseSchedulePreviewItemKey, type SchedulePreviewItem } from '@/lib/programSchedulePreview';
+import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
 import {
   formatScheduleSummary,
   toLocalDateString,
@@ -43,14 +45,20 @@ import { syncExerciseVideosForNames } from '@/lib/exerciseVideoSyncService';
 import {
   createActivationDraftFor,
   createEmptySessionDraft,
+  createRestDayDraft,
+  renameSessionCopy,
   type SessionDraft,
 } from '@/lib/trainerSessionDraft';
-import { ATHLETE_PLAN_TYPE_LABELS, type AthletePlanType } from '@/lib/trainerConstants';
+import {
+  ATHLETE_PLAN_TYPE_LABELS,
+  isAthletePlanType,
+  type AthletePlanType,
+} from '@/lib/trainerConstants';
 import type { NutritionPlanData } from '@/lib/types';
 
 function parsePlanType(value?: string | string[]): AthletePlanType {
   const raw = Array.isArray(value) ? value[0] : value;
-  return raw === 'nutrition' ? 'nutrition' : 'personalized';
+  return isAthletePlanType(raw) ? raw : 'personalized';
 }
 
 function parseOptionalParam(value?: string | string[]) {
@@ -79,7 +87,7 @@ export default function CreateAthletePlanScreen() {
   const { athletes, isLoading: athletesLoading } = useAthletes();
   const { athlete: presetAthlete, isLoading: presetAthleteLoading } = useAthlete(presetAthleteId ?? '');
   const { user } = useAuth();
-  const { createPlan } = useTrainerAthletePlans();
+  const { createPlan, updatePlan, removePlan } = useTrainerAthletePlans();
 
   const isNutrition = planType === 'nutrition';
 
@@ -119,7 +127,9 @@ export default function CreateAthletePlanScreen() {
     void fetchAthletePlansForAthlete(selectedAthleteId)
       .then((plans) => {
         if (cancelled) return;
-        setExistingGroups(groupPersonalizedPlans(plans));
+        setExistingGroups(
+          groupPersonalizedPlans(plans.filter((plan) => plan.planType === planType)),
+        );
       })
       .catch(() => {
         if (!cancelled) setExistingGroups([]);
@@ -131,7 +141,7 @@ export default function CreateAthletePlanScreen() {
     return () => {
       cancelled = true;
     };
-  }, [isNutrition, selectedAthleteId, user?.id]);
+  }, [isNutrition, planType, selectedAthleteId, user?.id]);
 
   const selectedGroup = useMemo(
     () => (selectedGroupId ? findPlanGroup(existingGroups, selectedGroupId) : undefined),
@@ -310,47 +320,194 @@ export default function CreateAthletePlanScreen() {
   const buildCalendarSessionDraft = (date: Date) =>
     applyDateToDraft(createEmptySessionDraft(nextCalendarSessionNumber() - 1), date);
 
-  const loadCalendarSessionDraft = (item: SchedulePreviewItem) => {
+  const buildCalendarRestDayDraft = (date: Date) => applyDateToDraft(createRestDayDraft(0), date);
+
+  const calendarSourceId = (item: SchedulePreviewItem) => {
     const { sourceId } = parseSchedulePreviewItemKey(item.id);
-    // Las sesiones ya guardadas del plan solo se consultan aquí: se editan desde su propia ficha.
-    if (savedGroupSessions.some((session) => session.id === sourceId)) return null;
+    if (sourceId.startsWith('plan:')) {
+      return sourceId.slice('plan:'.length) || sourceId;
+    }
+    return sourceId;
+  };
+
+  const loadCalendarSessionDraft = (item: SchedulePreviewItem) => {
+    const sourceId = calendarSourceId(item);
 
     const queued = queuedSessions.find((session) => session.id === sourceId);
     if (queued) return queued.draft;
+
+    const saved = selectedGroup?.sessions.find((session) => session.id === sourceId);
+    if (saved) {
+      return parsePersonalizedPlanContent(saved.content, (saved.sessionNumber ?? 1) - 1);
+    }
+
     return item.isCurrent ? sessionDraft : null;
   };
 
-  const saveCalendarSession = ({ draft, item }: CalendarSessionSaveInput) => {
+  const saveCalendarSession = async ({ draft, date, item }: CalendarSessionSaveInput) => {
     const draftError = validatePersonalizedPlanDraft(draft);
     if (draftError) return draftError;
-    if (!hasSessionBlockContent(draft)) return 'Añade al menos un bloque de entrenamiento.';
-
-    const sourceId = item ? parseSchedulePreviewItemKey(item.id).sourceId : undefined;
-
-    if (sourceId && savedGroupSessions.some((session) => session.id === sourceId)) {
-      return 'Esta sesión ya está guardada. Ábrela desde el plan del atleta para modificarla.';
+    if (!hasSessionBlockContent(draft) && draft.kind !== 'rest' && draft.kind !== 'activation') {
+      return 'Añade al menos un bloque de entrenamiento.';
     }
 
-    const queued = sourceId ? queuedSessions.find((session) => session.id === sourceId) : undefined;
+    const scheduledDraft = applyDateToDraft(draft, date);
+    const sourceId = item ? calendarSourceId(item) : undefined;
 
+    const queued = sourceId ? queuedSessions.find((session) => session.id === sourceId) : undefined;
     if (queued) {
       setQueuedSessions((sessions) =>
-        sessions.map((session) => (session.id === queued.id ? { ...session, draft } : session)),
+        sessions.map((session) =>
+          session.id === queued.id ? { ...session, draft: scheduledDraft } : session,
+        ),
       );
       setError(null);
       return null;
     }
 
+    const saved = sourceId ? selectedGroup?.sessions.find((session) => session.id === sourceId) : undefined;
+    if (saved) {
+      const result = await updatePlan(saved.id, {
+        athleteId: saved.athleteId,
+        planType: saved.planType,
+        title: saved.title,
+        content: serializePersonalizedPlanContent(scheduledDraft, saved.sessionNumber ?? 1),
+      });
+      if (result.error) return result.error;
+      await refreshExistingGroups();
+      setError(null);
+      return null;
+    }
+
     if (item?.isCurrent) {
-      setSessionDraft(draft);
+      setSessionDraft(scheduledDraft);
       setError(null);
       return null;
     }
 
     const number = nextCalendarSessionNumber();
-    queueSessionWithActivation({ id: `queued-${number}-${Date.now()}`, sessionNumber: number, draft });
+    queueSessionWithActivation({
+      id: `queued-${number}-${Date.now()}`,
+      sessionNumber: number,
+      draft: scheduledDraft,
+    });
     setError(null);
     return null;
+  };
+
+  const handleCalendarDelete = async (item: SchedulePreviewItem) => {
+    if (item.isCurrent) {
+      return 'No se puede eliminar la sesión que estás editando en el formulario.';
+    }
+
+    const sourceId = calendarSourceId(item);
+    if (queuedSessions.some((session) => session.id === sourceId)) {
+      setQueuedSessions((sessions) => sessions.filter((session) => session.id !== sourceId));
+      return null;
+    }
+
+    const saved = selectedGroup?.sessions.find((session) => session.id === sourceId);
+    if (saved) {
+      const result = await removePlan(saved.id);
+      if (result.error) return result.error;
+      await refreshExistingGroups();
+      return null;
+    }
+
+    return 'No se pudo eliminar la sesión.';
+  };
+
+  const handleCalendarCopy = async (item: SchedulePreviewItem) => {
+    const draft = loadCalendarSessionDraft(item);
+    if (!draft) return 'No se pudo copiar la sesión.';
+
+    const number = nextCalendarSessionNumber();
+    const copiedDraft = renameSessionCopy(draft, number);
+    queueSessionWithActivation({
+      id: `queued-${number}-${Date.now()}`,
+      sessionNumber: number,
+      draft: copiedDraft,
+    });
+    return null;
+  };
+
+  const handleCalendarMoveToDate = async (
+    item: SchedulePreviewItem,
+    date: Date,
+    dayItems?: SchedulePreviewItem[],
+  ) => {
+    const sourceId = calendarSourceId(item);
+    const queued = queuedSessions.find((session) => session.id === sourceId);
+    if (queued) {
+      const moved = applyDateToDraft(queued.draft, date);
+      setQueuedSessions((sessions) =>
+        sessions.map((session) => (session.id === queued.id ? { ...session, draft: moved } : session)),
+      );
+      return null;
+    }
+
+    const saved = selectedGroup?.sessions.find((session) => session.id === sourceId);
+    if (!saved || !selectedGroup) return 'No se pudo mover la sesión.';
+
+    const error = await moveCalendarSessionToDate({
+      sessions: selectedGroup.sessions,
+      plan: saved,
+      targetDate: date,
+      orderedIds: dayItems?.map((entry) => calendarSourceId(entry)),
+      updatePlan: async (planId, input) => updatePlan(planId, input),
+    });
+    if (error) return error;
+    await refreshExistingGroups();
+    return null;
+  };
+
+  const handleCalendarReorderDay = async (_date: Date, orderedItems: SchedulePreviewItem[]) => {
+    const orderedIds = orderedItems.map((item) => calendarSourceId(item));
+
+    setQueuedSessions((sessions) => {
+      let changed = false;
+      const next = sessions.map((session) => {
+        const index = orderedIds.indexOf(session.id);
+        if (index < 0) return session;
+        changed = true;
+        return {
+          ...session,
+          draft: {
+            ...session.draft,
+            schedule: { ...session.draft.schedule, dayOrder: index },
+            dayOrder: index,
+          },
+        };
+      });
+      return changed ? next : sessions;
+    });
+
+    const savedSessions = selectedGroup?.sessions ?? [];
+    const updates = buildDayOrderUpdates(orderedIds, savedSessions);
+    for (const update of updates) {
+      const plan = savedSessions.find((entry) => entry.id === update.id);
+      if (!plan) continue;
+      const result = await updatePlan(update.id, {
+        athleteId: update.athleteId,
+        planType: plan.planType,
+        title: update.title,
+        content: update.content,
+      });
+      if (result.error) return result.error;
+    }
+    if (updates.length > 0) await refreshExistingGroups();
+    return null;
+  };
+
+  const refreshExistingGroups = async () => {
+    if (!selectedAthleteId) return;
+    setGroupsLoading(true);
+    try {
+      const plans = await fetchAthletePlansForAthlete(selectedAthleteId);
+      setExistingGroups(groupPersonalizedPlans(plans.filter((entry) => entry.planType === planType)));
+    } finally {
+      setGroupsLoading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -686,9 +843,14 @@ export default function CreateAthletePlanScreen() {
               onConfirmSession={createMode === 'new' ? handleConfirmSession : undefined}
               canConfirmSession={canConfirmCurrentSession}
               onPendingBlocksChange={setHasPendingBlocks}
-              onBuildSessionDraftForDate={createMode === 'new' ? buildCalendarSessionDraft : undefined}
+              onBuildSessionDraftForDate={buildCalendarSessionDraft}
+              onBuildRestDayDraftForDate={buildCalendarRestDayDraft}
               onLoadCalendarSessionDraft={loadCalendarSessionDraft}
               onSaveCalendarSession={saveCalendarSession}
+              onSessionCopy={handleCalendarCopy}
+              onSessionDelete={handleCalendarDelete}
+              onSessionMoveToDate={handleCalendarMoveToDate}
+              onSessionReorderDay={handleCalendarReorderDay}
             />
             {planFooter}
           </>

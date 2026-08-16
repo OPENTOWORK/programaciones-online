@@ -1,5 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
@@ -9,7 +10,12 @@ import { colors, spacing, typography } from '@/constants/theme';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { getSessionLabel, groupPersonalizedPlans } from '@/lib/personalizedPlanGroups';
-import { ATHLETE_PLAN_TYPE_LABELS, type AthletePlanType } from '@/lib/trainerConstants';
+import {
+  ATHLETE_PLAN_TYPE_LABELS,
+  CREATE_ATHLETE_PLAN_LABELS,
+  isSessionBasedAthletePlanType,
+  type AthletePlanType,
+} from '@/lib/trainerConstants';
 import type { AthletePlan } from '@/lib/types';
 
 function formatDate(isoDate: string) {
@@ -22,30 +28,65 @@ function formatDate(isoDate: string) {
 function PlanGroupItem({
   title,
   sessions,
+  athleteId,
+  athleteName,
   onOpenSession,
+  onOpenAthlete,
 }: {
   title: string;
   sessions: AthletePlan[];
+  athleteId: string;
+  athleteName?: string;
   onOpenSession: (planId: string) => void;
+  onOpenAthlete: (athleteId: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const displayName = athleteName?.trim() || 'Atleta';
+
   return (
     <View style={styles.groupItem}>
-      <View style={styles.groupHeader}>
-        <Text style={styles.planTitle}>{title}</Text>
-        <Text style={styles.planMeta}>
-          {sessions.length} sesión{sessions.length === 1 ? '' : 'es'}
-        </Text>
-      </View>
-      {sessions.map((session, index) => (
+      <View style={[styles.groupHeader, expanded && styles.groupHeaderExpanded]}>
         <Pressable
-          key={session.id}
-          onPress={() => onOpenSession(session.id)}
-          style={({ pressed }) => [styles.sessionItem, pressed && styles.planItemPressed]}
+          onPress={() => setExpanded((current) => !current)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={expanded ? `Contraer ${title}` : `Desplegar ${title}`}
+          style={({ pressed }) => [styles.groupHeaderMain, pressed && styles.planItemPressed]}
         >
-          <Text style={styles.sessionTitle}>{getSessionLabel(session, index)}</Text>
-          <Text style={styles.planChevron}>›</Text>
+          <View style={styles.groupHeaderText}>
+            <Text style={styles.planTitle}>{title}</Text>
+            <Text style={styles.planMeta}>
+              {sessions.length} sesión{sessions.length === 1 ? '' : 'es'}
+            </Text>
+          </View>
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={colors.textSecondary}
+          />
         </Pressable>
-      ))}
+        <Pressable
+          onPress={() => onOpenAthlete(athleteId)}
+          hitSlop={8}
+          accessibilityRole="link"
+          accessibilityLabel={`Ver ficha de ${displayName}`}
+          style={({ pressed }) => [styles.athleteLinkWrap, pressed && styles.planItemPressed]}
+        >
+          <Text style={styles.athleteLink}>{displayName}</Text>
+        </Pressable>
+      </View>
+      {expanded
+        ? sessions.map((session, index) => (
+            <Pressable
+              key={session.id}
+              onPress={() => onOpenSession(session.id)}
+              style={({ pressed }) => [styles.sessionItem, pressed && styles.planItemPressed]}
+            >
+              <Text style={styles.sessionTitle}>{getSessionLabel(session, index)}</Text>
+              <Text style={styles.planChevron}>›</Text>
+            </Pressable>
+          ))
+        : null}
     </View>
   );
 }
@@ -60,18 +101,19 @@ export function TrainerPlansPanel({ activePlanType }: TrainerPlansPanelProps) {
 
   useFocusRefresh(() => refresh());
 
+  const isSessionBased = isSessionBasedAthletePlanType(activePlanType);
+
   const groupedPlans = useMemo(() => {
-    if (activePlanType !== 'personalized') return [];
+    if (!isSessionBased) return [];
     return groupPersonalizedPlans(plans);
-  }, [activePlanType, plans]);
+  }, [isSessionBased, plans]);
 
   const nutritionPlans = useMemo(
     () => (activePlanType === 'nutrition' ? plans : []),
     [activePlanType, plans],
   );
 
-  const createLabel =
-    activePlanType === 'nutrition' ? 'Crear plan nutricional' : 'Crear plan personalizado';
+  const createLabel = CREATE_ATHLETE_PLAN_LABELS[activePlanType];
 
   return (
     <Card style={styles.panel}>
@@ -93,7 +135,7 @@ export function TrainerPlansPanel({ activePlanType }: TrainerPlansPanelProps) {
 
       {isLoading ? (
         <ActivityIndicator color={colors.accent} style={styles.loader} />
-      ) : activePlanType === 'personalized' ? (
+      ) : isSessionBased ? (
         groupedPlans.length === 0 ? (
           <Text style={styles.emptyText}>
             Todavía no has creado planes en esta categoría. Usa el botón de arriba para empezar.
@@ -105,8 +147,13 @@ export function TrainerPlansPanel({ activePlanType }: TrainerPlansPanelProps) {
                 key={group.id}
                 title={group.title}
                 sessions={group.sessions}
+                athleteId={group.athleteId}
+                athleteName={group.sessions[0]?.athleteName}
                 onOpenSession={(planId) =>
                   router.push({ pathname: '/trainer/plan/[id]', params: { id: planId } })
+                }
+                onOpenAthlete={(athleteId) =>
+                  router.push({ pathname: '/trainer/athlete/[id]', params: { id: athleteId } })
                 }
               />
             ))}
@@ -177,11 +224,38 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
+    backgroundColor: `${colors.surfaceLight}88`,
+  },
+  groupHeaderExpanded: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    backgroundColor: `${colors.surfaceLight}88`,
+  },
+  groupHeaderMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minWidth: 0,
+  },
+  groupHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  athleteLinkWrap: {
+    flexShrink: 0,
+    maxWidth: '42%',
+  },
+  athleteLink: {
+    ...typography.bodySmall,
+    color: colors.accent,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    textAlign: 'right',
   },
   sessionItem: {
     flexDirection: 'row',

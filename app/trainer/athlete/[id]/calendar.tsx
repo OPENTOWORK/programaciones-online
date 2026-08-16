@@ -13,7 +13,7 @@ import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useAthlete } from '@/hooks/useAthletes';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
-import { loadTrainerAthleteScheduleSources, type CatalogProgramSchedule } from '@/lib/athleteSchedule';
+import { loadTrainerAthleteScheduleSources } from '@/lib/athleteSchedule';
 import { copyCalendarDaySessions } from '@/lib/copyCalendarDaySessions';
 import { moveCalendarSessionToDate } from '@/lib/moveCalendarSession';
 import { createActivationAfterSession } from '@/lib/planActivation';
@@ -29,13 +29,11 @@ import {
   groupPersonalizedPlans,
   type PersonalizedPlanGroup,
 } from '@/lib/personalizedPlanGroups';
-import {
-  parseSchedulePreviewItemKey,
-  type SchedulePreviewItem,
-} from '@/lib/programSchedulePreview';
+import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
 import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
 import { hasSessionBlockContent } from '@/lib/sessionBlockSections';
+import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
 import {
   formatScheduleSummary,
   scheduleForCalendarDate,
@@ -63,14 +61,12 @@ function applyDateToDraft(draft: SessionDraft, date: Date): SessionDraft {
   return { ...draft, schedule, dayLabel: formatScheduleSummary(schedule) };
 }
 
+/** Ids de sesión personalizada: `plan:<planId>` o `plan:<planId>:<YYYY-MM-DD>`. */
 function planIdFromCalendarItem(item: SchedulePreviewItem) {
-  if (item.id.startsWith('plan:')) return item.id.split(':')[1];
-  return undefined;
-}
-
-function workoutIdFromCalendarItem(item: SchedulePreviewItem) {
-  if (item.id.startsWith('plan:')) return undefined;
-  return parseSchedulePreviewItemKey(item.id).sourceId;
+  if (!item.id.startsWith('plan:')) return undefined;
+  const rest = item.id.slice('plan:'.length);
+  const withoutDate = rest.replace(/:\d{4}-\d{2}-\d{2}$/, '');
+  return withoutDate || undefined;
 }
 
 export default function TrainerAthleteCalendarScreen() {
@@ -81,13 +77,13 @@ export default function TrainerAthleteCalendarScreen() {
   const { createPlan, updatePlan, removePlan } = useTrainerAthletePlans();
 
   const [personalizedPlans, setPersonalizedPlans] = useState<AthletePlan[]>([]);
-  const [catalogPrograms, setCatalogPrograms] = useState<CatalogProgramSchedule[]>([]);
+  const [activeCatalogCount, setActiveCatalogCount] = useState(0);
   const [scheduleLoading, setScheduleLoading] = useState(true);
 
   const loadSchedule = useCallback(async () => {
     if (!athleteId) {
       setPersonalizedPlans([]);
-      setCatalogPrograms([]);
+      setActiveCatalogCount(0);
       setScheduleLoading(false);
       return;
     }
@@ -95,11 +91,12 @@ export default function TrainerAthleteCalendarScreen() {
     setScheduleLoading(true);
     try {
       const data = await loadTrainerAthleteScheduleSources(athleteId);
+      // Solo planes del atleta: el catálogo de Programaciones no se edita ni borra aquí.
       setPersonalizedPlans(data.personalizedPlans);
-      setCatalogPrograms(data.catalogPrograms);
+      setActiveCatalogCount(data.catalogPrograms.length);
     } catch {
       setPersonalizedPlans([]);
-      setCatalogPrograms([]);
+      setActiveCatalogCount(0);
     } finally {
       setScheduleLoading(false);
     }
@@ -123,10 +120,10 @@ export default function TrainerAthleteCalendarScreen() {
       athleteSchedule: {
         plans: personalizedPlans,
         workouts: [],
-        catalogPrograms,
+        // Sin catalogPrograms: esas sesiones viven en Programaciones, no en la ficha del atleta.
       },
     }),
-    [athlete?.name, catalogPrograms, personalizedPlans],
+    [athlete?.name, personalizedPlans],
   );
 
   const findPlan = useCallback(
@@ -297,7 +294,10 @@ export default function TrainerAthleteCalendarScreen() {
   );
 
   const loadCalendarSessionDraft = (item: SchedulePreviewItem) => {
-    const planId = planIdFromCalendarItem(item);
+    const planId =
+      planIdFromCalendarItem(item) ??
+      personalizedPlans.find((plan) => item.id === plan.id || item.id.startsWith(`plan:${plan.id}`))
+        ?.id;
     const plan = findPlan(planId);
     if (!plan) return null;
     return parsePersonalizedPlanContent(plan.content, (plan.sessionNumber ?? 1) - 1);
@@ -305,31 +305,22 @@ export default function TrainerAthleteCalendarScreen() {
 
   const openCalendarSession = (item: SchedulePreviewItem) => {
     const planId = planIdFromCalendarItem(item);
-    if (planId) {
-      router.push({ pathname: '/trainer/plan/[id]', params: { id: planId, edit: '1' } });
-      return;
-    }
-
-    const workoutId = workoutIdFromCalendarItem(item);
-    const programId = catalogPrograms.find((entry) =>
-      entry.workouts.some((workout) => workout.id === workoutId),
-    )?.program.id;
-
-    if (workoutId && programId) {
-      router.push({
-        pathname: '/trainer/program/[id]/session/[workoutId]',
-        params: { id: programId, workoutId },
-      });
-    }
+    if (!planId) return;
+    router.push({ pathname: '/trainer/plan/[id]', params: { id: planId, edit: '1' } });
   };
 
   const handleCalendarDelete = async (item: SchedulePreviewItem) => {
-    const planId = planIdFromCalendarItem(item);
-    if (!planId) return 'Solo se pueden eliminar sesiones de planes personalizados.';
+    const planId =
+      planIdFromCalendarItem(item) ??
+      personalizedPlans.find((plan) => item.id === plan.id || item.id.startsWith(`plan:${plan.id}`))
+        ?.id;
+
+    if (!planId) {
+      return 'Solo se pueden eliminar sesiones del plan personalizado de este atleta.';
+    }
 
     const result = await removePlan(planId);
     if (result.error) return result.error;
-
     await loadSchedule();
     return null;
   };
@@ -474,7 +465,11 @@ export default function TrainerAthleteCalendarScreen() {
     );
   }
 
-  const hasSchedule = personalizedPlans.length > 0 || catalogPrograms.length > 0;
+  const hasSchedule = personalizedPlans.length > 0;
+  const catalogNote =
+    activeCatalogCount > 0
+      ? ` Tiene ${activeCatalogCount} programación${activeCatalogCount === 1 ? '' : 'es'} de catálogo activa${activeCatalogCount === 1 ? '' : 's'} (se gestiona en Programaciones).`
+      : '';
 
   return (
     <ScreenWrapper scrollable={false} padded={false}>
@@ -485,8 +480,8 @@ export default function TrainerAthleteCalendarScreen() {
           title={athlete.name}
           subtitle={
             hasSchedule
-              ? 'Todas las programaciones del atleta. Pulsa el marcador de un día para crear, copiar o añadir desde plantilla.'
-              : 'Todavía no hay programaciones asignadas. Pulsa el marcador de un día para crear la primera sesión.'
+              ? `Plan personalizado de este atleta. Pulsa el marcador de un día para crear, copiar o añadir desde plantilla.${catalogNote}`
+              : `Todavía no hay un plan personalizado. Pulsa el marcador de un día para crear la primera sesión.${catalogNote}`
           }
           source={calendarSource}
           headerAction={
@@ -502,6 +497,7 @@ export default function TrainerAthleteCalendarScreen() {
           buildRestDayDraft={buildRestDayDraftForDate}
           saveSession={saveCalendarSession}
           onDayAction={handleDayAction}
+          onSessionPreview={(item) => openTrainerPreviewSession(router, item, calendarSource)}
           onSessionEdit={openCalendarSession}
           onSessionCopy={handleCalendarCopy}
           onCopyDayToDate={handleCopyDayToDate}

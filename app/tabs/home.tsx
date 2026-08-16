@@ -1,5 +1,6 @@
-import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AthleteCurrentSchedule } from '@/components/home/AthleteCurrentSchedule';
 import { HomeBrandShowcase } from '@/components/home/HomeBrandShowcase';
@@ -19,12 +20,33 @@ function formatToday() {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { focus } = useLocalSearchParams<{ focus?: string | string[] }>();
+  const focusValue = Array.isArray(focus) ? focus[0] : focus;
+  const focusCalendar = focusValue === 'calendar';
+
   const { user } = useAuth();
   const firstName = user?.name?.split(' ')[0] ?? 'atleta';
   const isTrainer = isTrainerRole(user?.role);
 
+  const scrollRef = useRef<ScrollView>(null);
+  const calendarOffsetY = useRef(0);
+
+  useEffect(() => {
+    if (!focusCalendar || isTrainer) return;
+
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(calendarOffsetY.current - 12, 0),
+        animated: true,
+      });
+      router.setParams({ focus: '' });
+    }, 220);
+
+    return () => clearTimeout(timer);
+  }, [focusCalendar, isTrainer, router]);
+
   return (
-    <ScreenWrapper>
+    <ScreenWrapper scrollRef={scrollRef} resetScrollOnFocus={!focusCalendar}>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <Text style={styles.greeting}>Hola, {firstName}</Text>
@@ -40,10 +62,18 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.body}>
-        <HomeBrandShowcase />
-        {!isTrainer ? <AthleteCurrentSchedule /> : null}
-      </View>
+      <HomeBrandShowcase />
+
+      {!isTrainer ? (
+        <View
+          style={styles.calendarWrap}
+          onLayout={(event) => {
+            calendarOffsetY.current = event.nativeEvent.layout.y;
+          }}
+        >
+          <AthleteCurrentSchedule preferPersonalized={focusCalendar} forceExpanded={focusCalendar} />
+        </View>
+      ) : null}
     </ScreenWrapper>
   );
 }
@@ -78,7 +108,7 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   avatarText: { ...typography.body, color: colors.black, fontWeight: '700' },
-  body: {
-    gap: spacing.lg,
+  calendarWrap: {
+    marginTop: spacing.lg,
   },
 });

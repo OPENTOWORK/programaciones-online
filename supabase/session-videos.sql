@@ -7,6 +7,8 @@ create table if not exists public.session_log_videos (
   storage_path text not null,
   file_name text not null,
   mime_type text not null default 'video/mp4',
+  exercise_key text,
+  exercise_name text,
   created_at timestamptz not null default now()
 );
 

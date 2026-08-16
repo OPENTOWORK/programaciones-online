@@ -45,7 +45,8 @@ export type AppIconName =
   | 'mic'
   | 'stop'
   | 'pause'
-  | 'video';
+  | 'video'
+  | 'camera';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -94,6 +95,7 @@ const ICONS: Record<AppIconName, { default: IoniconName; outline?: IoniconName }
   stop: { default: 'stop-circle', outline: 'stop-circle-outline' },
   pause: { default: 'pause-circle', outline: 'pause-circle-outline' },
   video: { default: 'videocam', outline: 'videocam-outline' },
+  camera: { default: 'camera', outline: 'camera-outline' },
 };
 
 export function resolveIconName(name: AppIconName, outlined = false): IoniconName {

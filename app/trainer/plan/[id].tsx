@@ -52,13 +52,30 @@ import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
 import { moveCalendarSessionToDate } from '@/lib/moveCalendarSession';
 import { collectExerciseNamesFromSessionDraft } from '@/lib/exerciseTextParser';
 import { syncExerciseVideosForNames } from '@/lib/exerciseVideoSyncService';
-import { createEmptySessionDraft, renameSessionCopy, type SessionDraft } from '@/lib/trainerSessionDraft';
-import { ATHLETE_PLAN_TYPE_LABELS } from '@/lib/trainerConstants';
-import type { AthletePlan, NutritionPlanData } from '@/lib/types';
+import { createEmptySessionDraft, createRestDayDraft, renameSessionCopy, type SessionDraft } from '@/lib/trainerSessionDraft';
+import { ATHLETE_PLAN_TYPE_LABELS, isSessionBasedAthletePlanType } from '@/lib/trainerConstants';
+import type { AthletePlan, AthletePlanType, NutritionPlanData } from '@/lib/types';
+import {
+  formatScheduleSummary,
+  toLocalDateString,
+  toWeekdayIndex,
+} from '@/lib/sessionSchedule';
+import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
 
-const PLAN_ICONS: Record<'personalized' | 'nutrition', AppIconName> = {
+function applyDateToDraft(draft: SessionDraft, date: Date): SessionDraft {
+  const schedule = {
+    weekdays: [toWeekdayIndex(date)],
+    recurrence: 'once' as const,
+    startDate: toLocalDateString(date),
+  };
+  return { ...draft, schedule, dayLabel: formatScheduleSummary(schedule) };
+}
+
+const PLAN_ICONS: Record<AthletePlanType, AppIconName> = {
   personalized: 'personal',
   nutrition: 'measure',
+  home_training: 'home',
+  gym_training: 'phase',
 };
 
 function formatDate(isoDate: string) {
@@ -103,7 +120,7 @@ export default function TrainerPlanDetailScreen() {
     setTitle(plan.title);
     setContent(plan.nutritionData ? '' : plan.content);
     setSessionDraft(
-      plan.planType === 'personalized'
+      isSessionBasedAthletePlanType(plan.planType)
         ? parsePersonalizedPlanContent(plan.content, (plan.sessionNumber ?? 1) - 1)
         : createEmptySessionDraft(0),
     );
@@ -120,7 +137,7 @@ export default function TrainerPlanDetailScreen() {
 
   useEffect(() => {
     resetFormFromPlan();
-    if (wantsGroupEdit && plan?.planType === 'personalized') {
+    if (wantsGroupEdit && isSessionBasedAthletePlanType(plan?.planType)) {
       setMode('editGroup');
       return;
     }
@@ -129,7 +146,7 @@ export default function TrainerPlanDetailScreen() {
   }, [plan?.id, wantsGroupEdit, wantsSessionEdit]);
 
   useEffect(() => {
-    if (!plan || plan.planType !== 'personalized') {
+    if (!plan || !isSessionBasedAthletePlanType(plan.planType)) {
       setGroupSessions([]);
       return;
     }
@@ -139,7 +156,10 @@ export default function TrainerPlanDetailScreen() {
     void fetchAthletePlansForAthlete(plan.athleteId)
       .then((plans) => {
         if (cancelled) return;
-        const group = findPlanGroup(groupPersonalizedPlans(plans), plan);
+        const group = findPlanGroup(
+          groupPersonalizedPlans(plans.filter((entry) => entry.planType === plan.planType)),
+          plan,
+        );
         setGroupSessions(group?.sessions ?? [plan]);
       })
       .catch(() => {
@@ -153,7 +173,7 @@ export default function TrainerPlanDetailScreen() {
 
   // El calendario debe enseñar todas las sesiones del plan, no solo la que se está editando.
   const otherGroupSessions = useMemo<QueuedPlanSession[]>(() => {
-    if (!plan || plan.planType !== 'personalized') return [];
+    if (!plan || !isSessionBasedAthletePlanType(plan.planType)) return [];
 
     return groupSessions
       .filter((session) => session.id !== plan.id)
@@ -169,8 +189,8 @@ export default function TrainerPlanDetailScreen() {
   }, [groupSessions, plan]);
 
   const findGroupSession = (item: SchedulePreviewItem) => {
-    const { sourceId } = parseSchedulePreviewItemKey(item.id);
-    return groupSessions.find((session) => session.id === sourceId);
+    const sessionId = planIdFromCalendarItem(item);
+    return groupSessions.find((session) => session.id === sessionId);
   };
 
   const loadCalendarSessionDraft = (item: SchedulePreviewItem) => {
@@ -194,9 +214,12 @@ export default function TrainerPlanDetailScreen() {
     item.id.startsWith('plan:') ? item.id.split(':')[1] : parseSchedulePreviewItemKey(item.id).sourceId;
 
   const refreshGroupSessions = useCallback(async () => {
-    if (!plan || plan.planType !== 'personalized') return;
+    if (!plan || !isSessionBasedAthletePlanType(plan.planType)) return;
     const plans = await fetchAthletePlansForAthlete(plan.athleteId);
-    const group = findPlanGroup(groupPersonalizedPlans(plans), plan);
+    const group = findPlanGroup(
+      groupPersonalizedPlans(plans.filter((entry) => entry.planType === plan.planType)),
+      plan,
+    );
     setGroupSessions(group?.sessions ?? [plan]);
     await refresh();
   }, [plan, refresh]);
@@ -236,7 +259,7 @@ export default function TrainerPlanDetailScreen() {
     const copiedDraft = renameSessionCopy(draft, nextNumber);
     const result = await createPlan({
       athleteId: source.athleteId,
-      planType: 'personalized',
+      planType: plan.planType,
       title: plan.title,
       content: serializePersonalizedPlanContent(copiedDraft, nextNumber),
       planGroupId: getPlanGroupId(plan),
@@ -258,7 +281,7 @@ export default function TrainerPlanDetailScreen() {
       async (input) => {
         const activationResult = await createPlan({
           athleteId: input.athleteId,
-          planType: 'personalized',
+          planType: plan.planType,
           title: input.title,
           content: input.content,
           planGroupId: input.planGroupId,
@@ -302,6 +325,7 @@ export default function TrainerPlanDetailScreen() {
   };
 
   const handleViewCalendarReorderDay = async (_date: Date, orderedItems: SchedulePreviewItem[]) => {
+    if (!plan) return 'No se pudo reordenar el día.';
     const orderedIds = orderedItems
       .map((item) => planIdFromCalendarItem(item))
       .filter((sessionId): sessionId is string => Boolean(sessionId));
@@ -311,7 +335,7 @@ export default function TrainerPlanDetailScreen() {
     for (const update of updates) {
       const result = await updatePlan(update.id, {
         athleteId: update.athleteId,
-        planType: 'personalized',
+        planType: plan.planType,
         title: update.title,
         content: update.content,
       });
@@ -500,14 +524,63 @@ export default function TrainerPlanDetailScreen() {
     }
   };
 
-  const handleCalendarSave = async ({ draft, item }: CalendarSessionSaveInput) => {
+  const handleCalendarSave = async ({ draft, date, item }: CalendarSessionSaveInput) => {
+    if (!plan) return 'No se pudo cargar el plan.';
+
     const target = item ? findGroupSession(item) : undefined;
-    if (target && target.id !== plan?.id) {
-      return persistOtherSessionDraft(target, draft);
+    if (target && target.id !== plan.id) {
+      return persistOtherSessionDraft(target, applyDateToDraft(draft, date));
     }
 
-    setSessionDraft(draft);
-    return persistSessionDraft(draft);
+    if (target && target.id === plan.id) {
+      const scheduled = applyDateToDraft(draft, date);
+      setSessionDraft(scheduled);
+      return persistSessionDraft(scheduled);
+    }
+
+    // Nueva sesión creada desde el calendario ampliado.
+    const scheduled = applyDateToDraft(draft, date);
+    const draftError = validatePersonalizedPlanDraft(scheduled);
+    if (draftError) return draftError;
+
+    const nextNumber = getNextSessionNumber(groupSessions);
+    const result = await createPlan({
+      athleteId: plan.athleteId,
+      planType: plan.planType,
+      title: plan.title,
+      content: serializePersonalizedPlanContent(scheduled, nextNumber),
+      planGroupId: getPlanGroupId(plan),
+      sessionNumber: nextNumber,
+      athleteName: plan.athleteName,
+    });
+    if (result.error) return result.error;
+
+    const activationError = await createActivationAfterSession(
+      scheduled,
+      nextNumber,
+      {
+        athleteId: plan.athleteId,
+        title: plan.title,
+        planGroupId: getPlanGroupId(plan),
+        existingSessions: groupSessions,
+      },
+      async (input) => {
+        const activationResult = await createPlan({
+          athleteId: input.athleteId,
+          planType: plan.planType,
+          title: input.title,
+          content: input.content,
+          planGroupId: input.planGroupId,
+          sessionNumber: input.sessionNumber,
+          athleteName: plan.athleteName,
+        });
+        return { error: activationResult.error };
+      },
+    );
+    if (activationError) return activationError;
+
+    await refreshGroupSessions();
+    return null;
   };
 
   const handleDelete = () => {
@@ -634,7 +707,7 @@ export default function TrainerPlanDetailScreen() {
               router.push({
                 pathname: '/trainer/plan/create',
                 params: {
-                  type: 'personalized',
+                  type: plan.planType,
                   athleteId: plan.athleteId,
                   planGroupId: getPlanGroupId(plan),
                 },
@@ -687,7 +760,7 @@ export default function TrainerPlanDetailScreen() {
               router.push({
                 pathname: '/trainer/plan/create',
                 params: {
-                  type: 'personalized',
+                  type: plan.planType,
                   athleteId: plan.athleteId,
                   planGroupId: getPlanGroupId(plan),
                 },
@@ -826,6 +899,15 @@ export default function TrainerPlanDetailScreen() {
               currentSessionSaved
               onLoadCalendarSessionDraft={loadCalendarSessionDraft}
               onSaveCalendarSession={handleCalendarSave}
+              onBuildSessionDraftForDate={(date) =>
+                applyDateToDraft(createEmptySessionDraft(getNextSessionNumber(groupSessions) - 1), date)
+              }
+              onBuildRestDayDraftForDate={(date) => applyDateToDraft(createRestDayDraft(0), date)}
+              onSessionCopy={handleViewCalendarCopy}
+              onSessionDelete={handleViewCalendarDelete}
+              onSessionMoveToDate={handleViewCalendarMoveToDate}
+              onSessionReorderDay={handleViewCalendarReorderDay}
+              onSessionEdit={openCalendarSessionEditor}
               footer={
                 <View style={styles.footer}>
                   <View style={styles.pdfSection}>
@@ -880,6 +962,12 @@ export default function TrainerPlanDetailScreen() {
           subtitle={`Sesiones programadas de ${plan.athleteName ?? 'este atleta'}. Despliega una sesión para ver su contenido.`}
           source={viewCalendarSource}
           loadSessionDraft={loadViewCalendarSessionDraft}
+          buildSessionDraft={(date) =>
+            applyDateToDraft(createEmptySessionDraft(getNextSessionNumber(groupSessions) - 1), date)
+          }
+          buildRestDayDraft={(date) => applyDateToDraft(createRestDayDraft(0), date)}
+          saveSession={handleCalendarSave}
+          onSessionPreview={(item) => openTrainerPreviewSession(router, item, viewCalendarSource)}
           onSessionEdit={openCalendarSessionEditor}
           onSessionCopy={handleViewCalendarCopy}
           onSessionDelete={handleViewCalendarDelete}

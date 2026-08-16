@@ -141,6 +141,15 @@ export function useChatComposer({ disabled = false, onSend }: UseChatComposerOpt
     setEmojiOpen(false);
   };
 
+  const clearComposer = useCallback(() => {
+    setNewMessage('');
+    setDrafts([]);
+    setAttachError(null);
+    setEmojiOpen(false);
+    setDragOver(false);
+    void recorder.cancel();
+  }, [recorder.cancel]);
+
   const handleSend = async () => {
     if (disabled || sending) return false;
     const trimmed = newMessage.trim();
@@ -152,9 +161,7 @@ export function useChatComposer({ disabled = false, onSend }: UseChatComposerOpt
     setSending(false);
 
     if (sent) {
-      setNewMessage('');
-      setDrafts([]);
-      setEmojiOpen(false);
+      clearComposer();
     }
 
     return sent;
@@ -194,6 +201,7 @@ export function useChatComposer({ disabled = false, onSend }: UseChatComposerOpt
   return {
     newMessage,
     onChangeMessage: setNewMessage,
+    clearComposer,
     drafts,
     removeDraft,
     attachError,

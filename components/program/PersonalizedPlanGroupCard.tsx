@@ -1,11 +1,10 @@
-import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { PersonalizedPlanContent } from '@/components/program/PersonalizedPlanContent';
+import { AthleteScheduleCalendar } from '@/components/schedule/AthleteScheduleCalendar';
 import { IconBadge } from '@/components/ui/AppIcon';
-import { Card } from '@/components/ui/Card';
 import { colors, spacing, typography } from '@/constants/theme';
-import { getSessionLabel, type PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
+import type { PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
 
 function formatDate(isoDate: string) {
   return new Date(isoDate).toLocaleDateString('es-ES', {
@@ -20,11 +19,10 @@ interface PersonalizedPlanGroupCardProps {
 }
 
 export function PersonalizedPlanGroupCard({ group }: PersonalizedPlanGroupCardProps) {
-  const router = useRouter();
   const firstSession = group.sessions[0];
 
   return (
-    <Card style={styles.card}>
+    <View style={styles.wrap}>
       <View style={styles.header}>
         <IconBadge name="personal" containerSize={44} size={22} />
         <View style={styles.headerText}>
@@ -36,20 +34,7 @@ export function PersonalizedPlanGroupCard({ group }: PersonalizedPlanGroupCardPr
         </View>
       </View>
 
-      <View style={styles.sessions}>
-        {group.sessions.map((session, index) => (
-          <Pressable
-            key={session.id}
-            onPress={() =>
-              router.push({ pathname: '/athlete/plan/[id]/session', params: { id: session.id } })
-            }
-            style={({ pressed }) => [styles.sessionRow, pressed && styles.sessionRowPressed]}
-          >
-            <Text style={styles.sessionName}>{getSessionLabel(session, index)}</Text>
-            <Text style={styles.sessionChevron}>›</Text>
-          </Pressable>
-        ))}
-      </View>
+      <AthleteScheduleCalendar assignedPlans={group.sessions} hideHeader />
 
       {group.sessions.length === 1 ? (
         <View style={styles.preview}>
@@ -59,19 +44,19 @@ export function PersonalizedPlanGroupCard({ group }: PersonalizedPlanGroupCardPr
           />
         </View>
       ) : null}
-    </Card>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  wrap: {
     marginBottom: spacing.md,
+    gap: spacing.sm,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
-    marginBottom: spacing.md,
   },
   headerText: {
     flex: 1,
@@ -84,33 +69,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     marginTop: 4,
-  },
-  sessions: {
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  sessionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    backgroundColor: colors.background,
-  },
-  sessionRowPressed: {
-    opacity: 0.8,
-  },
-  sessionName: {
-    ...typography.bodySmall,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  sessionChevron: {
-    ...typography.h3,
-    color: colors.textMuted,
   },
   preview: {
     marginTop: spacing.sm,

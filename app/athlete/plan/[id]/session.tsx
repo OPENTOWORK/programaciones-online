@@ -102,6 +102,7 @@ export default function AthletePlanSessionScreen() {
         saved={runner.saved}
         logId={runner.logId}
         userId={user?.id}
+        ensureLog={runner.ensureLog}
         getVideoId={getVideoId}
         hasVideo={hasVideo}
       />

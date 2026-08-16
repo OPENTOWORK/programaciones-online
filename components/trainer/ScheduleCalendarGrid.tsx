@@ -205,9 +205,12 @@ function ChipDragHandle({ dragHandlers }: { dragHandlers?: GestureResponderHandl
   );
 }
 
-/** Solo las sesiones de planes personalizados se pueden marcar para eliminar en bloque. */
+/** Sesiones guardadas (plan personalizado o catálogo) que se pueden marcar para borrar en bloque. */
 export function isSelectableCalendarSession(item: SchedulePreviewItem) {
-  return item.id.startsWith('plan:');
+  if (item.isDraft) return false;
+  if (!item.id || item.id === 'draft-new') return false;
+  if (item.id.startsWith('draft-new:') || item.id.startsWith('draft-new@')) return false;
+  return true;
 }
 
 /** Mide su posición para que el menú se abra pegado al botón. */

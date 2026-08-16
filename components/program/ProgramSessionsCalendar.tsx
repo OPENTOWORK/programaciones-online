@@ -32,7 +32,12 @@ import {
   workoutIdFromCalendarItem,
 } from '@/lib/catalogProgramCalendar';
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
-import { formatDateParam, openCalendarDay, openScheduledSession } from '@/lib/sessionNavigation';
+import {
+  formatDateParam,
+  openCalendarDay,
+  openScheduledSession,
+  openTrainerPreviewSession,
+} from '@/lib/sessionNavigation';
 import { createEmptySessionDraft } from '@/lib/trainerSessionDraft';
 import { isProgramActiveForUser, startUserProgram } from '@/lib/userProgramService';
 import type { Program, Workout } from '@/lib/types';
@@ -317,6 +322,9 @@ export function ProgramSessionsCalendar({
         loadSessionDraft={loadSessionDraft}
         saveSession={saveSession}
         onSessionEdit={handleSessionPress}
+        onSessionPreview={(item) => {
+          openTrainerPreviewSession(router, item, previewState);
+        }}
         onSessionCopy={handleSessionCopy}
         onCopyDayToDate={handleCopyDayToDate}
         onSessionDelete={handleSessionDelete}

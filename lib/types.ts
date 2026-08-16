@@ -194,6 +194,26 @@ export interface Appointment {
   updatedAt: string;
 }
 
+/** Hueco de entrenamiento a domicilio: libre, reservado o cancelado. */
+export type HomeTrainingSlotStatus = 'open' | 'booked' | 'cancelled';
+
+export interface HomeTrainingSlot {
+  id: string;
+  trainerId: string;
+  trainerName?: string;
+  createdBy: string;
+  title: string;
+  notes?: string;
+  startsAt: string;
+  durationMinutes: number;
+  athleteId?: string;
+  athleteName?: string;
+  status: HomeTrainingSlotStatus;
+  cancelledBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AthleteSummary {
   id: string;
   name: string;
@@ -212,7 +232,7 @@ export interface AthleteSummary {
   unansweredCount?: number;
 }
 
-export type AthletePlanType = 'personalized' | 'nutrition';
+export type AthletePlanType = 'personalized' | 'nutrition' | 'home_training' | 'gym_training';
 
 export type NutritionWeekDay =
   | 'lunes'

@@ -1,4 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CrmBoard } from '@/components/trainer/CrmBoard';
@@ -9,7 +10,6 @@ import { colors, spacing, typography } from '@/constants/theme';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAuth } from '@/hooks/useAuth';
 import { useChatComposer } from '@/hooks/useChatComposer';
-import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useTrainerMessages } from '@/hooks/useTrainerMessages';
 import { isTrainerRole } from '@/lib/athleteService';
 import { takeChatPrefill } from '@/lib/chatPrefill';
@@ -24,16 +24,34 @@ function AthleteChatScreen() {
     onSend: (text, attachments) => sendMessage(text, attachments),
   });
 
-  useFocusRefresh(() => {
-    const paramMessage = Array.isArray(prefill) ? prefill[0] : prefill;
-    const queuedMessage = takeChatPrefill();
-    const message =
-      typeof paramMessage === 'string' && paramMessage.trim() ? paramMessage : queuedMessage;
+  const composerRef = useRef(composer);
+  composerRef.current = composer;
+  const appliedPrefillRef = useRef<string | null>(null);
 
-    if (message?.trim()) {
-      composer.onChangeMessage(message);
-    }
-  });
+  useFocusEffect(
+    useCallback(() => {
+      const paramMessage = Array.isArray(prefill) ? prefill[0] : prefill;
+      const queuedMessage = takeChatPrefill();
+      const message =
+        typeof paramMessage === 'string' && paramMessage.trim()
+          ? paramMessage
+          : queuedMessage;
+
+      if (message?.trim() && appliedPrefillRef.current !== message) {
+        appliedPrefillRef.current = message;
+        composerRef.current.onChangeMessage(message);
+        if (typeof paramMessage === 'string' && paramMessage.trim()) {
+          router.setParams({ prefill: '' });
+        }
+      }
+
+      return () => {
+        appliedPrefillRef.current = null;
+        composerRef.current.clearComposer();
+        router.setParams({ prefill: '' });
+      };
+    }, [prefill, router]),
+  );
 
   const lastTrainerMsg = [...messages].reverse().find((message) => message.sender === 'trainer');
   const chatBlocked = !intakeLoading && !intakeComplete;

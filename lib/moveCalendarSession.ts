@@ -1,11 +1,11 @@
 import { parsePersonalizedPlanContent, serializePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
 import { formatScheduleSummary, moveScheduleToDate } from '@/lib/sessionSchedule';
-import type { AthletePlan } from '@/lib/types';
+import type { AthletePlan, AthletePlanType } from '@/lib/types';
 
 interface PlanContentUpdate {
   athleteId: string;
-  planType: 'personalized';
+  planType: AthletePlanType;
   title: string;
   content: string;
 }
@@ -42,7 +42,7 @@ export async function moveCalendarSessionToDate({
 
   const movedResult = await updatePlan(plan.id, {
     athleteId: plan.athleteId,
-    planType: 'personalized',
+    planType: plan.planType,
     title: plan.title,
     content: movedContent,
   });
@@ -58,7 +58,7 @@ export async function moveCalendarSessionToDate({
   for (const update of buildDayOrderUpdates(orderedIds, sessionsAfterMove)) {
     const result = await updatePlan(update.id, {
       athleteId: update.athleteId,
-      planType: 'personalized',
+      planType: plan.planType,
       title: update.title,
       content: update.content,
     });

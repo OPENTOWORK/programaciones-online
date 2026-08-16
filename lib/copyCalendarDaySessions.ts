@@ -12,11 +12,11 @@ import {
   renameSessionCopy,
   type SessionDraft,
 } from '@/lib/trainerSessionDraft';
-import type { AthletePlan } from '@/lib/types';
+import type { AthletePlan, AthletePlanType } from '@/lib/types';
 
 type CreatePlanInput = {
   athleteId: string;
-  planType: 'personalized';
+  planType: AthletePlanType;
   title: string;
   content: string;
   planGroupId: string;
@@ -89,7 +89,7 @@ export async function copyCalendarDaySessions({
 
     const result = await createPlan({
       athleteId: source.athleteId,
-      planType: 'personalized',
+      planType: source.planType,
       title: group.title,
       content: serializePersonalizedPlanContent(copiedDraft, nextNumber),
       planGroupId: group.planGroupId,
@@ -127,7 +127,7 @@ export async function copyCalendarDaySessions({
         async (input) => {
           const activationResult = await createPlan({
             athleteId: input.athleteId,
-            planType: 'personalized',
+            planType: source.planType,
             title: input.title,
             content: input.content,
             planGroupId: input.planGroupId,
