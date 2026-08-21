@@ -29,6 +29,7 @@ export type SessionTemplateTag = (typeof SESSION_TEMPLATE_ZONE_TAGS)[number];
 export type SessionTemplateFormatTag = (typeof SESSION_TEMPLATE_FORMAT_TAGS)[number];
 
 export const UNTAGGED_TEMPLATE_LABEL = 'Sin etiqueta';
+export const UNTAGGED_FORMAT_LABEL = 'Sin formato';
 
 export function isSessionTemplateTag(value: string | null | undefined): value is SessionTemplateTag {
   return Boolean(value && (SESSION_TEMPLATE_ZONE_TAGS as readonly string[]).includes(value));
@@ -94,6 +95,34 @@ export function groupTemplatesByTag<T extends { tag?: SessionTemplateTag | null 
   const untagged = buckets.get(UNTAGGED_TEMPLATE_LABEL);
   if (untagged?.length) {
     groups.push({ tag: null, label: UNTAGGED_TEMPLATE_LABEL, templates: untagged });
+  }
+
+  return groups;
+}
+
+export function groupTemplatesByFormatTag<
+  T extends { formatTag?: SessionTemplateFormatTag | null },
+>(templates: T[]): Array<{ formatTag: SessionTemplateFormatTag | null; label: string; templates: T[] }> {
+  const buckets = new Map<string, T[]>();
+
+  for (const template of templates) {
+    const key = template.formatTag ?? UNTAGGED_FORMAT_LABEL;
+    const list = buckets.get(key) ?? [];
+    list.push(template);
+    buckets.set(key, list);
+  }
+
+  const groups: Array<{ formatTag: SessionTemplateFormatTag | null; label: string; templates: T[] }> = [];
+
+  for (const formatTag of SESSION_TEMPLATE_FORMAT_TAGS) {
+    const list = buckets.get(formatTag);
+    if (!list?.length) continue;
+    groups.push({ formatTag, label: formatTag, templates: list });
+  }
+
+  const untagged = buckets.get(UNTAGGED_FORMAT_LABEL);
+  if (untagged?.length) {
+    groups.push({ formatTag: null, label: UNTAGGED_FORMAT_LABEL, templates: untagged });
   }
 
   return groups;

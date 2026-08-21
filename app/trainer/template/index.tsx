@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,25 +10,25 @@ import {
   View,
 } from 'react-native';
 
+import { SessionTemplateGroupList } from '@/components/trainer/SessionTemplateGroupList';
 import { ActionSheetModal } from '@/components/ui/ActionSheetModal';
-import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useSessionTemplates } from '@/hooks/useSessionTemplates';
 import { safeGoBack } from '@/lib/navigation';
+import { resolveTemplateDropTarget } from '@/lib/sessionTemplateDrag';
 import type { SessionTemplate } from '@/lib/sessionTemplateService';
 import {
+  groupTemplatesByFormatTag,
   groupTemplatesByTag,
   SESSION_TEMPLATE_FORMAT_TAGS,
   SESSION_TEMPLATE_ZONE_TAGS,
   type SessionTemplateFormatTag,
   type SessionTemplateTag,
 } from '@/lib/sessionTemplateTags';
-import { describeSessionTemplate } from '@/lib/sessionTemplates';
 
 function confirmDelete(name: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -41,75 +41,76 @@ function confirmDelete(name: string, onConfirm: () => void) {
   ]);
 }
 
-function TemplateListItem({
-  template,
-  onEdit,
-  onOptions,
-}: {
-  template: SessionTemplate;
-  onEdit: () => void;
-  onOptions: () => void;
-}) {
-  const summary = describeSessionTemplate(template.content);
+type GroupViewMode = 'zone' | 'format';
 
+function GroupModeToggle({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
-    <View style={styles.row}>
-      <Pressable
-        onPress={onEdit}
-        style={({ pressed }) => [styles.rowMain, pressed && styles.pressed]}
-      >
-        <Text style={styles.rowName} numberOfLines={2}>
-          {template.formatTag ?? template.tag ?? template.name}
-        </Text>
-        <Text style={styles.rowDetails} numberOfLines={1}>
-          {[
-            template.formatTag && template.tag ? template.tag : null,
-            `${summary.blockCount} bloque${summary.blockCount === 1 ? '' : 's'}`,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </Text>
-        {summary.exerciseLines.length > 0 ? (
-          <View style={styles.exerciseList}>
-            {summary.exerciseLines.map((line, index) => (
-              <Text key={`${template.id}-ex-${index}`} style={styles.exerciseLine} numberOfLines={2}>
-                • {line}
-              </Text>
-            ))}
-          </View>
-        ) : (
-          <Text style={styles.rowBlocks}>Sin ejercicios listados</Text>
-        )}
-      </Pressable>
-      <Pressable
-        onPress={onOptions}
-        hitSlop={8}
-        accessibilityLabel={`Opciones de ${template.name}`}
-        style={({ pressed }) => [styles.rowOptions, pressed && styles.pressed]}
-      >
-        <AppIcon name="menuDots" size={18} color={colors.textSecondary} />
-      </Pressable>
-    </View>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`Agrupar por ${label.toLowerCase()}`}
+      style={({ pressed }) => [styles.modeToggle, pressed && styles.pressed]}
+    >
+      <View style={[styles.modeRadio, active && styles.modeRadioActive]}>
+        {active ? <View style={styles.modeRadioDot} /> : null}
+      </View>
+      <Text style={[styles.tagLabel, active && styles.tagLabelActive]}>{label}</Text>
+    </Pressable>
   );
 }
 
 export default function TrainerSessionTemplatesScreen() {
   const router = useRouter();
-  const { templates, isLoading, saving, persistent, error, isTrainer, remove } =
+  const { templates, isLoading, saving, persistent, error, isTrainer, remove, update } =
     useSessionTemplates();
   const [optionsFor, setOptionsFor] = useState<SessionTemplate | null>(null);
+  const [groupMode, setGroupMode] = useState<GroupViewMode>('zone');
   const [zoneFilter, setZoneFilter] = useState<SessionTemplateTag | null>(null);
   const [formatFilter, setFormatFilter] = useState<SessionTemplateFormatTag | null>(null);
 
+  const selectGroupMode = (mode: GroupViewMode) => {
+    setGroupMode(mode);
+    if (mode === 'zone') {
+      setFormatFilter(null);
+      return;
+    }
+    setZoneFilter(null);
+  };
+
   const filteredTemplates = useMemo(() => {
     return templates.filter((template) => {
-      if (zoneFilter && template.tag !== zoneFilter) return false;
+      if (groupMode === 'zone') {
+        if (zoneFilter && template.tag !== zoneFilter) return false;
+        return true;
+      }
       if (formatFilter && template.formatTag !== formatFilter) return false;
       return true;
     });
-  }, [templates, zoneFilter, formatFilter]);
+  }, [templates, groupMode, zoneFilter, formatFilter]);
 
-  const groups = useMemo(() => groupTemplatesByTag(filteredTemplates), [filteredTemplates]);
+  const groups = useMemo(() => {
+    return groupMode === 'zone'
+      ? groupTemplatesByTag(filteredTemplates)
+      : groupTemplatesByFormatTag(filteredTemplates);
+  }, [filteredTemplates, groupMode]);
+
+  const handleMoveTemplate = useCallback(
+    (template: SessionTemplate, targetLabel: string) => {
+      const changes = resolveTemplateDropTarget(groupMode, targetLabel);
+      if (!changes) return;
+      void update(template, changes);
+    },
+    [groupMode, update],
+  );
 
   if (!isTrainer) {
     return (
@@ -134,7 +135,7 @@ export default function TrainerSessionTemplatesScreen() {
     <ScreenWrapper>
       <SectionHeader
         title="Plantillas"
-        subtitle="Filtra por zona o formato y despliega cada grupo para ver los ejercicios."
+        subtitle="Agrupa por zona o formato y arrastra una plantilla a otro grupo para reclasificarla."
       />
 
       {!persistent ? (
@@ -153,14 +154,25 @@ export default function TrainerSessionTemplatesScreen() {
 
       {templates.length > 0 ? (
         <Card style={styles.filterCard}>
-          <Text style={styles.tagLabel}>Zona</Text>
+          <GroupModeToggle
+            label="Zona"
+            active={groupMode === 'zone'}
+            onPress={() => selectGroupMode('zone')}
+          />
           <View style={styles.tagRow}>
             {SESSION_TEMPLATE_ZONE_TAGS.map((option) => {
-              const selected = zoneFilter === option;
+              const selected = groupMode === 'zone' && zoneFilter === option;
               return (
                 <Pressable
                   key={option}
-                  onPress={() => setZoneFilter(selected ? null : option)}
+                  onPress={() => {
+                    if (groupMode !== 'zone') {
+                      selectGroupMode('zone');
+                      setZoneFilter(option);
+                      return;
+                    }
+                    setZoneFilter(selected ? null : option);
+                  }}
                   style={({ pressed }) => [
                     styles.tagChip,
                     selected && styles.tagChipSelected,
@@ -175,14 +187,25 @@ export default function TrainerSessionTemplatesScreen() {
             })}
           </View>
 
-          <Text style={styles.tagLabel}>Formato</Text>
+          <GroupModeToggle
+            label="Formato"
+            active={groupMode === 'format'}
+            onPress={() => selectGroupMode('format')}
+          />
           <View style={styles.tagRow}>
             {SESSION_TEMPLATE_FORMAT_TAGS.map((option) => {
-              const selected = formatFilter === option;
+              const selected = groupMode === 'format' && formatFilter === option;
               return (
                 <Pressable
                   key={option}
-                  onPress={() => setFormatFilter(selected ? null : option)}
+                  onPress={() => {
+                    if (groupMode !== 'format') {
+                      selectGroupMode('format');
+                      setFormatFilter(option);
+                      return;
+                    }
+                    setFormatFilter(selected ? null : option);
+                  }}
                   style={({ pressed }) => [
                     styles.tagChip,
                     selected && styles.tagChipSelected,
@@ -213,33 +236,17 @@ export default function TrainerSessionTemplatesScreen() {
         <Card style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Sin resultados</Text>
           <Text style={styles.emptyText}>
-            No hay plantillas con ese filtro. Quita zona o formato tocando otra vez la etiqueta
-            activa.
+            No hay plantillas con ese filtro. Quita la etiqueta activa tocándola otra vez.
           </Text>
         </Card>
       ) : (
-        <View style={styles.list}>
-          {groups.map((group) => (
-            <CollapsibleSection
-              key={group.label}
-              title={group.label}
-              subtitle={`${group.templates.length} plantilla${group.templates.length === 1 ? '' : 's'}`}
-              defaultExpanded={false}
-              style={styles.groupCard}
-            >
-              <View style={styles.groupList}>
-                {group.templates.map((template) => (
-                  <TemplateListItem
-                    key={template.id}
-                    template={template}
-                    onEdit={() => openEditor(template.id)}
-                    onOptions={() => setOptionsFor(template)}
-                  />
-                ))}
-              </View>
-            </CollapsibleSection>
-          ))}
-        </View>
+        <SessionTemplateGroupList
+          groups={groups}
+          groupMode={groupMode}
+          onMoveTemplate={handleMoveTemplate}
+          onEdit={openEditor}
+          onOptions={setOptionsFor}
+        />
       )}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -287,12 +294,40 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     gap: spacing.sm,
   },
+  modeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    alignSelf: 'flex-start',
+  },
+  modeRadio: {
+    width: 18,
+    height: 18,
+    borderRadius: borderRadius.full,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+  modeRadioActive: {
+    borderColor: colors.accent,
+  },
+  modeRadioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.accent,
+  },
   tagLabel: {
     ...typography.caption,
     color: colors.textMuted,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
+  },
+  tagLabelActive: {
+    color: colors.text,
   },
   tagRow: {
     flexDirection: 'row',
@@ -322,60 +357,6 @@ const styles = StyleSheet.create({
   loader: {
     marginTop: spacing.xl,
   },
-  list: {
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  groupCard: {
-    marginBottom: 0,
-  },
-  groupList: {
-    gap: spacing.sm,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  rowMain: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    gap: 2,
-  },
-  rowName: {
-    ...typography.bodySmall,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  rowDetails: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  rowBlocks: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
-  exerciseList: {
-    marginTop: spacing.xs,
-    gap: 2,
-  },
-  exerciseLine: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    lineHeight: 16,
-  },
-  rowOptions: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.md,
-  },
-  pressed: {
-    opacity: 0.75,
-  },
   emptyCard: {
     marginBottom: spacing.lg,
   },
@@ -400,5 +381,8 @@ const styles = StyleSheet.create({
   },
   backButton: {
     marginTop: spacing.sm,
+  },
+  pressed: {
+    opacity: 0.75,
   },
 });

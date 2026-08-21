@@ -3,30 +3,30 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { ProfileAppointmentsCard } from '@/components/appointments/ProfileAppointmentsCard';
+import { PrivacyPolicyLink } from '@/components/legal/PrivacyPolicyLink';
 import { SavedMetconsCard } from '@/components/program/SavedMetconsCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { PrivacyPolicyLink } from '@/components/legal/PrivacyPolicyLink';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
-import { goalLabels, levelColors, colors, spacing, typography } from '@/constants/theme';
+import { colors, goalLabels, levelColors, spacing, typography } from '@/constants/theme';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAuth } from '@/hooks/useAuth';
+import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useNutritionProfile } from '@/hooks/useNutritionProfile';
 import { usePhysicalProfile } from '@/hooks/usePhysicalProfile';
 import { useTrainingProfile } from '@/hooks/useTrainingProfile';
+import { isTrainerRole } from '@/lib/athleteService';
 import {
-  activityLevelLabels,
-  formatBmi,
-  formatDerived,
-  formatKcal,
-  formatMeasured,
-  primaryGoalLabels,
-  NOT_INDICATED,
+    activityLevelLabels,
+    formatBmi,
+    formatDerived,
+    formatKcal,
+    formatMeasured,
+    NOT_INDICATED,
+    primaryGoalLabels,
 } from '@/lib/bodyMetrics';
 import { dietaryPreferenceLabels, trainingExperienceLabels } from '@/lib/profilePreferences';
-import { useFocusRefresh } from '@/hooks/useFocusRefresh';
-import { isTrainerRole } from '@/lib/athleteService';
 
 function formatList(values: string[]) {
   return values.length > 0 ? values.join(', ') : NOT_INDICATED;
@@ -105,7 +105,7 @@ export default function ProfileScreen() {
         </View>
         <Text style={styles.name}>{user.name}</Text>
         <Text style={styles.email}>{user.email}</Text>
-        {user.fitnessLevel || user.mainGoal ? (
+        {isAthlete && (user.fitnessLevel || user.mainGoal) ? (
           <View style={styles.badges}>
             {user.fitnessLevel ? (
               <Badge label={user.fitnessLevel} color={levelColors[user.fitnessLevel]} />
