@@ -66,10 +66,10 @@ export function ProgramCard({ program }: ProgramCardProps) {
           style={[
             styles.priceBadge,
             cover && styles.priceBadgeCover,
-            isMetcon && (cover ? styles.priceBadgeMetconCover : styles.priceBadgeMetcon),
+            isMetcon && styles.priceBadgeMetcon,
           ]}
         >
-          <Text style={[styles.price, isMetcon && styles.priceMetcon]}>{program.catalogPrice}</Text>
+          <Text style={styles.price}>{program.catalogPrice}</Text>
         </View>
       ) : null}
       <View style={styles.header}>
@@ -143,6 +143,8 @@ export function ProgramCard({ program }: ProgramCardProps) {
   );
 }
 
+const PRICE_GREEN = '#4ADE80';
+
 const styles = StyleSheet.create({
   card: {
     marginBottom: spacing.md,
@@ -170,7 +172,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.md,
     right: spacing.md,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: `${PRICE_GREEN}18`,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -179,21 +181,16 @@ const styles = StyleSheet.create({
   priceBadgeCover: {
     backgroundColor: 'rgba(15,20,25,0.72)',
     borderWidth: 1,
-    borderColor: `${colors.accent}40`,
+    borderColor: `${PRICE_GREEN}55`,
   },
   priceBadgeMetcon: {
-    backgroundColor: `${colors.metcon}18`,
-  },
-  priceBadgeMetconCover: {
-    borderColor: `${colors.metcon}50`,
+    borderWidth: 1,
+    borderColor: `${PRICE_GREEN}40`,
   },
   price: {
     ...typography.caption,
-    color: colors.accent,
+    color: PRICE_GREEN,
     fontWeight: '700',
-  },
-  priceMetcon: {
-    color: colors.metcon,
   },
   header: {
     flexDirection: 'row',
