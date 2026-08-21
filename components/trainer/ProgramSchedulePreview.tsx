@@ -30,6 +30,9 @@ interface ProgramSchedulePreviewProps {
   onExpand?: () => void;
   /** Vista compacta para el atleta: semana entera visible de un vistazo. */
   variant?: 'trainer' | 'athlete';
+  initialViewMode?: ScheduleViewMode;
+  hideHeader?: boolean;
+  embedded?: boolean;
 }
 
 export function ProgramSchedulePreview({
@@ -46,9 +49,14 @@ export function ProgramSchedulePreview({
   onSessionPress,
   onExpand,
   variant = 'trainer',
+  initialViewMode,
+  hideHeader = false,
+  embedded = false,
 }: ProgramSchedulePreviewProps) {
   const isAthlete = variant === 'athlete';
-  const [viewMode, setViewMode] = useState<ScheduleViewMode>(isAthlete ? 'day' : 'week');
+  const [viewMode, setViewMode] = useState<ScheduleViewMode>(
+    initialViewMode ?? (isAthlete ? 'day' : 'week'),
+  );
   const [focusDate, setFocusDate] = useState(() => new Date());
 
   const items = useMemo(
@@ -84,8 +92,8 @@ export function ProgramSchedulePreview({
   );
 
   return (
-    <Card style={[styles.panel, isAthlete && styles.panelAthlete]}>
-      {!isAthlete ? (
+    <Card style={[styles.panel, isAthlete && styles.panelAthlete, embedded && styles.panelEmbedded]}>
+      {!isAthlete && !hideHeader ? (
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.title}>Vista de programación</Text>
@@ -119,6 +127,16 @@ export function ProgramSchedulePreview({
           onSessionPress={onSessionPress}
           size="athlete"
         />
+      ) : embedded ? (
+        <ScheduleCalendarGrid
+          items={items}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          focusDate={focusDate}
+          onFocusDateChange={setFocusDate}
+          onDayPress={onDayPress}
+          onSessionPress={onSessionPress}
+        />
       ) : (
         <ScrollView style={styles.body} nestedScrollEnabled showsVerticalScrollIndicator={false}>
           <ScheduleCalendarGrid
@@ -146,6 +164,12 @@ const styles = StyleSheet.create({
   panelAthlete: {
     padding: spacing.md,
     minHeight: 0,
+  },
+  panelEmbedded: {
+    flex: 0,
+    minHeight: 0,
+    padding: spacing.md,
+    marginBottom: 0,
   },
   header: {
     flexDirection: 'row',

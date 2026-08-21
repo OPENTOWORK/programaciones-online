@@ -1,8 +1,6 @@
-import { lookupCardioExerciseVideoId } from '@/lib/cardioExerciseVideos';
-import { findBestVideoMatch, shouldSkipExercise } from '@/lib/exerciseVideoMatcher';
+import { shouldSkipExercise } from '@/lib/exerciseVideoMatcher';
 import { normalizeExerciseName } from '@/lib/exerciseName';
-import { fetchExerciseVideoCatalog } from '@/lib/exerciseVideoService';
-import { HYPE_CHANNEL_VIDEOS } from '@/lib/hypeChannelVideos';
+import { fetchExerciseVideoCatalog, lookupExerciseVideoId } from '@/lib/exerciseVideoService';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export interface ExerciseVideoSyncResult {
@@ -15,28 +13,11 @@ export interface ExerciseVideoSyncResult {
 function resolveYoutubeVideoId(
   exerciseName: string,
   existingNameKeys: Set<string>,
-  catalogByNameKey: Map<string, string>,
+  catalog: Awaited<ReturnType<typeof fetchExerciseVideoCatalog>>,
 ) {
   const nameKey = normalizeExerciseName(exerciseName);
   if (!nameKey || existingNameKeys.has(nameKey)) return null;
-
-  const catalogVideo = catalogByNameKey.get(nameKey);
-  if (catalogVideo) return catalogVideo;
-
-  const cardioVideo = lookupCardioExerciseVideoId(exerciseName);
-  if (cardioVideo) return cardioVideo;
-
-  const channelMatch = findBestVideoMatch(exerciseName, HYPE_CHANNEL_VIDEOS, { minScore: 55 });
-  if (channelMatch) return channelMatch.videoId;
-
-  const catalogCandidates = [...catalogByNameKey.entries()].map(([key, videoId]) => ({
-    videoId,
-    title: key,
-  }));
-  const fuzzyCatalogMatch = findBestVideoMatch(exerciseName, catalogCandidates, { minScore: 80 });
-  if (fuzzyCatalogMatch) return fuzzyCatalogMatch.videoId;
-
-  return null;
+  return lookupExerciseVideoId(catalog, exerciseName);
 }
 
 export async function syncExerciseVideosForNames(
@@ -61,7 +42,6 @@ export async function syncExerciseVideosForNames(
 
   const catalog = await fetchExerciseVideoCatalog();
   const existingNameKeys = new Set(catalog.byNameKey.keys());
-  const catalogByNameKey = catalog.byNameKey;
 
   let synced = 0;
   let skipped = 0;
@@ -76,7 +56,7 @@ export async function syncExerciseVideosForNames(
       continue;
     }
 
-    const youtubeVideoId = resolveYoutubeVideoId(exerciseName, existingNameKeys, catalogByNameKey);
+    const youtubeVideoId = resolveYoutubeVideoId(exerciseName, existingNameKeys, catalog);
     if (!youtubeVideoId) {
       unmatched.push(exerciseName);
       continue;
@@ -105,7 +85,7 @@ export async function syncExerciseVideosForNames(
     }
 
     existingNameKeys.add(nameKey);
-    catalogByNameKey.set(nameKey, youtubeVideoId);
+    catalog.byNameKey.set(nameKey, youtubeVideoId);
     synced += 1;
   }
 

@@ -3,8 +3,12 @@ import {
   formatStandardVenueDescription,
   getVenuePlaceholderSlot,
   isVenuePlaceholderProgram,
+  namesMatchCatalog,
   parseStandardVenueFromDescription,
+  STANDARD_VENUE_PRICES,
+  type StandardVenueProgramSlot,
 } from '@/lib/standardVenueCatalog';
+import type { StandardVenueId } from '@/lib/standardVenues';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { Exercise, Program, Workout } from '@/lib/types';
 import {
@@ -161,12 +165,93 @@ export async function ensureVenueCatalogProgram(
   }
 
   const { venue, slot } = slotInfo;
+
+  // Reutiliza la programación real si ya existe (evita duplicados vacíos).
+  const existing = await findExistingVenueCatalogProgram(placeholder.planId, slot, venue);
+  if (existing.program) return { program: existing.program };
+  if (existing.error) return { error: existing.error };
+
   return createProgramCatalog({
     planId: placeholder.planId,
     name: slot.name,
     description: formatStandardVenueDescription(slot.description, venue),
     category: 'standard',
   });
+}
+
+async function findExistingVenueCatalogProgram(
+  planId: string,
+  slot: StandardVenueProgramSlot,
+  venue: StandardVenueId,
+): Promise<{ program?: Program; error?: string }> {
+  if (!isSupabaseConfigured) {
+    const match = demoPrograms.find(
+      (program) =>
+        program.planId === planId &&
+        program.standardVenue === venue &&
+        namesMatchCatalog(program.name, slot.matchNames),
+    );
+    return match ? { program: match } : {};
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) return { error: 'Supabase no está disponible' };
+
+  const { data, error } = await supabase
+    .from('programas')
+    .select('id, name, id_planes, descripcion')
+    .eq('id_planes', planId);
+
+  if (error) return { error: error.message };
+  if (!data?.length) return {};
+
+  const candidates = data.filter((row) => {
+    const parsed = parseStandardVenueFromDescription(row.descripcion);
+    const sameVenue = parsed.venue === venue || (!parsed.venue && venue === 'gym');
+    return sameVenue && namesMatchCatalog(row.name, slot.matchNames);
+  });
+  if (!candidates.length) return {};
+
+  // Preferir la que ya tenga sesiones si hay varias con el mismo nombre.
+  let best = candidates[0];
+  let bestCount = -1;
+  for (const row of candidates) {
+    const { count } = await supabase
+      .from('entrenos_diarios')
+      .select('id', { count: 'exact', head: true })
+      .eq('program_id', row.id);
+    const n = count ?? 0;
+    if (n > bestCount) {
+      best = row;
+      bestCount = n;
+    }
+  }
+
+  const rawDescription = best.descripcion?.trim() || '';
+  const { venue: parsedVenue, description: cleanedDescription } =
+    parseStandardVenueFromDescription(rawDescription);
+
+  return {
+    program: {
+      id: best.id,
+      name: slot.name,
+      planId: best.id_planes,
+      category: 'standard',
+      level: 'principiante',
+      duration: 'Por definir',
+      goal: undefined,
+      sessionsPerWeek: 3,
+      status: 'disponible',
+      icon: slot.icon,
+      description: slot.description,
+      equipment: slot.equipment,
+      catalogPrice: STANDARD_VENUE_PRICES[slot.priceTier],
+      catalogNameTag: slot.nameTag,
+      trainingDays: [],
+      weeks: [],
+      standardVenue: parsedVenue ?? venue,
+    },
+  };
 }
 
 export async function createProgramCatalog(

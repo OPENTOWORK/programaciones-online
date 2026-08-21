@@ -4,7 +4,10 @@ import {
 } from '@/lib/personalizedPlanContent';
 import { draftToTaggedBlocks, hasSessionBlockContent } from '@/lib/sessionBlockSections';
 import { formatScheduleSummary } from '@/lib/sessionSchedule';
-import type { SessionDraft } from '@/lib/trainerSessionDraft';
+import {
+  ACTIVATION_SESSION_NAME,
+  type SessionDraft,
+} from '@/lib/trainerSessionDraft';
 import { getBlockTypeConfig, getWorkoutBlockSummary, formatBlockItemLineForDisplay } from '@/lib/workoutBlockBuilder';
 
 export interface SessionTemplateSummary {
@@ -29,15 +32,43 @@ function appendSection(current: string, incoming: string) {
   return [current.trim(), incoming.trim()].filter(Boolean).join('\n\n');
 }
 
+/** Plantilla marcada como Activación por formato o por kind en el contenido. */
+export function isActivationTemplate(template: {
+  formatTag?: string | null;
+  content?: string;
+}) {
+  if (template.formatTag?.trim() === 'Activación') return true;
+  if (!template.content) return false;
+  return parsePersonalizedPlanContent(template.content).kind === 'activation';
+}
+
+/** Si alguna plantilla es de activación, la sesión resultante también lo es. */
+export function withActivationKindFromTemplates(
+  draft: SessionDraft,
+  templates: Array<{ formatTag?: string | null; content: string }>,
+): SessionDraft {
+  if (!templates.some(isActivationTemplate)) return draft;
+  return {
+    ...draft,
+    kind: 'activation',
+    name: ACTIVATION_SESSION_NAME,
+  };
+}
+
 /**
  * Aplica una plantilla como sesión nueva: copia bloques/contenido y conserva
  * nombre, número y calendario del destino (el día donde se está creando/editando).
+ * Si la plantilla es de activación, la sesión pasa a ser de activación.
  */
 export function applyTemplateToDraft(draft: SessionDraft, templateContent: string): SessionDraft {
   const parsed = parsePersonalizedPlanContent(templateContent);
+  const asActivation = parsed.kind === 'activation';
 
   return {
     ...draft,
+    ...(asActivation
+      ? { kind: 'activation' as const, name: ACTIVATION_SESSION_NAME }
+      : {}),
     estimatedDuration: parsed.estimatedDuration || draft.estimatedDuration,
     warmup: parsed.warmup,
     main: parsed.main,

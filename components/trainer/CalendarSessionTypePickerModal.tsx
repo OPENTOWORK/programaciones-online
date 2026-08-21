@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 
-export type CalendarSessionType = 'session' | 'activation';
+export type CalendarSessionType = 'session' | 'activation' | 'metcon';
 
 interface CalendarSessionTypePickerModalProps {
   visible: boolean;
@@ -31,6 +31,13 @@ const OPTIONS: Array<{
     description: 'Sesión corta previa al entreno.',
     icon: 'flash-outline',
     accent: colors.activation,
+  },
+  {
+    type: 'metcon',
+    label: 'Metcon',
+    description: 'Bloque condicional / metcon del día.',
+    icon: 'timer-outline',
+    accent: colors.metcon,
   },
 ];
 

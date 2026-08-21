@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
+import { useMyAthletePlans } from '@/hooks/useAthletePlans';
 import { useAuth } from '@/hooks/useAuth';
 import { useChatComposer } from '@/hooks/useChatComposer';
 import { useTrainerMessages } from '@/hooks/useTrainerMessages';
@@ -19,8 +20,10 @@ function AthleteChatScreen() {
   const { prefill } = useLocalSearchParams<{ prefill?: string | string[] }>();
   const { messages, isEmpty, sendMessage } = useTrainerMessages();
   const { isComplete: intakeComplete, isLoading: intakeLoading } = useAthleteIntakeForm();
+  const { plans: personalizedPlans } = useMyAthletePlans('personalized');
   const composer = useChatComposer({
     disabled: !intakeLoading && !intakeComplete,
+    allowVideoAttachments: personalizedPlans.length > 0,
     onSend: (text, attachments) => sendMessage(text, attachments),
   });
 

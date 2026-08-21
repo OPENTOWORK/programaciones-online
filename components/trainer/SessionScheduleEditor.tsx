@@ -7,6 +7,7 @@ import {
   formatScheduleSummary,
   RECURRENCE_OPTIONS,
   WEEKDAY_OPTIONS,
+  toWeekdayIndex,
   type SessionRecurrence,
   type SessionSchedule,
   type WeekdayIndex,
@@ -28,6 +29,24 @@ export function SessionScheduleEditor({ schedule, onChange }: SessionScheduleEdi
 
   const setRecurrence = (recurrence: SessionRecurrence) => {
     onChange({ ...schedule, recurrence });
+  };
+
+  const setStartDate = (startDate: string) => {
+    const trimmed = startDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      onChange({ ...schedule, startDate: trimmed });
+      return;
+    }
+    const parsed = new Date(`${trimmed}T12:00:00`);
+    if (Number.isNaN(parsed.getTime())) {
+      onChange({ ...schedule, startDate: trimmed });
+      return;
+    }
+    onChange({
+      ...schedule,
+      startDate: trimmed,
+      weekdays: [toWeekdayIndex(parsed)],
+    });
   };
 
   const activeRecurrence = RECURRENCE_OPTIONS.find((entry) => entry.value === schedule.recurrence);
@@ -76,7 +95,7 @@ export function SessionScheduleEditor({ schedule, onChange }: SessionScheduleEdi
         <Input
           label="Fecha de inicio"
           value={schedule.startDate ?? ''}
-          onChangeText={(startDate) => onChange({ ...schedule, startDate })}
+          onChangeText={setStartDate}
           placeholder="AAAA-MM-DD"
           style={styles.dateInput}
         />

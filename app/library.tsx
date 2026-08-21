@@ -3,7 +3,6 @@ import * as Linking from 'expo-linking';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -13,13 +12,13 @@ import {
 } from 'react-native';
 
 import { ExerciseVideoEmbed } from '@/components/workout/ExerciseVideoEmbed';
+import { YoutubeThumbnail } from '@/components/workout/YoutubeThumbnail';
 import { Card } from '@/components/ui/Card';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useExerciseLibrary } from '@/hooks/useExerciseLibrary';
 import {
   filterExerciseLibrary,
-  getYoutubeThumbnailUrl,
   type ExerciseLibraryItem,
 } from '@/lib/exerciseLibrary';
 import { getYoutubeWatchUrl } from '@/lib/exerciseVideoService';
@@ -84,7 +83,7 @@ export default function ExerciseLibraryScreen() {
   return (
     <ScreenWrapper>
       <View style={styles.header}>
-        <Text style={styles.title}>Biblioteca de ejercicios</Text>
+        <Text style={styles.title}>Library · Exercises</Text>
         <Text style={styles.subtitle}>
           Todos los vídeos del canal de YouTube, listos para consultar la técnica de cada movimiento.
         </Text>
@@ -150,8 +149,8 @@ export default function ExerciseLibraryScreen() {
                       ]}
                     >
                       <View style={[styles.thumbWrap, isPlaying && styles.thumbWrapActive]}>
-                        <Image
-                          source={{ uri: getYoutubeThumbnailUrl(item.videoId) }}
+                        <YoutubeThumbnail
+                          videoId={item.videoId}
                           style={styles.thumb}
                           resizeMode="cover"
                         />

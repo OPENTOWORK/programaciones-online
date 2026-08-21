@@ -1,5 +1,11 @@
 import { lookupCardioExerciseVideoId } from '@/lib/cardioExerciseVideos';
 import { normalizeExerciseName } from '@/lib/exerciseName';
+import {
+  findBestVideoMatch,
+  shouldSkipExercise,
+  videoLookupNames,
+} from '@/lib/exerciseVideoMatcher';
+import { HYPE_CHANNEL_VIDEOS } from '@/lib/hypeChannelVideos';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export interface ExerciseVideoEntry {
@@ -33,6 +39,9 @@ function buildCatalog(entries: ExerciseVideoEntry[]): ExerciseVideoCatalog {
   return { byEjerId, byNameKey };
 }
 
+/** Vídeo genérico del canal mientras el entrenador asigna el correcto. */
+export const PLACEHOLDER_EXERCISE_VIDEO_ID = 'L7Cxfvr1jXU';
+
 export function lookupExerciseVideoId(
   catalog: ExerciseVideoCatalog,
   name: string,
@@ -41,16 +50,37 @@ export function lookupExerciseVideoId(
 ): string | null {
   const override = youtubeVideoId?.trim();
   if (override) return override;
+  if (shouldSkipExercise(name)) return null;
 
   if (aimharderEjerId != null) {
     const byId = catalog.byEjerId.get(aimharderEjerId);
     if (byId) return byId;
   }
 
-  const cardioVideoId = lookupCardioExerciseVideoId(name);
-  if (cardioVideoId) return cardioVideoId;
+  const names = videoLookupNames(name);
+  for (const candidate of names) {
+    const cardioVideoId = lookupCardioExerciseVideoId(candidate);
+    if (cardioVideoId) return cardioVideoId;
 
-  return catalog.byNameKey.get(normalizeExerciseName(name)) ?? null;
+    const exact = catalog.byNameKey.get(normalizeExerciseName(candidate));
+    if (exact) return exact;
+  }
+
+  for (const candidate of names) {
+    const channelMatch = findBestVideoMatch(candidate, HYPE_CHANNEL_VIDEOS, { minScore: 55 });
+    if (channelMatch) return channelMatch.videoId;
+  }
+
+  const catalogCandidates = [...catalog.byNameKey.entries()].map(([key, videoId]) => ({
+    videoId,
+    title: key,
+  }));
+  for (const candidate of names) {
+    const fuzzyCatalogMatch = findBestVideoMatch(candidate, catalogCandidates, { minScore: 72 });
+    if (fuzzyCatalogMatch) return fuzzyCatalogMatch.videoId;
+  }
+
+  return PLACEHOLDER_EXERCISE_VIDEO_ID;
 }
 
 export async function fetchExerciseCatalogEntries(): Promise<ExerciseCatalogEntry[]> {

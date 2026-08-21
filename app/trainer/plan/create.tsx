@@ -31,7 +31,6 @@ import {
   validatePersonalizedPlanDraft,
 } from '@/lib/personalizedPlanContent';
 import { hasSessionBlockContent } from '@/lib/sessionBlockSections';
-import { needsActivationForDraft } from '@/lib/planActivation';
 import { parseSchedulePreviewItemKey, type SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
 import {
@@ -43,7 +42,6 @@ import {
 import { collectExerciseNamesFromSessionDraft } from '@/lib/exerciseTextParser';
 import { syncExerciseVideosForNames } from '@/lib/exerciseVideoSyncService';
 import {
-  createActivationDraftFor,
   createEmptySessionDraft,
   createRestDayDraft,
   renameSessionCopy,
@@ -266,22 +264,8 @@ export default function CreateAthletePlanScreen() {
     return { plan: result.plan };
   };
 
-  /** Añade la sesión a la cola junto a su activación cuando ese día aún no tiene una. */
-  const queueSessionWithActivation = (session: QueuedPlanSession) => {
-    setQueuedSessions((current) => {
-      const next = [...current, session];
-      const existing = [...savedGroupSessions, ...next].map((entry) => entry.draft);
-      if (!needsActivationForDraft(session.draft, existing)) return next;
-
-      return [
-        ...next,
-        {
-          id: `queued-activation-${session.sessionNumber}-${Date.now()}`,
-          sessionNumber: session.sessionNumber,
-          draft: createActivationDraftFor(session.draft),
-        },
-      ];
-    });
+  const queueSession = (session: QueuedPlanSession) => {
+    setQueuedSessions((current) => [...current, session]);
   };
 
   const handleConfirmSession = () => {
@@ -290,7 +274,7 @@ export default function CreateAthletePlanScreen() {
       return;
     }
 
-    queueSessionWithActivation({
+    queueSession({
       id: `queued-${sessionNumber}-${Date.now()}`,
       sessionNumber,
       draft: sessionDraft,
@@ -386,7 +370,7 @@ export default function CreateAthletePlanScreen() {
     }
 
     const number = nextCalendarSessionNumber();
-    queueSessionWithActivation({
+    queueSession({
       id: `queued-${number}-${Date.now()}`,
       sessionNumber: number,
       draft: scheduledDraft,
@@ -423,7 +407,7 @@ export default function CreateAthletePlanScreen() {
 
     const number = nextCalendarSessionNumber();
     const copiedDraft = renameSessionCopy(draft, number);
-    queueSessionWithActivation({
+    queueSession({
       id: `queued-${number}-${Date.now()}`,
       sessionNumber: number,
       draft: copiedDraft,
@@ -546,12 +530,6 @@ export default function CreateAthletePlanScreen() {
           return;
         }
         sessionsToSave.push({ sessionNumber, draft: sessionDraft });
-
-        // Las sesiones ya encoladas traen su activación; la del formulario se añade aquí.
-        const existing = [...savedGroupSessions, ...sessionsToSave].map((entry) => entry.draft);
-        if (needsActivationForDraft(sessionDraft, existing)) {
-          sessionsToSave.push({ sessionNumber, draft: createActivationDraftFor(sessionDraft) });
-        }
       }
 
       if (sessionsToSave.length === 0) {

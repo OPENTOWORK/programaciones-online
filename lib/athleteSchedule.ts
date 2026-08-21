@@ -5,7 +5,7 @@ import { createPersonalizedPlanPreviewProgram } from '@/lib/personalizedPlanCont
 import { fetchProgramsByIds } from '@/lib/programService';
 import { fetchActiveProgramsForUser } from '@/lib/userProgramService';
 import { fetchWorkoutsByProgram } from '@/lib/workoutService';
-import { ACTIVATION_SESSION_NAME, REST_DAY_SESSION_NAME, defaultDayOrder } from '@/lib/trainerSessionDraft';
+import { ACTIVATION_SESSION_NAME, METCON_SESSION_NAME, REST_DAY_SESSION_NAME, defaultDayOrder } from '@/lib/trainerSessionDraft';
 import { isSessionBasedAthletePlanType } from '@/lib/trainerConstants';
 import type { AthletePlan, Program, Workout } from '@/lib/types';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
@@ -156,9 +156,11 @@ export function buildAthleteCalendarItems({
     const sessionLabel =
       draft.kind === 'activation'
         ? ACTIVATION_SESSION_NAME
-        : draft.kind === 'rest'
-          ? REST_DAY_SESSION_NAME
-          : draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
+        : draft.kind === 'metcon'
+          ? METCON_SESSION_NAME
+          : draft.kind === 'rest'
+            ? REST_DAY_SESSION_NAME
+            : draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
     const previewProgram = createPersonalizedPlanPreviewProgram(plan.title);
     items.push(
       ...buildSchedulePreviewItems({

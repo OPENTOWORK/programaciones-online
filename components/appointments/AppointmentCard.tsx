@@ -85,7 +85,7 @@ export function AppointmentCard({
             pressed && styles.meetingRowPressed,
           ]}
         >
-          <AppIcon name="video" size={16} color={meetingReady ? colors.black : colors.accent} />
+          <AppIcon name="video" size={16} color={meetingReady ? colors.white : colors.accent} />
           <Text style={[styles.meetingText, meetingReady && styles.meetingTextReady]}>
             {meetingReady ? 'Entrar ahora' : `Abrir ${meetingProviderLabel(appointment.meetingUrl)}`}
           </Text>
@@ -181,7 +181,8 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
   },
   meetingRowReady: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentDark,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   meetingRowPressed: {
     opacity: 0.85,
@@ -192,7 +193,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   meetingTextReady: {
-    color: colors.black,
+    color: colors.white,
   },
   actions: {
     flexDirection: 'row',
@@ -206,7 +207,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
   },
   confirmAction: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentDark,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   actionPressed: {
     opacity: 0.85,
@@ -216,7 +219,7 @@ const styles = StyleSheet.create({
   },
   confirmActionText: {
     ...typography.caption,
-    color: colors.black,
+    color: colors.white,
     fontWeight: '700',
   },
   cancelActionText: {

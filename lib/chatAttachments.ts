@@ -31,11 +31,15 @@ function canAddMore(currentCount: number) {
   return null;
 }
 
-export async function pickChatImage(fromCamera = false): Promise<{
+export async function pickChatImage(
+  fromCamera = false,
+  options?: { allowVideo?: boolean },
+): Promise<{
   draft?: ChatAttachmentDraft;
   error?: string;
   cancelled?: boolean;
 }> {
+  const allowVideo = options?.allowVideo !== false;
   if (Platform.OS !== 'web') {
     const permission = fromCamera
       ? await ImagePicker.requestCameraPermissionsAsync()
@@ -45,16 +49,17 @@ export async function pickChatImage(fromCamera = false): Promise<{
     }
   }
 
+  const mediaTypes = allowVideo ? (['images', 'videos'] as const) : (['images'] as const);
   const result = fromCamera
     ? await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images', 'videos'],
+        mediaTypes: [...mediaTypes],
         quality: 0.85,
-        videoMaxDuration: 300,
+        videoMaxDuration: allowVideo ? 300 : undefined,
       })
     : await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images', 'videos'],
+        mediaTypes: [...mediaTypes],
         quality: 0.85,
-        videoMaxDuration: 300,
+        videoMaxDuration: allowVideo ? 300 : undefined,
       });
 
   if (result.canceled || !result.assets[0]) return { cancelled: true };

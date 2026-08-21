@@ -1,3 +1,4 @@
+import { calculateBmi } from '@/lib/bodyMetrics';
 import type { FitnessLevel, ProgramGoal, UserProfile, UserRole } from '@/lib/types';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { fetchActiveProgramsForUser } from '@/lib/userProgramService';
@@ -11,6 +12,10 @@ import { TimeoutError } from '@/lib/withTimeout';
 
 const PERFIL_TABLE = 'Perfil';
 
+/**
+ * Solo se escriben las claves presentes en el objeto: pasar una clave con `undefined`
+ * borra el valor, y omitirla deja intacta la columna.
+ */
 export interface ProfileUpdates {
   name: string;
   fitnessLevel?: FitnessLevel;
@@ -55,6 +60,7 @@ function mapProfileRow(
     height: parseOptionalNumber(data.altura),
     weight: parseOptionalNumber(data.peso),
     injuries: (data.lesiones as string | null) ?? undefined,
+    bmi: calculateBmi(parseOptionalNumber(data.altura), parseOptionalNumber(data.peso)),
     currentPrograms: activePrograms,
     currentProgramId: primaryProgram?.id,
     currentProgram: primaryProgram,
@@ -177,16 +183,17 @@ export async function updateUserProfile(
     return { error: authError.message };
   }
 
-  const profilePayload = {
+  const profilePayload: Record<string, unknown> = {
     id: userId,
     email: email.trim(),
     name: updates.name.trim(),
-    nivel: updates.fitnessLevel ?? null,
-    objetivo: updates.mainGoal ?? null,
-    altura: updates.height ?? null,
-    peso: updates.weight ?? null,
-    lesiones: updates.injuries?.trim() || null,
   };
+
+  if ('fitnessLevel' in updates) profilePayload.nivel = updates.fitnessLevel ?? null;
+  if ('mainGoal' in updates) profilePayload.objetivo = updates.mainGoal ?? null;
+  if ('height' in updates) profilePayload.altura = updates.height ?? null;
+  if ('weight' in updates) profilePayload.peso = updates.weight ?? null;
+  if ('injuries' in updates) profilePayload.lesiones = updates.injuries?.trim() || null;
 
   const [{ data, error }, activePrograms] = await Promise.all([
     supabase

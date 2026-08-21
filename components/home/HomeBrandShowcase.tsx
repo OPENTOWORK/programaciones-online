@@ -32,7 +32,7 @@ export function HomeBrandShowcase() {
           <View style={styles.heroBrandRow}>
             <AppLogo size={40} />
             <View style={styles.heroBrandCopy}>
-              <Text style={styles.heroEyebrow}>HY-PE</Text>
+              <Text style={styles.heroEyebrow}>TrainingProgLine</Text>
               <Text style={styles.heroBrandTagline}>Programaciones a tu medida</Text>
             </View>
           </View>
@@ -44,7 +44,7 @@ export function HomeBrandShowcase() {
 
           <View style={styles.heroCta}>
             <Text style={styles.heroCtaText}>Explorar catálogo</Text>
-            <AppIcon name="programs" size={16} color={colors.black} />
+            <AppIcon name="programs" size={16} color={colors.white} />
           </View>
         </LinearGradient>
       </ImageBackground>
@@ -90,8 +90,7 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.accent,
     fontWeight: '700',
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   heroBrandTagline: {
     ...typography.bodySmall,
@@ -120,13 +119,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.accent,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.accentDark,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   heroCtaText: {
     ...typography.button,
-    color: colors.black,
-    fontWeight: '700',
+    color: colors.white,
+    fontWeight: '600',
     fontSize: 14,
+    letterSpacing: 0.4,
   },
 });

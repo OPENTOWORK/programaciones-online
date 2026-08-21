@@ -1,8 +1,11 @@
+import { View, StyleSheet } from 'react-native';
 import { useSegments } from 'expo-router';
 
+import { AthleteTabBar } from '@/components/ui/AthleteTabBar';
 import { AuthWebShell } from '@/components/ui/AuthWebShell';
 import { MobileShell } from '@/components/ui/MobileShell';
 import { TrainerDesktopShell } from '@/components/ui/TrainerDesktopShell';
+import { colors } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { isTrainerDesktopWeb, isWebPlatform } from '@/lib/platformAccess';
 
@@ -19,12 +22,23 @@ function isLandingRoute(segments: string[]) {
   return first === undefined || first === 'index';
 }
 
+function withPersistentTabs(children: React.ReactNode) {
+  return (
+    <View style={styles.shell}>
+      <View style={styles.content}>{children}</View>
+      <AthleteTabBar />
+    </View>
+  );
+}
+
 export function AppShell({ children }: AppShellProps) {
   const { user, isLoading } = useAuth();
   const segments = useSegments();
+  const showAthleteTabs =
+    !isLoading && Boolean(user) && !isAuthRoute(segments) && !isLandingRoute(segments) && !isTrainerDesktopWeb(user?.role);
 
   if (!isWebPlatform()) {
-    return <>{children}</>;
+    return showAthleteTabs ? withPersistentTabs(children) : <>{children}</>;
   }
 
   if (!isLoading && isTrainerDesktopWeb(user?.role)) {
@@ -40,5 +54,17 @@ export function AppShell({ children }: AppShellProps) {
     return <AuthWebShell>{children}</AuthWebShell>;
   }
 
-  return <MobileShell>{children}</MobileShell>;
+  return <MobileShell>{showAthleteTabs ? withPersistentTabs(children) : children}</MobileShell>;
 }
+
+const styles = StyleSheet.create({
+  shell: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: colors.background,
+  },
+  content: {
+    flex: 1,
+    minHeight: 0,
+  },
+});

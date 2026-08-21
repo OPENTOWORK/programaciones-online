@@ -55,6 +55,11 @@ function selectableItems(block: TaggedWorkoutBlock) {
   return block.items.filter((item) => item.text.trim());
 }
 
+/** Bloques sin ejercicios (p. ej. Tabata solo con timing) se eligen enteros, como el texto libre. */
+function isWholeBlockSelection(block: TaggedWorkoutBlock) {
+  return block.type === 'free_text' || selectableItems(block).length === 0;
+}
+
 function buildTemplateDraft(
   blocks: TaggedWorkoutBlock[],
   selectedBlockIds: Set<string>,
@@ -64,7 +69,7 @@ function buildTemplateDraft(
   const selectedBlocks: TaggedWorkoutBlock[] = [];
 
   for (const block of blocks) {
-    if (block.type === 'free_text') {
+    if (isWholeBlockSelection(block)) {
       if (selectedBlockIds.has(block.id)) selectedBlocks.push(block);
       continue;
     }
@@ -97,7 +102,7 @@ export function CreateSessionTemplateModal({
 
   useEffect(() => {
     if (!visible || !draft) return;
-    setTag(null);
+    setTag(draft.kind === 'metcon' ? 'Metcon' : draft.kind === 'activation' ? 'All' : null);
     setFormatTag(null);
     setSelectedBlockIds(new Set());
     setSelectedItemIds(new Set());
@@ -120,20 +125,20 @@ export function CreateSessionTemplateModal({
   const canSave = Boolean(draft && tag && selectedCount > 0 && !saving);
 
   const isBlockChecked = (block: TaggedWorkoutBlock) => {
-    if (block.type === 'free_text') return selectedBlockIds.has(block.id);
+    if (isWholeBlockSelection(block)) return selectedBlockIds.has(block.id);
     const items = selectableItems(block);
     return items.length > 0 && items.every((item) => selectedItemIds.has(item.id));
   };
 
   const isBlockPartial = (block: TaggedWorkoutBlock) => {
-    if (block.type === 'free_text') return false;
+    if (isWholeBlockSelection(block)) return false;
     const items = selectableItems(block);
     const selected = items.filter((item) => selectedItemIds.has(item.id)).length;
     return selected > 0 && selected < items.length;
   };
 
   const toggleBlock = (block: TaggedWorkoutBlock) => {
-    if (block.type === 'free_text') {
+    if (isWholeBlockSelection(block)) {
       setSelectedBlockIds((current) => {
         const next = new Set(current);
         if (next.has(block.id)) next.delete(block.id);
@@ -168,7 +173,7 @@ export function CreateSessionTemplateModal({
     const nextBlocks = new Set<string>();
     const nextItems = new Set<string>();
     for (const block of blocks) {
-      if (block.type === 'free_text') {
+      if (isWholeBlockSelection(block)) {
         nextBlocks.add(block.id);
         continue;
       }
@@ -188,7 +193,8 @@ export function CreateSessionTemplateModal({
     const content = sessionDraftToTemplateContent(
       buildTemplateDraft(blocks, selectedBlockIds, selectedItemIds, {
         ...draft,
-        name: tag,
+        name: formatTag === 'Activación' ? 'Activación' : tag,
+        ...(formatTag === 'Activación' ? { kind: 'activation' as const } : {}),
       }),
     );
     const exerciseHint = describeSessionTemplate(content).exerciseLines[0] ?? null;

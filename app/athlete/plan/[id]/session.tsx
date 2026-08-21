@@ -12,6 +12,7 @@ import { useSessionRunner } from '@/hooks/useSessionRunner';
 import { combineMainPartsForSave, extractExercisesFromSessionDraft } from '@/lib/sessionBlockSections';
 import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import { formatDayLabel } from '@/lib/programSchedulePreview';
+import { allowsTrainerFeedbackVideos } from '@/lib/feedbackVideoAccess';
 import { safeGoBack } from '@/lib/navigation';
 
 export default function AthletePlanSessionScreen() {
@@ -105,6 +106,7 @@ export default function AthletePlanSessionScreen() {
         ensureLog={runner.ensureLog}
         getVideoId={getVideoId}
         hasVideo={hasVideo}
+        allowFeedbackVideos={allowsTrainerFeedbackVideos({ planType: plan.planType })}
       />
     </ScreenWrapper>
   );

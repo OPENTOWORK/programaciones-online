@@ -139,3 +139,26 @@ export function shouldSkipExercise(name: string) {
   const key = normalizeExerciseName(name);
   return key === 'descanso rest' || key === 'rest' || key === 'texto libre';
 }
+
+/** Quita series, reps y tiempos para poder emparejar el nombre con el vídeo. */
+export function cleanExerciseNameForVideo(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return '';
+
+  const withoutPrescription = trimmed
+    .replace(/\s+\d+\s*[x×]\s*\d+.*$/i, '')
+    .replace(/\s+\d+\s*reps?.*$/i, '')
+    .replace(/\s+\d+\s*[''].*$/i, '')
+    .replace(/\s+\d+\s*min(?:utos?)?.*$/i, '')
+    .trim();
+
+  const colonIndex = withoutPrescription.indexOf(':');
+  if (colonIndex > 0) return withoutPrescription.slice(0, colonIndex).trim();
+
+  return withoutPrescription || trimmed;
+}
+
+export function videoLookupNames(name: string) {
+  const cleaned = cleanExerciseNameForVideo(name);
+  return [...new Set([name.trim(), cleaned].filter(Boolean))];
+}

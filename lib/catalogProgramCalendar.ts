@@ -22,7 +22,9 @@ import {
   createRestDayDraft,
   defaultDayOrder,
   isActivationSessionDraft,
+  isMetconSessionDraft,
   isRestDaySessionDraft,
+  METCON_SESSION_NAME,
   renameSessionCopy,
   workoutToSessionDraft,
   type SessionDraft,
@@ -35,7 +37,11 @@ export function workoutIdFromCalendarItem(item: SchedulePreviewItem) {
 }
 
 export function applyDateToSessionDraft(draft: SessionDraft, date: Date): SessionDraft {
-  const schedule = scheduleForCalendarDate(date);
+  const schedule = {
+    ...scheduleForCalendarDate(date),
+    ...(draft.kind && draft.kind !== 'session' ? { kind: draft.kind } : {}),
+    ...(typeof draft.dayOrder === 'number' ? { dayOrder: draft.dayOrder } : {}),
+  };
   return {
     ...draft,
     schedule,
@@ -48,6 +54,7 @@ function sessionDraftToCatalogPayload(draft: SessionDraft) {
   const schedule: SessionSchedule = {
     ...draft.schedule,
     ...(typeof draft.dayOrder === 'number' ? { dayOrder: draft.dayOrder } : {}),
+    ...(draft.kind && draft.kind !== 'session' ? { kind: draft.kind } : {}),
   };
 
   return {
@@ -69,23 +76,28 @@ export async function persistCatalogSessionDraft(
   draftToSave: SessionDraft,
   targetWorkoutId?: string,
 ): Promise<string | null> {
-  const trimmedName = draftToSave.name.trim();
+  const normalizedDraft = isMetconSessionDraft(draftToSave)
+    ? { ...draftToSave, name: METCON_SESSION_NAME, kind: 'metcon' as const }
+    : isActivationSessionDraft(draftToSave)
+      ? { ...draftToSave, name: draftToSave.name.trim() || 'Activación', kind: 'activation' as const }
+      : draftToSave;
+  const trimmedName = normalizedDraft.name.trim();
   if (!trimmedName) return 'El nombre de la sesión es obligatorio.';
 
   if (
-    !isRestDaySessionDraft(draftToSave) &&
-    !isActivationSessionDraft(draftToSave) &&
-    extractExercisesFromSessionDraft(draftToSave).every((exercise) => !exercise.name.trim()) &&
-    !hasSessionBlockContent(draftToSave)
+    !isRestDaySessionDraft(normalizedDraft) &&
+    !isActivationSessionDraft(normalizedDraft) &&
+    extractExercisesFromSessionDraft(normalizedDraft).every((exercise) => !exercise.name.trim()) &&
+    !hasSessionBlockContent(normalizedDraft)
   ) {
     return 'Añade al menos un bloque de entrenamiento.';
   }
 
-  if (draftToSave.schedule.weekdays.length === 0) {
+  if (normalizedDraft.schedule.weekdays.length === 0) {
     return 'Selecciona al menos un día para la sesión.';
   }
 
-  const payload = sessionDraftToCatalogPayload(draftToSave);
+  const payload = sessionDraftToCatalogPayload(normalizedDraft);
   const result = targetWorkoutId
     ? await updateWorkoutCatalog(targetWorkoutId, payload)
     : await createWorkoutCatalog({
@@ -97,7 +109,7 @@ export async function persistCatalogSessionDraft(
   if (result.error) return result.error;
 
   // El guardado de la sesión no debe fallar si el catálogo de vídeos falla.
-  void syncExerciseVideosForNames(collectExerciseNamesFromSessionDraft(draftToSave));
+  void syncExerciseVideosForNames(collectExerciseNamesFromSessionDraft(normalizedDraft));
 
   return null;
 }

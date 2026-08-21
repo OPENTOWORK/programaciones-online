@@ -1,4 +1,5 @@
-import { parseStandardVenueFromDescription } from '@/lib/standardVenueCatalog';
+import { enrichProgramFromHypeCatalog, sortHypePrograms } from '@/lib/hypeCatalog';
+import { enrichProgramFromVenueCatalog, parseStandardVenueFromDescription } from '@/lib/standardVenueCatalog';
 import type { AppIconName } from '@/constants/icons';
 import type { Program, ProgramCategory, ProgramGoal } from '@/lib/types';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -10,17 +11,26 @@ export interface Plan {
 }
 
 export const APP_SERVICE_PLANS: Plan[] = [
-  { id: 'plan-nutrition', label: 'Nutrición', category: 'nutrition' },
-  { id: 'plan-home-training', label: 'Entrenamiento personal en tu domicilio', category: 'home_training' },
-  { id: 'plan-gym-training', label: 'Programación para tu gimnasio', category: 'gym_training' },
+  { id: 'plan-nutrition', label: 'Nutrition · Plan', category: 'nutrition' },
+  { id: 'plan-home-training', label: 'Home · Coaching', category: 'home_training' },
+  { id: 'plan-gym-training', label: 'Gym · Programming', category: 'gym_training' },
 ];
 
 export const PLAN_DISPLAY_LABELS: Record<ProgramCategory, string> = {
-  personalized: 'Entrenamiento personalizado',
-  standard: 'Estándar',
-  hype: 'Hype / Intensivas',
-  nutrition: 'Nutrición',
-  home_training: 'Entrenamiento personal en tu domicilio',
+  personalized: 'Personal · Coaching',
+  standard: 'Base · Training',
+  hype: 'HYPE · Performance',
+  nutrition: 'Nutrition · Plan',
+  home_training: 'Home · Coaching',
+  gym_training: 'Gym · Programming',
+};
+
+export const PLAN_DISPLAY_SUBTITLES: Record<ProgramCategory, string> = {
+  personalized: 'Programación hecha a tu medida',
+  standard: 'Catálogo de gym y calistenia',
+  hype: 'Bloques intensivos de alto rendimiento',
+  nutrition: 'Pauta nutricional personalizada',
+  home_training: 'Entrenador en tu domicilio',
   gym_training: 'Programación para tu gimnasio',
 };
 
@@ -69,15 +79,20 @@ function mapPlanCategory(descripcion: string): ProgramCategory {
   return 'standard';
 }
 
-/** Catálogos de sesiones sueltas ("¿Cuánto tiempo tienes?"): no son un ciclo semanal con objetivo. */
+/** Catálogos de sesiones sueltas (tiempo libre / metcon): no son un ciclo semanal con objetivo. */
 function isLooseSessionCatalog(name: string) {
   const normalized = name.toLowerCase();
-  return normalized.includes('cuánto tiempo') || normalized.includes('cuanto tiempo');
+  return (
+    normalized.includes('cuánto tiempo') ||
+    normalized.includes('cuanto tiempo') ||
+    normalized.trim() === 'metcon'
+  );
 }
 
 function inferIcon(name: string): AppIconName {
   const normalized = name.toLowerCase();
 
+  if (normalized.trim() === 'metcon') return 'intense';
   if (isLooseSessionCatalog(name)) return 'time';
   if (normalized.includes('core')) return 'core';
   if (normalized.includes('athx') || normalized.includes('hype')) return 'intense';
@@ -123,23 +138,25 @@ function mapPrograma(
   const looseSessions = isLooseSessionCatalog(row.name);
   const { venue, description } = parseStandardVenueFromDescription(row.descripcion);
 
-  return {
-    id: row.id,
-    name: row.name,
-    planId: row.id_planes,
-    category,
-    standardVenue: venue ?? (category === 'standard' ? 'gym' : undefined),
-    level: inferLevel(category),
-    duration: 'Por definir' as Program['duration'],
-    goal: inferGoal(row.name),
-    sessionsPerWeek: looseSessions ? 0 : 3,
-    status: 'disponible',
-    icon: inferIcon(row.name),
-    description: description || `Programación del plan ${planLabel}.`,
-    equipment: [],
-    trainingDays: [],
-    weeks: [],
-  };
+  return enrichProgramFromHypeCatalog(
+    enrichProgramFromVenueCatalog({
+      id: row.id,
+      name: row.name,
+      planId: row.id_planes,
+      category,
+      standardVenue: venue ?? (category === 'standard' ? 'gym' : undefined),
+      level: inferLevel(category),
+      duration: 'Por definir' as Program['duration'],
+      goal: inferGoal(row.name),
+      sessionsPerWeek: looseSessions ? 0 : 3,
+      status: 'disponible',
+      icon: inferIcon(row.name),
+      description: description || `Programación del plan ${planLabel}.`,
+      equipment: [],
+      trainingDays: [],
+      weeks: [],
+    }),
+  );
 }
 
 /** Los catálogos de sesiones sueltas se listan al final del plan. */
@@ -206,10 +223,11 @@ export async function fetchPlansAndPrograms(): Promise<{ plans: Plan[]; programs
     return { plans: [], programs: [] };
   }
 
-  const [{ data: planes, error: planesError }, { data: programas, error: programasError }] =
+  const [{ data: planes, error: planesError }, { data: programas, error: programasError }, { data: sessionCounts, error: countsError }] =
     await Promise.all([
       supabase.from('planes').select('id, descripcion').order('descripcion'),
       supabase.from('programas').select('id, name, id_planes, descripcion').order('name'),
+      supabase.from('entrenos_diarios').select('program_id'),
     ]);
 
   if (planesError) {
@@ -220,6 +238,18 @@ export async function fetchPlansAndPrograms(): Promise<{ plans: Plan[]; programs
     throw new Error(programasError.message);
   }
 
+  if (countsError) {
+    // No bloqueamos el listado si falla el conteo; solo afecta el desempate de duplicados.
+    console.warn('No se pudieron contar sesiones de catálogo:', countsError.message);
+  }
+
+  const sessionsByProgram = new Map<string, number>();
+  for (const row of sessionCounts ?? []) {
+    const programId = row.program_id as string | null;
+    if (!programId) continue;
+    sessionsByProgram.set(programId, (sessionsByProgram.get(programId) ?? 0) + 1);
+  }
+
   const planLabels = new Map((planes ?? []).map((plan) => [plan.id, plan.descripcion]));
 
   const plans: Plan[] = (planes ?? []).map((plan) => ({
@@ -228,11 +258,18 @@ export async function fetchPlansAndPrograms(): Promise<{ plans: Plan[]; programs
     category: mapPlanCategory(plan.descripcion),
   }));
 
-  const programs: Program[] = (programas ?? [])
-    .map((programa) => mapPrograma(programa, planLabels.get(programa.id_planes) ?? ''))
+  const mappedPrograms = (programas ?? []).map((programa) => ({
+    ...mapPrograma(programa, planLabels.get(programa.id_planes) ?? ''),
+    catalogSessionCount: sessionsByProgram.get(programa.id) ?? 0,
+  }));
+  const hypePrograms = sortHypePrograms(
+    mappedPrograms.filter((program) => program.category === 'hype'),
+  );
+  const otherPrograms = mappedPrograms
+    .filter((program) => program.category !== 'hype')
     .sort(compareCatalogPrograms);
 
-  return { plans, programs };
+  return { plans, programs: [...otherPrograms, ...hypePrograms] };
 }
 
 export async function fetchProgramById(programId: string): Promise<Program | null> {

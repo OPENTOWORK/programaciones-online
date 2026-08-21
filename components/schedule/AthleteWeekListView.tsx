@@ -31,6 +31,7 @@ interface AthleteWeekListViewProps {
 
 function sessionCardStyle(item: SchedulePreviewItem) {
   if (item.kind === 'activation') return styles.sessionActivation;
+  if (item.kind === 'metcon') return styles.sessionMetcon;
   if (item.kind === 'rest') return styles.sessionRest;
   if (item.isCurrent) return styles.sessionCurrent;
   return styles.sessionDefault;
@@ -211,6 +212,10 @@ const styles = StyleSheet.create({
   sessionActivation: {
     borderColor: `${colors.activation}99`,
     backgroundColor: `${colors.activation}1A`,
+  },
+  sessionMetcon: {
+    borderColor: `${colors.metcon}99`,
+    backgroundColor: `${colors.metcon}1A`,
   },
   sessionRest: {
     borderColor: `${colors.restDay}99`,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { buildExerciseLibrary } from '@/lib/exerciseLibrary';
 import { buildExerciseNameCatalog, type ExerciseNameOption } from '@/lib/exerciseNameCatalog';
-import { fetchExerciseCatalogEntries, fetchExerciseVideoEntries } from '@/lib/exerciseVideoService';
+import { fetchExerciseCatalogEntries } from '@/lib/exerciseVideoService';
 
 export function useExerciseNameCatalog() {
   const [items, setItems] = useState<ExerciseNameOption[]>([]);
@@ -14,12 +14,8 @@ export function useExerciseNameCatalog() {
     setError(null);
 
     try {
-      const [catalogEntries, planEntries] = await Promise.all([
-        fetchExerciseCatalogEntries(),
-        fetchExerciseVideoEntries(),
-      ]);
-      const libraryItems = buildExerciseLibrary(planEntries);
-      setItems(buildExerciseNameCatalog(catalogEntries, libraryItems));
+      const catalogEntries = await fetchExerciseCatalogEntries();
+      setItems(buildExerciseNameCatalog(catalogEntries, buildExerciseLibrary()));
     } catch (loadError) {
       setItems(buildExerciseNameCatalog([], buildExerciseLibrary()));
       setError(

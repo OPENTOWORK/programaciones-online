@@ -20,6 +20,7 @@ interface SessionEditorFormProps {
   canConfirmSession?: boolean;
   onPendingBlocksChange?: (hasPending: boolean) => void;
   showTemplates?: boolean;
+  showSchedule?: boolean;
 }
 
 export function SessionEditorForm({
@@ -32,6 +33,7 @@ export function SessionEditorForm({
   canConfirmSession = false,
   onPendingBlocksChange,
   showTemplates = true,
+  showSchedule = true,
 }: SessionEditorFormProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 720;
@@ -84,16 +86,18 @@ export function SessionEditorForm({
         </View>
       </Card>
 
-      <SessionScheduleEditor
-        schedule={draft.schedule}
-        onChange={(schedule) =>
-          onChange({
-            ...draft,
-            schedule,
-            dayLabel: formatScheduleSummary(schedule),
-          })
-        }
-      />
+      {showSchedule ? (
+        <SessionScheduleEditor
+          schedule={draft.schedule}
+          onChange={(schedule) =>
+            onChange({
+              ...draft,
+              schedule,
+              dayLabel: formatScheduleSummary(schedule),
+            })
+          }
+        />
+      ) : null}
 
       <WorkoutBlocksEditor
         draft={draft}

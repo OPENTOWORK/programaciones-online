@@ -17,7 +17,14 @@ function blockHeader(block: WorkoutBlockDraft) {
     .join(' · ');
 }
 
-export function SessionDraftSummary({ draft }: { draft: SessionDraft }) {
+export function SessionDraftSummary({
+  draft,
+  hideSectionLabels = false,
+}: {
+  draft: SessionDraft;
+  /** Oculta etiquetas tipo «Parte principal» (p. ej. cuadrícula Metcon). */
+  hideSectionLabels?: boolean;
+}) {
   const sections = SESSION_BLOCK_SECTIONS.map(({ key, label }) => ({
     label,
     blocks: parseWorkoutBlocksFromText(draft[key]),
@@ -31,7 +38,7 @@ export function SessionDraftSummary({ draft }: { draft: SessionDraft }) {
     <View style={styles.wrap}>
       {sections.map((section) => (
         <View key={section.label} style={styles.section}>
-          <Text style={styles.sectionLabel}>{section.label}</Text>
+          {hideSectionLabels ? null : <Text style={styles.sectionLabel}>{section.label}</Text>}
           {section.blocks.map((block, blockIndex) => {
             if (block.type === 'free_text') {
               return (

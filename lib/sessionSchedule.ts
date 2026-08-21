@@ -4,12 +4,17 @@ export type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export type SessionRecurrence = 'once' | 'weekly' | 'biweekly' | 'every3weeks' | 'every4weeks';
 
+/** Tipo de sesión persistido en schedule_config del catálogo. */
+export type CatalogSessionKind = 'session' | 'activation' | 'metcon' | 'rest';
+
 export interface SessionSchedule {
   weekdays: WeekdayIndex[];
   recurrence: SessionRecurrence;
   startDate?: string;
   /** Orden dentro de un mismo día cuando hay varias sesiones. */
   dayOrder?: number;
+  /** Activación / metcon / descanso; si falta, se infiere del nombre. */
+  kind?: CatalogSessionKind;
 }
 
 export const WEEKDAY_OPTIONS: Array<{ index: WeekdayIndex; label: string; short: string }> = [
@@ -129,6 +134,7 @@ export function normalizeSessionSchedule(
     typeof schedule?.dayOrder === 'number' && Number.isFinite(schedule.dayOrder)
       ? schedule.dayOrder
       : base.dayOrder;
+  const kind = schedule?.kind ?? base.kind;
   return {
     weekdays: weekdays.length > 0 ? [...new Set(weekdays)].sort() : base.weekdays,
     recurrence: VALID_RECURRENCES.has(recurrence as SessionRecurrence)
@@ -136,6 +142,7 @@ export function normalizeSessionSchedule(
       : 'weekly',
     startDate: schedule?.startDate ?? base.startDate,
     dayOrder,
+    ...(kind ? { kind } : {}),
   };
 }
 
@@ -216,16 +223,17 @@ export function getScheduleAnchorDate(schedule: SessionSchedule, reference = new
 }
 
 export function sessionOccursOnDate(schedule: SessionSchedule, date: Date, reference = new Date()) {
+  const anchor = getScheduleAnchorDate(schedule, reference);
+
+  // Una sola vez: solo cuenta la fecha de inicio (los weekdays pueden desincronizarse).
+  if (schedule.recurrence === 'once') {
+    return isSameDay(date, anchor);
+  }
+
   if (schedule.weekdays.length === 0) return false;
 
   const weekday = toWeekdayIndex(date);
   if (!schedule.weekdays.includes(weekday)) return false;
-
-  const anchor = getScheduleAnchorDate(schedule, reference);
-
-  if (schedule.recurrence === 'once') {
-    return isSameDay(date, anchor);
-  }
 
   if (date < anchor) return false;
 
@@ -245,5 +253,6 @@ export function serializeScheduleForDb(schedule: SessionSchedule) {
     recurrence: schedule.recurrence,
     startDate: schedule.startDate ?? toLocalDateString(startOfDay(new Date())),
     ...(typeof schedule.dayOrder === 'number' ? { dayOrder: schedule.dayOrder } : {}),
+    ...(schedule.kind ? { kind: schedule.kind } : {}),
   };
 }

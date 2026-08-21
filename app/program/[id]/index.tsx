@@ -2,12 +2,14 @@ import { useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { ProgramSessionsCalendar } from '@/components/program/ProgramSessionsCalendar';
+import { ProgramSessionsGrid } from '@/components/program/ProgramSessionsGrid';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useProgram } from '@/hooks/usePrograms';
 import { isTrainerRole } from '@/lib/athleteService';
 import { isTrainerEditableCategory } from '@/lib/programService';
+import { isMetconCatalogProgram } from '@/lib/standardVenueCatalog';
 
 export default function ProgramCalendarScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -31,6 +33,19 @@ export default function ProgramCalendarScreen() {
   }
 
   const canEdit = isTrainerRole(user?.role) && isTrainerEditableCategory(program.category);
+  const useGrid = isMetconCatalogProgram(program);
+
+  if (useGrid) {
+    return (
+      <ProgramSessionsGrid
+        program={program}
+        workouts={workouts}
+        isLoading={isLoadingWorkouts}
+        canManage={canEdit}
+        onWorkoutsChange={reloadWorkouts}
+      />
+    );
+  }
 
   return (
     <ScreenWrapper scrollable={false} padded={false}>

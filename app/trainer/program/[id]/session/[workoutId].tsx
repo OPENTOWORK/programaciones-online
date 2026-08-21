@@ -30,10 +30,13 @@ import {
   type SessionSchedule,
 } from '@/lib/sessionSchedule';
 import {
+  createActivationDraftFor,
   createEmptySessionDraft,
+  createMetconDraftFor,
   workoutToSessionDraft,
   type SessionDraft,
 } from '@/lib/trainerSessionDraft';
+import { isMetconCatalogProgram } from '@/lib/standardVenueCatalog';
 import { fetchWorkoutById } from '@/lib/workoutService';
 
 function scheduleDraftForDate(draft: SessionDraft, isoDate?: string): SessionDraft {
@@ -50,7 +53,13 @@ function scheduleDraftForDate(draft: SessionDraft, isoDate?: string): SessionDra
 }
 
 export default function EditSessionScreen() {
-  const { id, workoutId, date } = useLocalSearchParams<{ id: string; workoutId: string; date?: string }>();
+  const { id, workoutId, date, slot, kind } = useLocalSearchParams<{
+    id: string;
+    workoutId: string;
+    date?: string;
+    slot?: string;
+    kind?: string;
+  }>();
   const { width } = useWindowDimensions();
   const isSplitLayout = width >= 1080;
   const router = useRouter();
@@ -72,7 +81,47 @@ export default function EditSessionScreen() {
     if (!program || !canEdit) return;
 
     if (isNewSession) {
-      setDraft(scheduleDraftForDate(createEmptySessionDraft(workouts.length), date));
+      const empty = createEmptySessionDraft(workouts.length);
+      const slotIndex = Number.parseInt(Array.isArray(slot) ? slot[0] : slot ?? '', 10);
+      const hasSlot = Number.isFinite(slotIndex) && slotIndex >= 0;
+      const kindParam = (Array.isArray(kind) ? kind[0] : kind)?.trim().toLowerCase();
+      const isMetconProgram = isMetconCatalogProgram(program);
+
+      let initial = empty;
+      if (kindParam === 'activation') {
+        initial = createActivationDraftFor(empty);
+      } else if (kindParam === 'metcon' || (isMetconProgram && kindParam !== 'session')) {
+        const metcon = createMetconDraftFor(empty);
+        initial = {
+          ...metcon,
+          name: hasSlot
+            ? `Metcon ${slotIndex + 1}`
+            : workouts.length === 0
+              ? 'Metcon 1'
+              : `Metcon ${workouts.length + 1}`,
+          dayLabel: isMetconProgram ? 'Sesión libre' : metcon.dayLabel,
+        };
+      } else if (isMetconProgram && kindParam === 'session') {
+        initial = {
+          ...empty,
+          name: hasSlot ? `Sesión ${slotIndex + 1}` : empty.name,
+          dayLabel: 'Sesión libre',
+        };
+      }
+
+      if (hasSlot) {
+        initial = {
+          ...initial,
+          dayOrder: slotIndex,
+          schedule: {
+            ...initial.schedule,
+            ...(initial.kind && initial.kind !== 'session' ? { kind: initial.kind } : {}),
+            dayOrder: slotIndex,
+          },
+        };
+      }
+
+      setDraft(scheduleDraftForDate(initial, date));
       setLoadingSession(false);
       return;
     }
@@ -101,7 +150,7 @@ export default function EditSessionScreen() {
     return () => {
       cancelled = true;
     };
-  }, [program, canEdit, isNewSession, workoutId, workouts, date]);
+  }, [program, canEdit, isNewSession, workoutId, workouts, date, slot, kind]);
 
   const persistSessionDraft = async (
     draftToSave: SessionDraft,
@@ -220,19 +269,22 @@ export default function EditSessionScreen() {
     return workout ? workoutToSessionDraft(workout, index) : null;
   };
 
-  const handleCalendarSave = async ({ draft: calendarDraft, item }: CalendarSessionSaveInput) => {
+  const handleCalendarSave = async ({ draft: calendarDraft, date, item }: CalendarSessionSaveInput) => {
     const targetWorkoutId = item ? resolveWorkoutId(item) : undefined;
+    const draftToSave = item
+      ? calendarDraft
+      : scheduleDraftForDate(calendarDraft, toLocalDateString(date));
 
     if (item && !targetWorkoutId) {
-      setDraft(calendarDraft);
+      setDraft(draftToSave);
       setSuccessMessage('Sesión actualizada en el formulario. Pulsa «Crear sesión» para guardarla.');
       return null;
     }
 
-    const result = await persistSessionDraft(calendarDraft, targetWorkoutId);
+    const result = await persistSessionDraft(draftToSave, targetWorkoutId);
     if (result.error) return result.error;
 
-    if (targetWorkoutId && targetWorkoutId === workoutId) setDraft(calendarDraft);
+    if (targetWorkoutId && targetWorkoutId === workoutId) setDraft(draftToSave);
     setSuccessMessage(
       targetWorkoutId ? 'Sesión actualizada desde el calendario.' : 'Sesión creada desde el calendario.',
     );
@@ -255,17 +307,27 @@ export default function EditSessionScreen() {
     );
   }
 
+  const isMetconProgram = isMetconCatalogProgram(program);
+
   return (
     <ScreenWrapper padded={false}>
       <View style={styles.page}>
         <View style={[styles.pageHeader, isSplitLayout && styles.pageHeaderWide]}>
           <Text style={styles.title}>{isNewSession ? 'Nueva sesión' : 'Editar sesión'}</Text>
-          <SectionHeader title={program.name} subtitle={draft.dayLabel} />
+          <SectionHeader
+            title={program.name}
+            subtitle={isMetconProgram ? 'Sesión libre · sin días fijos' : draft.dayLabel}
+          />
         </View>
 
-        <View style={[styles.splitLayout, isSplitLayout && styles.splitLayoutWide]}>
+        <View style={[styles.splitLayout, isSplitLayout && !isMetconProgram && styles.splitLayoutWide]}>
           <View style={styles.editorColumn}>
-            <SessionEditorForm draft={draft} onChange={setDraft} />
+            <SessionEditorForm
+              draft={draft}
+              onChange={setDraft}
+              showTemplates
+              showSchedule={!isMetconProgram}
+            />
 
             <View style={styles.footer}>
               {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -277,29 +339,41 @@ export default function EditSessionScreen() {
                 loading={submitting}
                 style={styles.saveBtn}
               />
+              {isMetconProgram ? (
+                <Button
+                  title="Volver a la cuadrícula"
+                  variant="outline"
+                  onPress={() =>
+                    router.replace({ pathname: '/program/[id]', params: { id: program.id } })
+                  }
+                  style={styles.backBtn}
+                />
+              ) : null}
             </View>
           </View>
 
-          <View style={[styles.previewColumn, isSplitLayout && styles.previewColumnWide]}>
-            <ProgramSchedulePreview
-              program={program}
-              workouts={workouts}
-              draft={draft}
-              editingWorkoutId={isNewSession ? null : workoutId}
-              isNewSession={isNewSession}
-              onDayPress={(date) => {
-                if (previewState) openTrainerPreviewDay(router, date, previewState);
-              }}
-              onSessionPress={(item) => {
-                if (previewState) openTrainerPreviewSession(router, item, previewState);
-              }}
-              onExpand={() => setCalendarOpen(true)}
-            />
-          </View>
+          {!isMetconProgram ? (
+            <View style={[styles.previewColumn, isSplitLayout && styles.previewColumnWide]}>
+              <ProgramSchedulePreview
+                program={program}
+                workouts={workouts}
+                draft={draft}
+                editingWorkoutId={isNewSession ? null : workoutId}
+                isNewSession={isNewSession}
+                onDayPress={(date) => {
+                  if (previewState) openTrainerPreviewDay(router, date, previewState);
+                }}
+                onSessionPress={(item) => {
+                  if (previewState) openTrainerPreviewSession(router, item, previewState);
+                }}
+                onExpand={() => setCalendarOpen(true)}
+              />
+            </View>
+          ) : null}
         </View>
       </View>
 
-      {previewState ? (
+      {previewState && !isMetconProgram ? (
         <ScheduleCalendarModal
           visible={calendarOpen}
           onClose={() => setCalendarOpen(false)}
@@ -361,6 +435,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
     gap: spacing.sm,
+  },
+  backBtn: {
+    marginTop: spacing.xs,
   },
   error: { ...typography.bodySmall, color: colors.danger },
   success: { ...typography.bodySmall, color: colors.success },

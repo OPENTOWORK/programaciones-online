@@ -52,6 +52,8 @@ interface SessionWorkoutViewProps {
   userId?: string;
   ensureLog?: () => Promise<{ logId?: string; error?: string }>;
   onLogEnsured?: (logId: string) => void;
+  /** Vídeos para el entrenador: solo Personal · Coaching. */
+  allowFeedbackVideos?: boolean;
 }
 
 export function SessionWorkoutView({
@@ -76,6 +78,7 @@ export function SessionWorkoutView({
   userId,
   ensureLog,
   onLogEnsured,
+  allowFeedbackVideos = false,
 }: SessionWorkoutViewProps) {
   const [activeVideo, setActiveVideo] = useState<ActiveVideo | null>(null);
   const [sendTarget, setSendTarget] = useState<SendTarget | null>(null);
@@ -140,11 +143,12 @@ export function SessionWorkoutView({
     hasExerciseVideo: (name: string, aimharderEjerId?: number, youtubeVideoId?: string) =>
       hasVideo(name, aimharderEjerId, youtubeVideoId),
     activeExerciseName: activeVideo?.name,
-    onSendExerciseVideo: readOnly
-      ? undefined
-      : (exerciseKey: string, exerciseName: string) => {
-          setSendTarget({ key: exerciseKey, name: exerciseName });
-        },
+    onSendExerciseVideo:
+      readOnly || !allowFeedbackVideos
+        ? undefined
+        : (exerciseKey: string, exerciseName: string) => {
+            setSendTarget({ key: exerciseKey, name: exerciseName });
+          },
     uploadingExerciseKey: readOnly ? null : uploadingExerciseKey,
     sentExerciseKeys: readOnly ? undefined : sentExerciseKeys,
   });
@@ -196,7 +200,10 @@ export function SessionWorkoutView({
         <WorkoutSection title="Core / Accesorio" content={workout.core} icon="core" {...sectionProps('core')} />
       ) : null}
 
-      {workout.exercises.length > 0 ? (
+      {workout.exercises.length > 0 &&
+      !workout.warmup?.trim() &&
+      !workout.main?.trim() &&
+      !workout.core?.trim() ? (
         <View>
           <SectionHeader title="Ejercicios" subtitle={`${workout.exercises.length} ejercicios`} />
           {workout.exercises.map((exercise) => {
@@ -219,7 +226,7 @@ export function SessionWorkoutView({
                     )
                   }
                   onSendVideo={
-                    readOnly
+                    readOnly || !allowFeedbackVideos
                       ? undefined
                       : () => setSendTarget({ key, name: exercise.name })
                   }
@@ -254,22 +261,26 @@ export function SessionWorkoutView({
             style={styles.feelingsInput}
           />
 
-          <SessionLogVideos
-            videos={videos}
-            isLoading={videosLoading}
-            isUploading={isUploading && !uploadingExerciseKey}
-            error={videosError}
-            onUpload={(source) => void handleUpload(source)}
-            onRemove={(videoId) => void removeVideo(videoId)}
-            readOnly={false}
-            canUpload
-          />
+          {allowFeedbackVideos ? (
+            <SessionLogVideos
+              videos={videos}
+              isLoading={videosLoading}
+              isUploading={isUploading && !uploadingExerciseKey}
+              error={videosError}
+              onUpload={(source) => void handleUpload(source)}
+              onRemove={(videoId) => void removeVideo(videoId)}
+              readOnly={false}
+              canUpload
+            />
+          ) : null}
 
           {saved ? (
             <Card style={styles.successCard}>
               <Text style={styles.successTitle}>Sesión guardada</Text>
               <Text style={styles.successText}>
-                Tu entrenador podrá ver tu progreso, sensaciones y videos del entreno.
+                {allowFeedbackVideos
+                  ? 'Tu entrenador podrá ver tu progreso, sensaciones y videos del entreno.'
+                  : 'Tu entrenador podrá ver tu progreso y sensaciones del entreno.'}
               </Text>
             </Card>
           ) : (
@@ -288,7 +299,7 @@ export function SessionWorkoutView({
       {displayError ? <Text style={styles.error}>{displayError}</Text> : null}
 
       <ActionSheetModal
-        visible={Boolean(sendTarget)}
+        visible={allowFeedbackVideos && Boolean(sendTarget)}
         title={sendTarget ? `Vídeo · ${sendTarget.name}` : 'Enviar vídeo'}
         subtitle={
           Platform.OS === 'web'

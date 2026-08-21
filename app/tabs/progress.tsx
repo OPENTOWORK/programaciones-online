@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { BodyMetricsChart } from '@/components/progress/BodyMetricsChart';
 import { MotivationBanner } from '@/components/progress/MotivationBanner';
 import { ProgressOverview } from '@/components/progress/ProgressOverview';
 import { ProgressPhotos } from '@/components/progress/ProgressPhotos';
@@ -7,12 +8,17 @@ import { TrainerFeedbackCard } from '@/components/progress/TrainerFeedbackCard';
 import { Card } from '@/components/ui/Card';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
+import { usePhysicalProfile } from '@/hooks/usePhysicalProfile';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useProgress } from '@/hooks/useProgress';
 
 export default function ProgressScreen() {
   const { progress, refresh } = useProgress();
-  useFocusRefresh(() => refresh());
+  const { history, refresh: refreshMetrics } = usePhysicalProfile();
+  useFocusRefresh(() => {
+    refresh();
+    void refreshMetrics();
+  });
 
   const weeklyValue =
     progress.weeklyTarget > 0
@@ -77,6 +83,8 @@ export default function ProgressScreen() {
             </View>
           )}
         </View>
+
+        <BodyMetricsChart entries={history} />
 
         <ProgressPhotos dense />
         <TrainerFeedbackCard dense />

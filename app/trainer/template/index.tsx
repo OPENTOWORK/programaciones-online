@@ -247,7 +247,7 @@ export default function TrainerSessionTemplatesScreen() {
       <Button
         title="Volver"
         variant="secondary"
-        onPress={() => safeGoBack(router, '/tabs/trainer')}
+        onPress={() => safeGoBack(router, '/tabs/programs')}
         style={styles.backButton}
       />
 

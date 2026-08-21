@@ -18,6 +18,7 @@ import {
   getWorkoutById,
 } from '@/lib/mockData';
 import { getDemoCatalog } from '@/lib/programEditService';
+import { sortHypePrograms } from '@/lib/hypeCatalog';
 import { fetchPlansAndPrograms, fetchProgramById, mergeAppServicePlans, type Plan } from '@/lib/programService';
 import { createStaleRefresh } from '@/lib/staleRefresh';
 import { isServicePlanCategory } from '@/lib/trainerConstants';
@@ -36,9 +37,9 @@ const PLAN_CATEGORY_ORDER: ProgramCategory[] = [
 ];
 
 const demoPlans: Plan[] = [
-  { id: 'personalized', label: 'Personalizado', category: 'personalized' },
-  { id: 'standard', label: 'Estándar', category: 'standard' },
-  { id: 'hype', label: 'Hype / Intensivas', category: 'hype' },
+  { id: 'personalized', label: 'Personal · Coaching', category: 'personalized' },
+  { id: 'standard', label: 'Base · Training', category: 'standard' },
+  { id: 'hype', label: 'HYPE · Performance', category: 'hype' },
 ];
 
 function sortPlans(plans: Plan[]) {
@@ -51,11 +52,11 @@ function getProgramsForPlan(planId: string, plans: Plan[], programs: Program[]) 
   const plan = plans.find((item) => item.id === planId);
   if (!plan) return [];
 
-  if (isServicePlanCategory(plan.category)) {
-    return programs.filter((program) => program.category === plan.category);
-  }
+  const list = isServicePlanCategory(plan.category)
+    ? programs.filter((program) => program.category === plan.category)
+    : programs.filter((program) => program.planId === planId);
 
-  return programs.filter((program) => program.planId === planId);
+  return plan.category === 'hype' ? sortHypePrograms(list) : list;
 }
 
 interface ProgramsContextValue {

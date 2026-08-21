@@ -42,6 +42,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     minHeight: '100vh' as unknown as number,
     position: 'relative',
+    flexDirection: 'column',
     ...(Platform.OS === 'web'
       ? { boxShadow: '0 0 40px rgba(0, 230, 118, 0.08)' as unknown as undefined }
       : {}),

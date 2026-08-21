@@ -122,7 +122,7 @@ function workoutPreviewItem(
     exerciseCount: workout.exercises.length,
     isCurrent: options.isCurrent,
     isDraft: options.isDraft,
-    kind: sessionKindFromWorkoutName(workout.name),
+    kind: workout.schedule?.kind ?? sessionKindFromWorkoutName(workout.name),
     dayOrder: workout.schedule?.dayOrder,
   };
 }

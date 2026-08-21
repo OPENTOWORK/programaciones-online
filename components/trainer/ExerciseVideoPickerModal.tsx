@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -13,9 +12,10 @@ import {
 } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
+import { YoutubeThumbnail } from '@/components/workout/YoutubeThumbnail';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useExerciseLibrary } from '@/hooks/useExerciseLibrary';
-import { filterExerciseLibrary, getYoutubeThumbnailUrl, type ExerciseLibraryItem } from '@/lib/exerciseLibrary';
+import { filterExerciseLibrary, type ExerciseLibraryItem } from '@/lib/exerciseLibrary';
 import { parseWorkoutItemVideoFromInput } from '@/lib/workoutItemVideo';
 
 export interface ExerciseVideoSelection {
@@ -88,7 +88,7 @@ export function ExerciseVideoPickerModal({
 
           {currentVideoId ? (
             <View style={styles.currentVideoRow}>
-              <Image source={{ uri: getYoutubeThumbnailUrl(currentVideoId) }} style={styles.currentThumb} />
+              <YoutubeThumbnail videoId={currentVideoId} style={styles.currentThumb} resizeMode="cover" />
               <View style={styles.currentCopy}>
                 <Text style={styles.currentLabel}>Vídeo actual</Text>
                 <Text style={styles.currentId}>{currentVideoId}</Text>
@@ -154,7 +154,7 @@ export function ExerciseVideoPickerModal({
                   onPress={() => handlePickLibrary(item)}
                   style={({ pressed }) => [styles.resultRow, pressed && styles.resultRowPressed]}
                 >
-                  <Image source={{ uri: getYoutubeThumbnailUrl(item.videoId) }} style={styles.resultThumb} />
+                  <YoutubeThumbnail videoId={item.videoId} style={styles.resultThumb} resizeMode="cover" />
                   <View style={styles.resultCopy}>
                     <Text style={styles.resultTitle} numberOfLines={2}>
                       {item.name}
@@ -274,16 +274,19 @@ const styles = StyleSheet.create({
     minHeight: 40,
   },
   urlBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: borderRadius.sm,
+    backgroundColor: colors.accentDark,
+    borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     minHeight: 40,
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   urlBtnText: {
     ...typography.bodySmall,
-    color: colors.black,
-    fontWeight: '700',
+    color: colors.white,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   urlError: {
     ...typography.caption,

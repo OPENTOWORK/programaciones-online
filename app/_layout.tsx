@@ -57,15 +57,17 @@ function RootNavigator() {
           <Stack.Screen name="auth" options={{ headerShown: false }} />
           <Stack.Screen name="tabs" options={{ headerShown: false }} />
           <Stack.Screen name="plan/[id]/index" options={{ title: 'Programación' }} />
-          <Stack.Screen name="plan/[id]/[venue]" options={{ title: 'Estándar' }} />
+          <Stack.Screen name="plan/[id]/[venue]" options={{ title: 'Base · Training' }} />
           <Stack.Screen name="program/[id]/index" options={{ title: 'Programación' }} />
           <Stack.Screen name="program/[id]/info" options={{ title: 'Ficha de la programación' }} />
           <Stack.Screen name="workout/[id]" options={{ title: 'Sesión' }} />
-          <Stack.Screen name="library" options={{ title: 'Biblioteca de ejercicios' }} />
+          <Stack.Screen name="library" options={{ title: 'Library · Exercises' }} />
           <Stack.Screen name="calendar/[date]" options={{ title: 'Día de entreno' }} />
           <Stack.Screen name="athlete/plan/[id]/session" options={{ title: 'Sesión del plan' }} />
           <Stack.Screen name="profile/edit" options={{ title: 'Editar perfil' }} />
           <Stack.Screen name="profile/intake-form" options={{ title: 'Formulario de bienvenida' }} />
+          <Stack.Screen name="profile/nutrition" options={{ title: 'Datos de nutrición' }} />
+          <Stack.Screen name="profile/training" options={{ title: 'Datos de entrenamiento' }} />
           <Stack.Screen name="profile/appointments" options={{ title: 'Citas' }} />
           <Stack.Screen name="legal/privacy" options={{ title: 'Política de privacidad' }} />
           <Stack.Screen name="trainer/athlete/[id]/calendar" options={{ title: 'Calendario del atleta', headerShown: false }} />

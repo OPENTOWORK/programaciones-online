@@ -46,7 +46,7 @@ export function ExerciseNamePickerModal({
             <View style={styles.headerCopy}>
               <Text style={styles.title}>Buscar en la biblioteca</Text>
               <Text style={styles.subtitle}>
-                Elige un nombre de ejercicio. No se añadirá ningún vídeo automáticamente.
+                Elige un nombre de ejercicio. Si hay vídeo de técnica, se asignará solo.
               </Text>
             </View>
             <Pressable onPress={onCancel} hitSlop={8} accessibilityLabel="Cerrar">

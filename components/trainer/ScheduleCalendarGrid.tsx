@@ -296,6 +296,7 @@ function SessionChip({
   size?: ScheduleCalendarSize;
 }) {
   const isActivation = item.kind === 'activation';
+  const isMetcon = item.kind === 'metcon';
   const isRestDay = item.kind === 'rest';
   const isAthlete = size === 'athlete';
 
@@ -305,6 +306,7 @@ function SessionChip({
         styles.sessionChipName,
         isAthlete && styles.sessionChipNameAthlete,
         isActivation && styles.sessionChipNameActivation,
+        isMetcon && styles.sessionChipNameMetcon,
         isRestDay && styles.sessionChipNameRestDay,
       ]}
       numberOfLines={expanded ? 2 : 1}
@@ -319,6 +321,7 @@ function SessionChip({
     item.isCurrent && styles.sessionChipCurrent,
     item.isDraft && styles.sessionChipDraft,
     isActivation && styles.sessionChipActivation,
+    isMetcon && styles.sessionChipMetcon,
     isRestDay && styles.sessionChipRestDay,
     selectionChecked && styles.sessionChipSelected,
     inlineEditing && styles.sessionChipInlineEditing,
@@ -674,6 +677,7 @@ function MonthView({
                         size === 'athlete' && styles.monthSessionDotAthlete,
                         item.isCurrent && styles.monthSessionDotCurrent,
                         item.kind === 'activation' && styles.monthSessionDotActivation,
+                        item.kind === 'metcon' && styles.monthSessionDotMetcon,
                         item.kind === 'rest' && styles.monthSessionDotRestDay,
                       ]}
                       numberOfLines={size === 'athlete' ? 2 : 1}
@@ -692,6 +696,7 @@ function MonthView({
                       size === 'athlete' && styles.monthSessionDotAthlete,
                       item.isCurrent && styles.monthSessionDotCurrent,
                       item.kind === 'activation' && styles.monthSessionDotActivation,
+                      item.kind === 'metcon' && styles.monthSessionDotMetcon,
                       item.kind === 'rest' && styles.monthSessionDotRestDay,
                     ]}
                     numberOfLines={size === 'athlete' ? 2 : 1}
@@ -1389,6 +1394,10 @@ const styles = StyleSheet.create({
     color: colors.activation,
     fontWeight: '700',
   },
+  monthSessionDotMetcon: {
+    color: colors.metcon,
+    fontWeight: '700',
+  },
   monthSessionDotRestDay: {
     color: colors.restDay,
     fontWeight: '700',
@@ -1657,6 +1666,10 @@ const styles = StyleSheet.create({
     borderColor: `${colors.activation}66`,
     backgroundColor: `${colors.activation}1A`,
   },
+  sessionChipMetcon: {
+    borderColor: `${colors.metcon}66`,
+    backgroundColor: `${colors.metcon}1A`,
+  },
   sessionChipRestDay: {
     borderColor: `${colors.restDay}66`,
     backgroundColor: `${colors.restDay}1A`,
@@ -1677,6 +1690,9 @@ const styles = StyleSheet.create({
   },
   sessionChipNameActivation: {
     color: colors.activation,
+  },
+  sessionChipNameMetcon: {
+    color: colors.metcon,
   },
   sessionChipNameRestDay: {
     color: colors.restDay,

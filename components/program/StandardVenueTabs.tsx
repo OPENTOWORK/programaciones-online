@@ -5,9 +5,8 @@ import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { STANDARD_VENUES, type StandardVenueId } from '@/lib/standardVenues';
 
 const VENUE_SHORT_LABELS: Record<StandardVenueId, string> = {
-  home: 'Casa',
   gym: 'Gym',
-  calisthenics: 'Parque',
+  calisthenics: 'Calistenia',
 };
 
 interface StandardVenueTabsProps {
@@ -21,7 +20,8 @@ export function StandardVenueTabs({ value, onChange }: StandardVenueTabsProps) {
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.row}>
+      <Text style={styles.caption}>Espacio</Text>
+      <View style={styles.track}>
         {STANDARD_VENUES.map((venue) => {
           const isActive = venue.id === value;
           const label = compact ? VENUE_SHORT_LABELS[venue.id] : venue.label;
@@ -32,30 +32,31 @@ export function StandardVenueTabs({ value, onChange }: StandardVenueTabsProps) {
               onPress={() => onChange(venue.id)}
               style={({ pressed }) => [
                 styles.tab,
-                compact && styles.tabCompact,
                 isActive && styles.tabActive,
-                pressed && styles.tabPressed,
+                pressed && !isActive && styles.tabPressed,
               ]}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={venue.label}
             >
-              <AppIcon
-                name={venue.icon}
-                size={compact ? 18 : 16}
-                color={isActive ? colors.accent : colors.textMuted}
-                outlined={!isActive}
-              />
-              <Text
-                style={[
-                  styles.tabText,
-                  compact && styles.tabTextCompact,
-                  isActive && styles.tabTextActive,
-                ]}
-                numberOfLines={compact ? 1 : 2}
-              >
-                {label}
-              </Text>
+              <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
+                <AppIcon
+                  name={venue.icon}
+                  size={16}
+                  color={isActive ? colors.white : colors.textMuted}
+                  outlined={!isActive}
+                />
+              </View>
+              <View style={styles.copy}>
+                <Text style={[styles.tabText, isActive && styles.tabTextActive]} numberOfLines={1}>
+                  {label}
+                </Text>
+                {!compact ? (
+                  <Text style={[styles.tabHint, isActive && styles.tabHintActive]} numberOfLines={1}>
+                    {venue.description}
+                  </Text>
+                ) : null}
+              </View>
             </Pressable>
           );
         })}
@@ -68,49 +69,80 @@ const styles = StyleSheet.create({
   wrap: {
     marginBottom: spacing.lg,
   },
-  row: {
+  caption: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+  },
+  track: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 4,
+    maxWidth: 560,
   },
   tab: {
     flex: 1,
+    minWidth: 0,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    minWidth: 0,
+    gap: spacing.sm,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.sm + 2,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceLight,
-  },
-  tabCompact: {
-    flexDirection: 'column',
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.xs,
-    gap: 4,
+    borderColor: 'transparent',
   },
   tabActive: {
-    borderColor: colors.accent,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: colors.accentDark,
+    borderColor: 'rgba(255,255,255,0.16)',
+    shadowColor: colors.accentDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 3,
   },
   tabPressed: {
-    opacity: 0.88,
+    opacity: 0.78,
+    backgroundColor: colors.surfaceLight,
+  },
+  iconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  iconWrapActive: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  copy: {
+    flex: 1,
+    minWidth: 0,
   },
   tabText: {
     ...typography.bodySmall,
     color: colors.textSecondary,
-    fontWeight: '600',
-    textAlign: 'center',
-    flexShrink: 1,
-  },
-  tabTextCompact: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   tabTextActive: {
-    color: colors.text,
+    color: colors.white,
+  },
+  tabHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  tabHintActive: {
+    color: 'rgba(255,255,255,0.72)',
   },
 });

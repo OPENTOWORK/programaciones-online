@@ -1,33 +1,19 @@
-import { CARDIO_EXERCISE_VIDEO_ENTRIES } from '@/lib/cardioExerciseVideos';
 import { normalizeExerciseName } from '@/lib/exerciseName';
-import type { ExerciseVideoEntry } from '@/lib/exerciseVideoService';
 import { HYPE_CHANNEL_VIDEOS } from '@/lib/hypeChannelVideos';
 
 export interface ExerciseLibraryItem {
   videoId: string;
   name: string;
-  /** `channel` si el vídeo está en el canal; `plan` si solo aparece enlazado desde los planes. */
-  source: 'channel' | 'plan';
+  /** Solo vídeos del canal Trainwithhype. */
+  source: 'channel';
   /** Otros nombres con los que el mismo vídeo aparece en los entrenos. */
   aliases: string[];
 }
 
-function addAlias(item: ExerciseLibraryItem, name: string) {
-  const trimmed = name.trim();
-  if (!trimmed) return;
-
-  const key = normalizeExerciseName(trimmed);
-  if (!key || key === normalizeExerciseName(item.name)) return;
-  if (item.aliases.some((alias) => normalizeExerciseName(alias) === key)) return;
-
-  item.aliases.push(trimmed);
-}
-
 /**
- * Une el catálogo del canal de YouTube con los ejercicios que ya están enlazados desde los planes,
- * para que la biblioteca enseñe un vídeo una sola vez aunque tenga varios nombres.
+ * Biblioteca = únicamente el catálogo del canal de YouTube Trainwithhype.
  */
-export function buildExerciseLibrary(planEntries: ExerciseVideoEntry[] = []): ExerciseLibraryItem[] {
+export function buildExerciseLibrary(): ExerciseLibraryItem[] {
   const byVideoId = new Map<string, ExerciseLibraryItem>();
 
   for (const video of HYPE_CHANNEL_VIDEOS) {
@@ -37,28 +23,6 @@ export function buildExerciseLibrary(planEntries: ExerciseVideoEntry[] = []): Ex
       videoId: video.videoId,
       name: video.title.trim(),
       source: 'channel',
-      aliases: [],
-    });
-  }
-
-  const extras: Array<{ name: string; youtubeVideoId: string }> = [
-    ...CARDIO_EXERCISE_VIDEO_ENTRIES.map((entry) => ({ ...entry })),
-    ...planEntries.map((entry) => ({ name: entry.name, youtubeVideoId: entry.youtubeVideoId })),
-  ];
-
-  for (const entry of extras) {
-    if (!entry.youtubeVideoId || !entry.name?.trim()) continue;
-
-    const existing = byVideoId.get(entry.youtubeVideoId);
-    if (existing) {
-      addAlias(existing, entry.name);
-      continue;
-    }
-
-    byVideoId.set(entry.youtubeVideoId, {
-      videoId: entry.youtubeVideoId,
-      name: entry.name.trim(),
-      source: 'plan',
       aliases: [],
     });
   }
@@ -82,5 +46,16 @@ export function filterExerciseLibrary(items: ExerciseLibraryItem[], query: strin
 }
 
 export function getYoutubeThumbnailUrl(videoId: string) {
-  return `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+  // maxres (~1280px) para rejillas retina; si no existe, el componente cae a hq/sd.
+  return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+}
+
+/** Orden de calidad: maxres → sd → hq (mq solo como último recurso). */
+export function getYoutubeThumbnailCandidates(videoId: string) {
+  return [
+    `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+    `https://i.ytimg.com/vi/${videoId}/sddefault.jpg`,
+    `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+  ];
 }

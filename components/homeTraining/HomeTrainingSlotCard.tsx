@@ -163,12 +163,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentDark,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   primaryBtnText: {
     ...typography.bodySmall,
-    color: colors.black,
-    fontWeight: '700',
+    color: colors.white,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   ghostBtn: {
     paddingHorizontal: spacing.md,

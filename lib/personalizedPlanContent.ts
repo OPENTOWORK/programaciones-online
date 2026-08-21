@@ -7,6 +7,7 @@ import {
 } from '@/lib/sessionSchedule';
 import {
   ACTIVATION_SESSION_NAME,
+  METCON_SESSION_NAME,
   REST_DAY_SESSION_NAME,
   createEmptySessionDraft,
   type SessionDraft,
@@ -57,6 +58,10 @@ export function serializePersonalizedPlanContent(draft: SessionDraft, sessionNum
 
   if (draft.kind === 'activation') {
     metaLines.push('kind=activation');
+  }
+
+  if (draft.kind === 'metcon') {
+    metaLines.push('kind=metcon');
   }
 
   if (draft.kind === 'rest') {
@@ -117,6 +122,7 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
     if (line.startsWith('kind=')) {
       const value = line.slice('kind='.length).trim();
       if (value === 'activation') kind = 'activation';
+      if (value === 'metcon') kind = 'metcon';
       if (value === 'rest') kind = 'rest';
     }
     if (line.startsWith('dayOrder=')) {
@@ -222,6 +228,7 @@ export function formatSessionSectionTitle(
 ) {
   // La activación comparte número con su sesión, así que se distingue por el tipo.
   if (kind === 'activation') return ACTIVATION_SESSION_NAME;
+  if (kind === 'metcon') return METCON_SESSION_NAME;
   if (kind === 'rest') return REST_DAY_SESSION_NAME;
 
   if (sessionNumber && sessionNumber > 0) return `Sesión ${sessionNumber}`;

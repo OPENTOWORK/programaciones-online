@@ -66,7 +66,15 @@ export default function TrainerSessionTemplateScreen() {
       return;
     }
 
-    const content = sessionDraftToTemplateContent({ ...draft, name: tag });
+    const content = sessionDraftToTemplateContent({
+      ...draft,
+      name: formatTag === 'Activación' ? 'Activación' : tag,
+      ...(formatTag === 'Activación'
+        ? { kind: 'activation' as const }
+        : draft.kind === 'activation'
+          ? { kind: undefined }
+          : {}),
+    });
     const exerciseHint = describeSessionTemplate(content).exerciseLines[0] ?? null;
     const name = buildSessionTemplateName({ tag, formatTag, exerciseHint });
     const result = template

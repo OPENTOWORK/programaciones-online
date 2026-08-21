@@ -11,6 +11,8 @@ export const colors = {
   accentBlue: '#00B8D4',
   /** Naranja suave para las sesiones de activación. */
   activation: '#FFB27A',
+  /** Azul para las sesiones de metcon. */
+  metcon: '#4C9AFF',
   /** Azul apagado para los días de descanso. */
   restDay: '#7C9CBF',
   warning: '#FFB300',
@@ -80,10 +82,10 @@ export const goalLabels = {
 };
 
 export const categoryLabels = {
-  standard: 'Estándar',
-  hype: 'Hype / Intensivas',
-  personalized: 'Entrenamiento personalizado',
-  nutrition: 'Nutrición',
-  home_training: 'Entrenamiento personal en tu domicilio',
-  gym_training: 'Programación para tu gimnasio',
+  standard: 'Base · Training',
+  hype: 'HYPE · Performance',
+  personalized: 'Personal · Coaching',
+  nutrition: 'Nutrition · Plan',
+  home_training: 'Home · Coaching',
+  gym_training: 'Gym · Programming',
 };

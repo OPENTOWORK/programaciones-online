@@ -213,10 +213,14 @@ try {
   }
   Pop-Location
 
+  $appJson = Get-Content (Join-Path $sourceRoot "app.json") -Raw | ConvertFrom-Json
+  $appVersion = $appJson.expo.version
+  $versionCode = $appJson.expo.android.versionCode
+
   Write-Host ""
   Write-Host "AAB generado:" $outputPath
   Write-Host "Nombre del paquete: com.trainingprogline.app"
-  Write-Host "Version: 1.0.9 (versionCode 10)"
+  Write-Host "Version: $appVersion (versionCode $versionCode)"
   Write-Host ""
   Write-Host "Subelo en Google Play Console -> Crear nueva version -> App bundles"
 }

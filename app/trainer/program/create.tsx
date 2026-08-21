@@ -24,7 +24,7 @@ function parseCategory(value?: string | string[]): ProgramCategory | null {
 
 function parseStandardVenue(value?: string | string[]): StandardVenueId | undefined {
   const raw = Array.isArray(value) ? value[0] : value;
-  if (raw === 'home' || raw === 'gym' || raw === 'calisthenics') return raw;
+  if (raw === 'gym' || raw === 'calisthenics') return raw;
   return undefined;
 }
 

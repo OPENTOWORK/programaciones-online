@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { buildExerciseLibrary, type ExerciseLibraryItem } from '@/lib/exerciseLibrary';
-import { fetchExerciseVideoEntries } from '@/lib/exerciseVideoService';
 
 export function useExerciseLibrary() {
   const [items, setItems] = useState<ExerciseLibraryItem[]>(() => buildExerciseLibrary());
@@ -13,14 +12,12 @@ export function useExerciseLibrary() {
     setError(null);
 
     try {
-      const planEntries = await fetchExerciseVideoEntries();
-      setItems(buildExerciseLibrary(planEntries));
-    } catch (loadError) {
       setItems(buildExerciseLibrary());
+    } catch (loadError) {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : 'No se pudieron cargar los ejercicios enlazados en los planes.',
+          : 'No se pudo cargar la biblioteca del canal.',
       );
     } finally {
       setIsLoading(false);

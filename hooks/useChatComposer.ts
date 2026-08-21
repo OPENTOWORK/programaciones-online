@@ -17,10 +17,16 @@ const QUICK_EMOJIS = ['😀', '👍', '🔥', '💪', '🙌', '❤️', '😂', 
 
 interface UseChatComposerOptions {
   disabled?: boolean;
+  /** Los atletas de Base/HYPE no envían vídeo; solo Personal · Coaching. */
+  allowVideoAttachments?: boolean;
   onSend: (text: string, attachments: ChatAttachmentDraft[]) => Promise<boolean>;
 }
 
-export function useChatComposer({ disabled = false, onSend }: UseChatComposerOptions) {
+export function useChatComposer({
+  disabled = false,
+  allowVideoAttachments = true,
+  onSend,
+}: UseChatComposerOptions) {
   const recorder = useVoiceNoteRecorder();
   const [newMessage, setNewMessage] = useState('');
   const [drafts, setDrafts] = useState<ChatAttachmentDraft[]>([]);
@@ -30,6 +36,10 @@ export function useChatComposer({ disabled = false, onSend }: UseChatComposerOpt
   const [sending, setSending] = useState(false);
 
   const addDraft = useCallback((draft: ChatAttachmentDraft) => {
+    if (!allowVideoAttachments && draft.kind === 'video') {
+      setAttachError('El envío de vídeo está disponible solo en Personal · Coaching.');
+      return;
+    }
     setAttachError(null);
     setDrafts((current) => {
       const next = appendDrafts(current, [draft]);
@@ -39,20 +49,27 @@ export function useChatComposer({ disabled = false, onSend }: UseChatComposerOpt
       }
       return next.drafts;
     });
-  }, []);
+  }, [allowVideoAttachments]);
 
   const addDrafts = useCallback((incoming: ChatAttachmentDraft[]) => {
     if (incoming.length === 0) return;
-    setAttachError(null);
+    const allowed = allowVideoAttachments
+      ? incoming
+      : incoming.filter((draft) => draft.kind !== 'video');
+    if (allowed.length < incoming.length) {
+      setAttachError('El envío de vídeo está disponible solo en Personal · Coaching.');
+    }
+    if (allowed.length === 0) return;
+    setAttachError((current) => (allowed.length < incoming.length ? current : null));
     setDrafts((current) => {
-      const next = appendDrafts(current, incoming);
+      const next = appendDrafts(current, allowed);
       if (next.error) {
         setAttachError(next.error);
         return current;
       }
       return next.drafts;
     });
-  }, []);
+  }, [allowVideoAttachments]);
 
   const removeDraft = useCallback((index: number) => {
     setDrafts((current) => current.filter((_, position) => position !== index));
@@ -65,12 +82,22 @@ export function useChatComposer({ disabled = false, onSend }: UseChatComposerOpt
       setAttachError(limit.error);
       return;
     }
-    const result = await pickChatImage(fromCamera);
+    const result = await pickChatImage(fromCamera, { allowVideo: allowVideoAttachments });
     if (result.error) setAttachError(result.error);
-    if (result.draft) addDraft(result.draft);
+    if (result.draft) {
+      if (!allowVideoAttachments && result.draft.kind === 'video') {
+        setAttachError('El envío de vídeo está disponible solo en Personal · Coaching.');
+        return;
+      }
+      addDraft(result.draft);
+    }
   };
 
   const handleAttachVideo = async () => {
+    if (!allowVideoAttachments) {
+      setAttachError('El envío de vídeo está disponible solo en Personal · Coaching.');
+      return;
+    }
     if (disabled) return;
     const limit = canAddDrafts(drafts.length);
     if (limit?.error) {
@@ -174,7 +201,13 @@ export function useChatComposer({ disabled = false, onSend }: UseChatComposerOpt
       setAttachError(result.error);
       return;
     }
-    addDrafts(result.drafts);
+    const draftsToAdd = allowVideoAttachments
+      ? result.drafts
+      : result.drafts.filter((draft) => draft.kind !== 'video');
+    if (draftsToAdd.length < result.drafts.length) {
+      setAttachError('El envío de vídeo está disponible solo en Personal · Coaching.');
+    }
+    addDrafts(draftsToAdd);
   };
 
   const webDropHandlers =
@@ -216,6 +249,7 @@ export function useChatComposer({ disabled = false, onSend }: UseChatComposerOpt
     onAttachPhoto: () => void handleAttachPhoto(false),
     onAttachCamera: () => void handleAttachPhoto(true),
     onAttachVideo: () => void handleAttachVideo(),
+    allowVideoAttachments,
     onAttachGif: () => void handleAttachGif(),
     onAttachFile: () => void handleAttachFile(),
     onToggleRecording: () => void handleToggleRecording(),

@@ -11,11 +11,11 @@ import { useAthlete } from '@/hooks/useAthletes';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
+import { usePhysicalProfile } from '@/hooks/usePhysicalProfile';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
 import { useTrainerCrmActivity } from '@/hooks/useTrainerCrmActivity';
 import { fetchAthletePlansForAthlete } from '@/lib/athletePlanService';
 import { copyCalendarDaySessions } from '@/lib/copyCalendarDaySessions';
-import { createActivationAfterSession } from '@/lib/planActivation';
 import {
   createPersonalizedPlanPreviewProgram,
   parsePersonalizedPlanContent,
@@ -37,6 +37,13 @@ import {
   renameSessionCopy,
   type SessionDraft,
 } from '@/lib/trainerSessionDraft';
+import {
+  formatBmi,
+  formatDerived,
+  formatKcal,
+  formatMeasured,
+  primaryGoalLabels,
+} from '@/lib/bodyMetrics';
 import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
 import { fetchAthleteSessionLogs } from '@/lib/sessionLogService';
 import { markAthleteDetailAlertsRead } from '@/lib/trainerAthleteAlerts';
@@ -99,6 +106,11 @@ export default function AthleteDetailScreen() {
     removeEntry: removeActivityEntry,
   } = useTrainerCrmActivity(id ?? '');
   const { form: intakeForm, isLoading: intakeLoading, isComplete: intakeComplete } = useAthleteIntakeForm(id);
+  const {
+    basics: physicalBasics,
+    measured: physicalMeasured,
+    derived: physicalDerived,
+  } = usePhysicalProfile(id, { heightCm: athlete?.height, weightKg: athlete?.weight });
   const [noteText, setNoteText] = useState('');
   const [assignedPlans, setAssignedPlans] = useState<AthletePlan[]>([]);
   const [sessionLogs, setSessionLogs] = useState<Awaited<ReturnType<typeof fetchAthleteSessionLogs>>>([]);
@@ -290,30 +302,6 @@ export default function AthleteDetailScreen() {
     });
 
     if (result.error) return result.error;
-
-    const activationError = await createActivationAfterSession(
-      copiedDraft,
-      nextNumber,
-      {
-        athleteId: source.athleteId,
-        title: calendarGroup.title,
-        planGroupId: calendarGroup.planGroupId,
-        existingSessions: calendarGroup.sessions,
-      },
-      async (input) => {
-        const activationResult = await createPlan({
-          athleteId: input.athleteId,
-          planType: 'personalized',
-          title: input.title,
-          content: input.content,
-          planGroupId: input.planGroupId,
-          sessionNumber: input.sessionNumber,
-          athleteName: athlete?.name,
-        });
-        return { error: activationResult.error };
-      },
-    );
-    if (activationError) return activationError;
 
     await refreshCalendarGroup();
     return null;
@@ -591,7 +579,7 @@ export default function AthleteDetailScreen() {
               pressed && Boolean(noteText.trim()) && styles.noteAddBtnPressed,
             ]}
           >
-            <AppIcon name="add" size={18} color={noteText.trim() ? colors.black : colors.textMuted} />
+            <AppIcon name="add" size={18} color={noteText.trim() ? colors.white : colors.textMuted} />
           </Pressable>
         </View>
 
@@ -621,8 +609,25 @@ export default function AthleteDetailScreen() {
       </CollapsibleSection>
 
       <CollapsibleSection title="Datos físicos">
-        <InfoRow label="Altura" value={formatOptionalValue(athlete.height, ' cm')} />
-        <InfoRow label="Peso" value={formatOptionalValue(athlete.weight, ' kg')} />
+        <InfoRow label="Edad" value={formatDerived(physicalDerived.age, ' años', 0)} />
+        <InfoRow label="Altura" value={formatMeasured(physicalBasics.heightCm, ' cm')} />
+        <InfoRow label="Peso" value={formatMeasured(physicalMeasured.weightKg, ' kg')} />
+        <InfoRow label="IMC" value={formatBmi(physicalDerived.bmi)} />
+        <InfoRow label="Cintura" value={formatMeasured(physicalMeasured.waistCm, ' cm')} />
+        <InfoRow label="FC en reposo" value={formatMeasured(physicalMeasured.restingHeartRate, ' lpm')} />
+        <InfoRow label="Grasa corporal" value={formatMeasured(physicalMeasured.bodyFatPercentage, ' %')} />
+        <InfoRow label="Masa grasa" value={formatDerived(physicalDerived.fatMassKg, ' kg')} />
+        <InfoRow label="Masa libre de grasa" value={formatDerived(physicalDerived.leanBodyMassKg, ' kg')} />
+        <InfoRow label="Masa muscular" value={formatMeasured(physicalMeasured.muscleMassKg, ' kg')} />
+        <InfoRow label="Metabolismo basal" value={formatKcal(physicalDerived.bmrKcal)} />
+        <InfoRow
+          label="Gasto diario estimado"
+          value={formatKcal(physicalDerived.estimatedDailyExpenditureKcal)}
+        />
+        <InfoRow
+          label="Objetivo principal"
+          value={physicalBasics.primaryGoal ? primaryGoalLabels[physicalBasics.primaryGoal] : 'No indicado'}
+        />
         <InfoRow label="Limitaciones" value={formatOptionalValue(athlete.injuries)} />
       </CollapsibleSection>
 
@@ -897,7 +902,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentDark,
     alignItems: 'center',
     justifyContent: 'center',
   },

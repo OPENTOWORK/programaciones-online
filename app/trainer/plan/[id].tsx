@@ -39,7 +39,6 @@ import {
 import { createEmptyNutritionPlan } from '@/lib/nutritionPlanContent';
 import { openPlanPdf } from '@/lib/openPlanPdf';
 import { pickPlanPdf, type PickedPlanPdf } from '@/lib/planPdfPicker';
-import { createActivationAfterSession } from '@/lib/planActivation';
 import {
   createPersonalizedPlanPreviewProgram,
   isStructuredPersonalizedPlanContent,
@@ -268,30 +267,6 @@ export default function TrainerPlanDetailScreen() {
     });
 
     if (result.error) return result.error;
-
-    const activationError = await createActivationAfterSession(
-      copiedDraft,
-      nextNumber,
-      {
-        athleteId: source.athleteId,
-        title: plan.title,
-        planGroupId: getPlanGroupId(plan),
-        existingSessions: groupSessions,
-      },
-      async (input) => {
-        const activationResult = await createPlan({
-          athleteId: input.athleteId,
-          planType: plan.planType,
-          title: input.title,
-          content: input.content,
-          planGroupId: input.planGroupId,
-          sessionNumber: input.sessionNumber,
-          athleteName: plan.athleteName,
-        });
-        return { error: activationResult.error };
-      },
-    );
-    if (activationError) return activationError;
 
     await refreshGroupSessions();
     return null;
@@ -554,30 +529,6 @@ export default function TrainerPlanDetailScreen() {
       athleteName: plan.athleteName,
     });
     if (result.error) return result.error;
-
-    const activationError = await createActivationAfterSession(
-      scheduled,
-      nextNumber,
-      {
-        athleteId: plan.athleteId,
-        title: plan.title,
-        planGroupId: getPlanGroupId(plan),
-        existingSessions: groupSessions,
-      },
-      async (input) => {
-        const activationResult = await createPlan({
-          athleteId: input.athleteId,
-          planType: plan.planType,
-          title: input.title,
-          content: input.content,
-          planGroupId: input.planGroupId,
-          sessionNumber: input.sessionNumber,
-          athleteName: plan.athleteName,
-        });
-        return { error: activationResult.error };
-      },
-    );
-    if (activationError) return activationError;
 
     await refreshGroupSessions();
     return null;

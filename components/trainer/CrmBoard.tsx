@@ -586,7 +586,7 @@ export function CrmBoard() {
           onPress={() => setCreateClientOpen(true)}
           style={({ pressed }) => [styles.createClientBtn, pressed && styles.createClientBtnPressed]}
         >
-          <AppIcon name="add" size={16} color={colors.black} />
+          <AppIcon name="add" size={16} color={colors.white} />
           <Text style={styles.createClientBtnText}>Crear cliente</Text>
         </Pressable>
       </View>
@@ -831,11 +831,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentDark,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     height: 40,
     flexShrink: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
     ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
   },
   createClientBtnPressed: {
@@ -843,8 +845,9 @@ const styles = StyleSheet.create({
   },
   createClientBtnText: {
     ...typography.bodySmall,
-    color: colors.black,
+    color: colors.white,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
   searchInput: {
     flex: 1,

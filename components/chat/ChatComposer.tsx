@@ -16,6 +16,7 @@ interface ChatComposerToolbarProps {
   onAttachFile: () => void;
   emojiOpen: boolean;
   onToggleEmoji: () => void;
+  allowVideoAttachments?: boolean;
 }
 
 export function ChatComposerToolbar({
@@ -28,6 +29,7 @@ export function ChatComposerToolbar({
   onAttachFile,
   emojiOpen,
   onToggleEmoji,
+  allowVideoAttachments = true,
 }: ChatComposerToolbarProps) {
   const iconSize = compact ? 16 : 18;
 
@@ -53,7 +55,7 @@ export function ChatComposerToolbar({
         </Pressable>
       </HoverTooltip>
 
-      <HoverTooltip label="Foto o vídeo">
+      <HoverTooltip label={allowVideoAttachments ? 'Foto o vídeo' : 'Foto'}>
         <Pressable
           onPress={onAttachCamera}
           disabled={disabled}

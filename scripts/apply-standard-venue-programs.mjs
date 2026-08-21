@@ -5,33 +5,41 @@ const DATABASE_URL = process.env.DATABASE_URL;
 const PLAN_DESCRIPTION = 'Estandar';
 
 const VENUE_PROGRAMS = {
-  home: [
-    { name: 'Core', description: 'Trabajo de core y estabilidad para entrenar en casa.' },
+  gym: [
     {
-      name: 'Movilidad y estabilidad',
-      description: 'Movilidad articular y control corporal sin material de gimnasio.',
+      name: 'Base',
+      description: 'Programación de entrada para aprender técnica y construir una base sólida de fuerza.',
     },
     {
-      name: 'Fuerza fundamental',
-      description: 'Base de fuerza con el material que tengas en casa.',
+      name: 'Strength',
+      description: 'Más volumen e intensidad con bloques compuestos y accesorios exigentes.',
     },
     {
-      name: '¿Cuánto tiempo tienes?',
-      description: 'Sesiones sueltas por duración para adaptar el entreno al día.',
+      name: 'Performance',
+      description: 'Para atletas con experiencia: carga alta, densidad de trabajo y exigencia técnica.',
+    },
+    {
+      name: 'Metcon',
+      description: 'Sesiones de metcon sueltas para elegir cuando quieras.',
     },
   ],
   calisthenics: [
-    { name: 'Estáticos', description: 'Progresiones de figuras estáticas en barra y suelo.' },
     {
       name: 'Consigue tu primera dominada',
       description: 'Plan progresivo para lograr tu primera dominada.',
     },
     {
+      name: 'Consigue tu primera flexión',
+      description: 'Plan progresivo para lograr tu primera flexión.',
+    },
+    {
       name: 'Consigue tu primer muscle up',
       description: 'Técnica y fuerza para tu primer muscle up.',
     },
-    { name: 'Abdomen de hierro', description: 'Core y control para un abdomen fuerte en calistenia.' },
-    { name: 'Anillas', description: 'Trabajo específico en anillas: fuerza, control y estabilidad.' },
+    {
+      name: 'Metcon',
+      description: 'Sesiones de metcon sueltas para elegir cuando quieras.',
+    },
   ],
 };
 
@@ -62,9 +70,12 @@ async function main() {
         const { rows: existing } = await client.query(
           `select id, descripcion
            from public.programas
-           where id_planes = $1 and name = $2 and descripcion ~* $3
+           where id_planes = $1
+             and name = $2
+             and coalesce(descripcion, '') ilike ('%@venue:' || $3 || '%')
+           order by id
            limit 1`,
-          [plan.id, program.name, `@venue:${venue}\\b`],
+          [plan.id, program.name, venue],
         );
 
         if (existing[0]) {

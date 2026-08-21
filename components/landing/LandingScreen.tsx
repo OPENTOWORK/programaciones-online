@@ -82,7 +82,7 @@ export function LandingScreen() {
               accessibilityLabel="Descargar la app para Android en Google Play"
               style={({ pressed }) => [styles.storeButton, pressed && styles.pressed]}
             >
-              <Ionicons name="logo-google-playstore" size={24} color={colors.black} />
+              <Ionicons name="logo-google-playstore" size={24} color={colors.white} />
               <View>
                 <Text style={styles.storeButtonEyebrow}>Descárgala en</Text>
                 <Text style={styles.storeButtonText}>Google Play</Text>
@@ -219,21 +219,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm + 2,
-    minHeight: 56,
+    minHeight: 52,
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentDark,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   storeButtonEyebrow: {
     ...typography.caption,
-    color: colors.black,
-    opacity: 0.75,
+    color: colors.white,
+    opacity: 0.78,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
   storeButtonText: {
     ...typography.button,
-    color: colors.black,
-    fontWeight: '700',
+    color: colors.white,
+    fontWeight: '600',
+    letterSpacing: 0.35,
   },
   ghostButton: {
     alignItems: 'center',

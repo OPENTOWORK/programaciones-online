@@ -35,6 +35,7 @@ interface CalendarDayActionsMenuProps {
   canCopy?: boolean;
   /** El día ya tiene un descanso marcado. */
   hasRestDay?: boolean;
+  accentColor?: string;
 }
 
 export function CalendarDayActionsMenu({
@@ -44,6 +45,7 @@ export function CalendarDayActionsMenu({
   onAction,
   canCopy = false,
   hasRestDay = false,
+  accentColor = colors.accent,
 }: CalendarDayActionsMenuProps) {
   const { width, height } = useWindowDimensions();
 
@@ -74,12 +76,22 @@ export function CalendarDayActionsMenu({
         >
           <View style={styles.row}>
             {actions.slice(0, 3).map((action) => (
-              <DayActionButton key={action.id} action={action} onPress={() => onAction(action.id)} />
+              <DayActionButton
+                key={action.id}
+                action={action}
+                accentColor={accentColor}
+                onPress={() => onAction(action.id)}
+              />
             ))}
           </View>
           <View style={[styles.row, styles.rowBottom]}>
             {actions.slice(3).map((action) => (
-              <DayActionButton key={action.id} action={action} onPress={() => onAction(action.id)} />
+              <DayActionButton
+                key={action.id}
+                action={action}
+                accentColor={accentColor}
+                onPress={() => onAction(action.id)}
+              />
             ))}
           </View>
         </Pressable>
@@ -97,9 +109,11 @@ function dayActionTooltip(action: CalendarDayAction): string {
 function DayActionButton({
   action,
   onPress,
+  accentColor,
 }: {
   action: CalendarDayAction;
   onPress: () => void;
+  accentColor: string;
 }) {
   return (
     <HoverTooltip label={dayActionTooltip(action)}>
@@ -112,8 +126,16 @@ function DayActionButton({
         accessibilityLabel={action.label}
         style={({ pressed }) => [
           styles.actionBtn,
+          {
+            backgroundColor: `${accentColor}10`,
+            borderColor: `${accentColor}30`,
+          },
           action.disabled && styles.actionBtnDisabled,
-          pressed && !action.disabled && styles.actionBtnPressed,
+          pressed &&
+            !action.disabled && [
+              styles.actionBtnPressed,
+              { backgroundColor: `${accentColor}22` },
+            ],
           Platform.OS === 'web' && !action.disabled && styles.actionBtnWeb,
         ]}
       >
@@ -130,10 +152,11 @@ function DayActionButton({
 interface DayActionsButtonProps {
   onPress: (anchor: PopoverAnchor) => void;
   size?: 'small' | 'medium';
+  color?: string;
 }
 
 /** Icono de marcador en la celda del día; abre el menú de acciones rápidas. */
-export function DayActionsButton({ onPress, size = 'small' }: DayActionsButtonProps) {
+export function DayActionsButton({ onPress, size = 'small', color = colors.accent }: DayActionsButtonProps) {
   const ref = useRef<View>(null);
   const iconSize = size === 'small' ? 14 : 16;
 
@@ -148,7 +171,7 @@ export function DayActionsButton({ onPress, size = 'small' }: DayActionsButtonPr
       }}
       style={({ pressed }) => [styles.dayBtn, pressed && styles.dayBtnPressed]}
     >
-      <Ionicons name="bookmark-outline" size={iconSize} color={colors.accent} />
+      <Ionicons name="bookmark-outline" size={iconSize} color={color} />
     </Pressable>
   );
 }
@@ -185,13 +208,10 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: `${colors.accent}10`,
     borderWidth: 1,
-    borderColor: `${colors.accent}30`,
   },
   actionBtnPressed: {
     opacity: 0.85,
-    backgroundColor: `${colors.accent}22`,
   },
   actionBtnDisabled: {
     opacity: 0.45,

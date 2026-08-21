@@ -53,17 +53,23 @@ export function TrainerAthleteChatWidget({
               <Text style={styles.panelTitle} numberOfLines={1}>
                 Chat con {athleteName}
               </Text>
-              <Pressable onPress={openFullChat} style={({ pressed }) => pressed && styles.linkPressed}>
-                <Text style={styles.panelLink}>Pantalla completa</Text>
+            </View>
+            <View style={styles.panelHeaderActions}>
+              <Pressable
+                onPress={openFullChat}
+                accessibilityLabel="Maximizar chat"
+                style={({ pressed }) => [styles.panelHeaderBtn, pressed && styles.panelHeaderBtnPressed]}
+              >
+                <Ionicons name="expand-outline" size={18} color={colors.textSecondary} />
+              </Pressable>
+              <Pressable
+                onPress={() => setOpen(false)}
+                accessibilityLabel="Minimizar chat"
+                style={({ pressed }) => [styles.panelHeaderBtn, pressed && styles.panelHeaderBtnPressed]}
+              >
+                <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
               </Pressable>
             </View>
-            <Pressable
-              onPress={() => setOpen(false)}
-              accessibilityLabel="Minimizar chat"
-              style={({ pressed }) => [styles.panelCloseBtn, pressed && styles.panelCloseBtnPressed]}
-            >
-              <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
-            </Pressable>
           </View>
 
           <View style={styles.panelBody}>
@@ -86,7 +92,7 @@ export function TrainerAthleteChatWidget({
           accessibilityLabel={`Chat con ${athleteName}`}
           style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
         >
-          <Ionicons name={open ? 'close' : 'chatbubbles-outline'} size={22} color={colors.black} />
+          <Ionicons name={open ? 'close' : 'chatbubbles-outline'} size={22} color={colors.white} />
           {!open && unreadCount > 0 ? (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -135,15 +141,12 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
   },
-  panelLink: {
-    ...typography.caption,
-    color: colors.accent,
-    marginTop: 2,
+  panelHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
-  linkPressed: {
-    opacity: 0.8,
-  },
-  panelCloseBtn: {
+  panelHeaderBtn: {
     width: 32,
     height: 32,
     borderRadius: borderRadius.full,
@@ -153,7 +156,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  panelCloseBtnPressed: {
+  panelHeaderBtnPressed: {
     opacity: 0.85,
   },
   panelBody: {
@@ -167,7 +170,9 @@ const styles = StyleSheet.create({
     borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentDark,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
     ...shadows.card,
     ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
   },

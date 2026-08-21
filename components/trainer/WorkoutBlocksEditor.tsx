@@ -20,6 +20,7 @@ import { Card } from '@/components/ui/Card';
 import { ExerciseNamePickerModal } from '@/components/trainer/ExerciseNamePickerModal';
 import { ExerciseVideoPickerModal } from '@/components/trainer/ExerciseVideoPickerModal';
 import { borderRadius, colors, shadows, spacing, typography } from '@/constants/theme';
+import { useExerciseVideos } from '@/hooks/useExerciseVideos';
 import { getBlockAccent } from '@/lib/workoutContentParser';
 import {
   blockUsesSeries,
@@ -199,7 +200,9 @@ function MovementRow({
   const loadMetric = getMovementLoadMetric(item);
   const [videoPickerOpen, setVideoPickerOpen] = useState(false);
   const [namePickerOpen, setNamePickerOpen] = useState(false);
-  const hasVideo = Boolean(item.youtubeVideoId?.trim());
+  const { getVideoId } = useExerciseVideos();
+  const resolvedVideoId = getVideoId(item.text, item.aimharderEjerId, item.youtubeVideoId);
+  const hasVideo = Boolean(resolvedVideoId);
 
   const setLoadMetric = (metric: MovementLoadMetric) => {
     onUpdate({
@@ -235,7 +238,13 @@ function MovementRow({
         <Text style={[styles.itemBullet, { color: accentText }]}>•</Text>
         <TextInput
           value={item.text}
-          onChangeText={(text) => onUpdate({ text, aimharderEjerId: undefined })}
+          onChangeText={(text) =>
+            onUpdate({
+              text,
+              aimharderEjerId: undefined,
+              youtubeVideoId: getVideoId(text) ?? undefined,
+            })
+          }
           placeholder="Ej. Deadlift"
           placeholderTextColor={colors.textMuted}
           style={[styles.input, styles.itemNameInput]}
@@ -352,11 +361,12 @@ function MovementRow({
         visible={namePickerOpen}
         currentName={item.text}
         onCancel={() => setNamePickerOpen(false)}
-        onConfirm={(option) => {
+          onConfirm={(option) => {
           setNamePickerOpen(false);
           onUpdate({
             text: option.name,
             aimharderEjerId: option.aimharderEjerId,
+            youtubeVideoId: getVideoId(option.name, option.aimharderEjerId) ?? undefined,
           });
         }}
       />
@@ -364,7 +374,7 @@ function MovementRow({
       <ExerciseVideoPickerModal
         visible={videoPickerOpen}
         exerciseName={item.text}
-        currentVideoId={item.youtubeVideoId}
+        currentVideoId={resolvedVideoId ?? item.youtubeVideoId}
         onCancel={() => setVideoPickerOpen(false)}
         onConfirm={(selection) => {
           setVideoPickerOpen(false);

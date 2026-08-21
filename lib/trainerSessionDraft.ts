@@ -13,13 +13,15 @@ import {
   serializeWorkoutBlocks,
 } from '@/lib/workoutBlockBuilder';
 
-/** Una activación es la sesión corta que acompaña al entreno del mismo día. */
-export type SessionKind = 'session' | 'activation' | 'rest';
+/** Tipos de sesión del calendario: normal, activación, metcon o descanso. */
+export type SessionKind = 'session' | 'activation' | 'metcon' | 'rest';
 
 export const ACTIVATION_SESSION_NAME = 'Activación';
+export const METCON_SESSION_NAME = 'Metcon';
 export const REST_DAY_SESSION_NAME = 'Día de descanso';
 
 const ACTIVATION_DEFAULT_DURATION = '15 min';
+const METCON_DEFAULT_DURATION = '20 min';
 
 export type SessionDraft = {
   name: string;
@@ -38,22 +40,29 @@ export type SessionDraft = {
   dayOrder?: number;
 };
 
-/** Orden por defecto de un día: la activación encabeza el día si nadie ha reordenado. */
+/** Orden por defecto: activación → sesión → metcon. */
 export function defaultDayOrder(draft: Pick<SessionDraft, 'kind' | 'dayOrder'>) {
-  return draft.dayOrder ?? (draft.kind === 'activation' || draft.kind === 'rest' ? 0 : 1);
+  if (draft.dayOrder != null) return draft.dayOrder;
+  if (draft.kind === 'activation' || draft.kind === 'rest') return 0;
+  if (draft.kind === 'metcon') return 2;
+  return 1;
 }
 
 export function isActivationSessionDraft(draft: Pick<SessionDraft, 'kind'>) {
   return draft.kind === 'activation';
 }
 
+export function isMetconSessionDraft(draft: Pick<SessionDraft, 'kind'>) {
+  return draft.kind === 'metcon';
+}
+
 export function isRestDaySessionDraft(draft: Pick<SessionDraft, 'kind'>) {
   return draft.kind === 'rest';
 }
 
-/** Una copia de sesión pasa a llevar el número siguiente, pero una activación mantiene su nombre. */
+/** Una copia de sesión pasa a llevar el número siguiente; activación y metcon mantienen nombre. */
 export function renameSessionCopy(draft: SessionDraft, sessionNumber: number): SessionDraft {
-  if (isActivationSessionDraft(draft)) return draft;
+  if (isActivationSessionDraft(draft) || isMetconSessionDraft(draft)) return draft;
   return { ...draft, name: `Sesión ${sessionNumber}` };
 }
 
@@ -73,10 +82,11 @@ export function createRestDayDraft(sessionIndex = 0): SessionDraft {
   };
 }
 
-/** Hereda el calendario de su sesión y nace sin bloques para rellenarla más tarde. */
+/** Crea un borrador vacío de activación con el calendario de referencia. */
 export function sessionKindFromWorkoutName(name: string): SessionKind | undefined {
   const trimmed = name.trim();
   if (trimmed === ACTIVATION_SESSION_NAME) return 'activation';
+  if (trimmed.toLowerCase() === METCON_SESSION_NAME.toLowerCase()) return 'metcon';
   if (trimmed === REST_DAY_SESSION_NAME) return 'rest';
   return undefined;
 }
@@ -93,6 +103,29 @@ export function createActivationDraftFor(session: SessionDraft): SessionDraft {
     core: '',
     cooldown: '',
     exercises: [],
+    schedule: {
+      ...session.schedule,
+      kind: 'activation',
+    },
+  };
+}
+
+export function createMetconDraftFor(session: SessionDraft): SessionDraft {
+  return {
+    ...session,
+    kind: 'metcon',
+    name: METCON_SESSION_NAME,
+    estimatedDuration: METCON_DEFAULT_DURATION,
+    warmup: '',
+    main: '',
+    metcon: '',
+    core: '',
+    cooldown: '',
+    exercises: [],
+    schedule: {
+      ...session.schedule,
+      kind: 'metcon',
+    },
   };
 }
 
@@ -183,6 +216,6 @@ export function workoutToSessionDraft(workout: Workout, sessionIndex = 0): Sessi
     exercises: [],
     schedule: parseScheduleFromWorkout(workout, sessionIndex),
     dayOrder: workout.schedule?.dayOrder,
-    kind: sessionKindFromWorkoutName(workout.name),
+    kind: workout.schedule?.kind ?? sessionKindFromWorkoutName(workout.name),
   };
 }

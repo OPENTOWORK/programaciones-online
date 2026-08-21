@@ -1,31 +1,22 @@
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, ImageBackground, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
-import { AppIcon, IconBadge } from '@/components/ui/AppIcon';
-import { goalLabels, levelColors, spacing, typography, colors } from '@/constants/theme';
-import type { AppIconName } from '@/constants/icons';
+import { IconBadge } from '@/components/ui/AppIcon';
+import { spacing, typography, colors } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { usePrograms } from '@/hooks/usePrograms';
 import { isTrainerRole } from '@/lib/athleteService';
 import { ensureVenueCatalogProgram } from '@/lib/programEditService';
-import { isVenuePlaceholderProgram } from '@/lib/standardVenueCatalog';
+import { getProgramCover } from '@/lib/programCovers';
+import { isMetconCatalogProgram, isVenuePlaceholderProgram } from '@/lib/standardVenueCatalog';
 import type { Program } from '@/lib/types';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 
 interface ProgramCardProps {
   program: Program;
-}
-
-function MetaItem({ icon, text }: { icon: AppIconName; text: string }) {
-  return (
-    <View style={styles.metaRow}>
-      <AppIcon name={icon} size={16} color={colors.textMuted} />
-      <Text style={styles.metaText}>{text}</Text>
-    </View>
-  );
 }
 
 export function ProgramCard({ program }: ProgramCardProps) {
@@ -36,7 +27,10 @@ export function ProgramCard({ program }: ProgramCardProps) {
   const isComingSoon = isVenuePlaceholderProgram(program);
   const canManagePlaceholder = isComingSoon && isTrainer;
   const isLocked = program.status === 'bloqueada' && !canManagePlaceholder;
+  const isMetcon = isMetconCatalogProgram(program);
   const [creating, setCreating] = useState(false);
+  const useMetconBlue = isMetcon && !(isLocked || (isComingSoon && !isTrainer));
+  const cover = getProgramCover(program);
 
   const handlePress = async () => {
     if (canManagePlaceholder) {
@@ -65,26 +59,48 @@ export function ProgramCard({ program }: ProgramCardProps) {
         ? 'Bloqueada'
         : 'Ver programación';
 
-  return (
-    <Card style={styles.card}>
-      <View style={styles.header}>
-        <IconBadge name={program.icon} containerSize={48} size={24} />
-        <View style={styles.headerText}>
-          <Text style={styles.name}>{program.name}</Text>
-          <View style={styles.badges}>
-            <Badge label={program.level} color={levelColors[program.level]} />
-          </View>
+  const body = (
+    <>
+      {program.catalogPrice ? (
+        <View
+          style={[
+            styles.priceBadge,
+            cover && styles.priceBadgeCover,
+            isMetcon && (cover ? styles.priceBadgeMetconCover : styles.priceBadgeMetcon),
+          ]}
+        >
+          <Text style={[styles.price, isMetcon && styles.priceMetcon]}>{program.catalogPrice}</Text>
         </View>
-      </View>
-
-      <View style={styles.meta}>
-        {program.duration !== 'Por definir' ? (
-          <MetaItem icon="calendar" text={program.duration} />
-        ) : null}
-        {program.goal ? <MetaItem icon="goal" text={goalLabels[program.goal]} /> : null}
-        {program.sessionsPerWeek > 0 ? (
-          <MetaItem icon="frequency" text={`${program.sessionsPerWeek}x/semana`} />
-        ) : null}
+      ) : null}
+      <View style={styles.header}>
+        <IconBadge
+          name={program.icon}
+          containerSize={48}
+          size={24}
+          color={isMetcon ? colors.metcon : colors.accent}
+          style={cover ? styles.iconBadgeCover : undefined}
+        />
+        <View style={styles.headerText}>
+          <View style={styles.titleRow}>
+            <Text style={[styles.name, isMetcon && styles.nameMetcon, cover && styles.textOnCover]}>
+              {program.name}
+            </Text>
+            {program.catalogNameTag ? (
+              <Text style={[styles.nameTag, isMetcon && styles.nameTagMetcon]}>
+                {program.catalogNameTag}
+              </Text>
+            ) : null}
+          </View>
+          {program.description ? (
+            <Text style={[styles.description, cover && styles.textOnCover]}>{program.description}</Text>
+          ) : null}
+          {program.equipment.length > 0 ? (
+            <Text style={[styles.equipment, cover && styles.textOnCover]}>
+              <Text style={styles.equipmentLabel}>Material necesario · </Text>
+              {program.equipment.join(' · ')}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       <Button
@@ -93,8 +109,36 @@ export function ProgramCard({ program }: ProgramCardProps) {
         variant={isLocked || (isComingSoon && !isTrainer) ? 'secondary' : 'primary'}
         disabled={isLocked || (isComingSoon && !isTrainer)}
         loading={creating}
-        style={styles.button}
+        style={useMetconBlue ? { ...styles.button, ...styles.buttonMetcon } : styles.button}
+        textStyle={useMetconBlue ? styles.buttonMetconText : undefined}
       />
+    </>
+  );
+
+  return (
+    <Card style={cover ? { ...styles.card, ...styles.cardCover, ...(isMetcon ? styles.cardMetcon : {}) } : isMetcon ? { ...styles.card, ...styles.cardMetcon } : styles.card}>
+      {cover ? (
+        <ImageBackground
+          source={cover}
+          style={styles.cover}
+          imageStyle={styles.coverImage}
+          resizeMode="cover"
+        >
+          <LinearGradient
+            colors={
+              isMetcon
+                ? ['rgba(15,20,25,0.28)', 'rgba(15,20,25,0.72)', 'rgba(10,16,26,0.92)']
+                : ['rgba(15,20,25,0.24)', 'rgba(15,20,25,0.70)', 'rgba(15,20,25,0.90)']
+            }
+            locations={[0, 0.42, 1]}
+            style={styles.coverOverlay}
+          >
+            {body}
+          </LinearGradient>
+        </ImageBackground>
+      ) : (
+        body
+      )}
     </Card>
   );
 }
@@ -102,6 +146,54 @@ export function ProgramCard({ program }: ProgramCardProps) {
 const styles = StyleSheet.create({
   card: {
     marginBottom: spacing.md,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  cardCover: {
+    padding: 0,
+    backgroundColor: colors.background,
+  },
+  cardMetcon: {
+    borderColor: `${colors.metcon}66`,
+  },
+  cover: {
+    minHeight: 204,
+  },
+  coverImage: {
+    opacity: 0.92,
+  },
+  coverOverlay: {
+    padding: spacing.md,
+    minHeight: 204,
+  },
+  priceBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    backgroundColor: `${colors.accent}18`,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    zIndex: 2,
+  },
+  priceBadgeCover: {
+    backgroundColor: 'rgba(15,20,25,0.72)',
+    borderWidth: 1,
+    borderColor: `${colors.accent}40`,
+  },
+  priceBadgeMetcon: {
+    backgroundColor: `${colors.metcon}18`,
+  },
+  priceBadgeMetconCover: {
+    borderColor: `${colors.metcon}50`,
+  },
+  price: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  priceMetcon: {
+    color: colors.metcon,
   },
   header: {
     flexDirection: 'row',
@@ -111,31 +203,70 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+    paddingRight: 92,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   name: {
     ...typography.h3,
     color: colors.text,
-    marginBottom: spacing.sm,
   },
-  badges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+  nameMetcon: {
+    color: colors.metcon,
   },
-  meta: {
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+  nameTag: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    backgroundColor: `${colors.accent}14`,
+    borderRadius: 999,
+    overflow: 'hidden',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+  nameTagMetcon: {
+    color: colors.metcon,
+    backgroundColor: `${colors.metcon}14`,
   },
-  metaText: {
+  description: {
     ...typography.bodySmall,
     color: colors.textSecondary,
+    marginTop: spacing.xs,
+    lineHeight: 20,
+  },
+  equipment: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+    lineHeight: 18,
+  },
+  equipmentLabel: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  textOnCover: {
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  iconBadgeCover: {
+    backgroundColor: 'rgba(15,20,25,0.62)',
   },
   button: {
     marginTop: spacing.xs,
+  },
+  buttonMetcon: {
+    backgroundColor: '#3B7DD8',
+    borderColor: 'rgba(255,255,255,0.16)',
+    shadowColor: '#3B7DD8',
+  },
+  buttonMetconText: {
+    color: colors.white,
   },
 });

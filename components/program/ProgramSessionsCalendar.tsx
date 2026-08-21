@@ -29,6 +29,7 @@ import {
   moveCatalogSessionToDate,
   persistCatalogSessionDraft,
   reorderCatalogWorkoutsDay,
+  applyDateToSessionDraft,
   workoutIdFromCalendarItem,
 } from '@/lib/catalogProgramCalendar';
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
@@ -142,9 +143,11 @@ export function ProgramSessionsCalendar({
   );
 
   const saveSession = useCallback(
-    async ({ draft, item }: CalendarSessionSaveInput) => {
+    async ({ draft, date, item }: CalendarSessionSaveInput) => {
       const targetWorkoutId = item ? workoutIdFromCalendarItem(item) : undefined;
-      const error = await persistCatalogSessionDraft(program, workouts, draft, targetWorkoutId);
+      // Nueva sesión desde un día del calendario: ancla siempre a esa fecha.
+      const draftToSave = item ? draft : applyDateToSessionDraft(draft, date);
+      const error = await persistCatalogSessionDraft(program, workouts, draftToSave, targetWorkoutId);
       if (error) return error;
       await refreshWorkouts();
       return null;
@@ -289,11 +292,13 @@ export function ProgramSessionsCalendar({
   return (
     <View style={styles.wrap}>
       <ScheduleCalendarModal
+        key={program.id}
         visible
         presentation="inline"
         title={program.name}
-        subtitle="Pulsa el marcador de un día para crear, copiar o añadir desde plantilla. Despliega una sesión para ver o editar su contenido."
+        subtitle="Pulsa el marcador de un día para crear, copiar o añadir desde plantilla. Las sesiones salen desplegadas; pulsa la flecha para ocultarlas."
         source={previewState}
+        expandSessionsByDefault
         headerAction={
           <View style={styles.headerActions}>
             <Pressable

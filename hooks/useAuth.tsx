@@ -580,10 +580,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (isDemoMode) {
         const name = updates.name.trim();
+        const { calculateBmi } = await import('@/lib/bodyMetrics');
+        const height = 'height' in updates ? updates.height : user.height;
+        const weight = 'weight' in updates ? updates.weight : user.weight;
         setUser({
           ...user,
           ...updates,
           name,
+          height,
+          weight,
+          bmi: calculateBmi(height, weight),
           avatarInitials: name
             .split(' ')
             .map((part) => part[0])

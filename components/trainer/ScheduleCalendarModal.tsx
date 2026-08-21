@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
   Modal,
@@ -42,12 +42,13 @@ import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
 import {
   canSaveSessionAsTemplate,
   mergeTemplatesIntoDraft,
+  withActivationKindFromTemplates,
 } from '@/lib/sessionTemplates';
 import {
   applyInlineTextToSessionDraft,
   sessionDraftToInlineText,
 } from '@/lib/sessionInlineText';
-import { createActivationDraftFor, workoutToSessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
+import { createActivationDraftFor, createMetconDraftFor, workoutToSessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
 
 import { CalendarSessionTypePickerModal, type CalendarSessionType } from '@/components/trainer/CalendarSessionTypePickerModal';
 
@@ -73,6 +74,8 @@ interface ScheduleCalendarModalProps {
   source: ScheduleCalendarSource;
   /** Modal sobre otra pantalla, o incrustado como pantalla completa. */
   presentation?: 'modal' | 'inline';
+  /** Dentro de una ficha: sin cabecera extra ni estirar a toda la pantalla. */
+  embedded?: boolean;
   /** Acción de cabecera alternativa al botón de cerrar (p. ej. enlace a la ficha). */
   headerAction?: ReactNode;
   /** Abre la sesión en solo lectura tal y como la verá el atleta. */
@@ -119,6 +122,8 @@ interface ScheduleCalendarModalProps {
     date: Date,
     orderedItems: SchedulePreviewItem[],
   ) => Promise<string | null> | string | null;
+  /** Al abrir, las sesiones visibles salen desplegadas. */
+  expandSessionsByDefault?: boolean;
 }
 
 export function ScheduleCalendarModal({
@@ -142,6 +147,8 @@ export function ScheduleCalendarModal({
   onSessionDelete,
   onSessionMoveToDate,
   onSessionReorderDay,
+  expandSessionsByDefault = false,
+  embedded = false,
 }: ScheduleCalendarModalProps) {
   const router = useRouter();
   const { user } = useAuth();
@@ -167,6 +174,7 @@ export function ScheduleCalendarModal({
     text: string;
   } | null>(null);
   const [expandedItemIds, setExpandedItemIds] = useState<string[]>([]);
+  const seenSessionKeysRef = useRef<Set<string>>(new Set());
   const [menu, setMenu] = useState<{ item: SchedulePreviewItem; anchor: PopoverAnchor } | null>(null);
   const [dayMenu, setDayMenu] = useState<{
     date: Date;
@@ -225,6 +233,12 @@ export function ScheduleCalendarModal({
     openEditorWithDraft(date, createActivationDraftFor(base));
   };
 
+  const openMetconEditor = (date: Date) => {
+    if (!buildSessionDraft || !saveSession) return;
+    const base = buildSessionDraft(date);
+    openEditorWithDraft(date, createMetconDraftFor(base));
+  };
+
   const requestCreateSession = (date: Date) => {
     if (!buildSessionDraft || !saveSession) {
       onCreateSession?.(date);
@@ -240,6 +254,11 @@ export function ScheduleCalendarModal({
 
     if (type === 'activation') {
       openActivationEditor(date);
+      return;
+    }
+
+    if (type === 'metcon') {
+      openMetconEditor(date);
       return;
     }
 
@@ -265,6 +284,7 @@ export function ScheduleCalendarModal({
     setPendingBlocks(false);
     setInlineSaving(false);
     setExpandedItemIds([]);
+    seenSessionKeysRef.current = new Set();
     setMenu(null);
     setDayMenu(null);
     setCopyDayPicker(null);
@@ -293,6 +313,21 @@ export function ScheduleCalendarModal({
     }
     return merged;
   }, [source, focusDate, viewMode, visiblePeriods]);
+
+  useEffect(() => {
+    if (!expandSessionsByDefault || !visible) return;
+
+    const unseenKeys = items
+      .map(scheduleItemKey)
+      .filter((key) => !seenSessionKeysRef.current.has(key));
+    if (unseenKeys.length === 0) return;
+
+    for (const key of unseenKeys) seenSessionKeysRef.current.add(key);
+    setExpandedItemIds((current) => {
+      const extra = unseenKeys.filter((key) => !current.includes(key));
+      return extra.length === 0 ? current : [...current, ...extra];
+    });
+  }, [expandSessionsByDefault, items, visible]);
 
   const selectableItems = useMemo(
     () => items.filter(isSelectableCalendarSession),
@@ -395,7 +430,7 @@ export function ScheduleCalendarModal({
   };
 
   const handleTemplateSelect = async (
-    templates: Array<{ name?: string; content: string }>,
+    templates: Array<{ name?: string; content: string; formatTag?: string | null }>,
   ) => {
     if (!saveSession || templates.length === 0) {
       closeTemplatePicker();
@@ -440,9 +475,12 @@ export function ScheduleCalendarModal({
 
       if (templatePickerDate && buildSessionDraft) {
         const date = templatePickerDate;
-        const draft = mergeTemplatesIntoDraft(
-          buildSessionDraft(date),
-          templates.map((template) => template.content),
+        const draft = withActivationKindFromTemplates(
+          mergeTemplatesIntoDraft(
+            buildSessionDraft(date),
+            templates.map((template) => template.content),
+          ),
+          templates,
         );
         const result = await saveSession({ draft, date });
         if (result) {
@@ -451,7 +489,12 @@ export function ScheduleCalendarModal({
           return;
         }
         closeTemplatePicker();
-        Alert.alert('Sesión creada', `Se creó una sesión combinando ${label}.`);
+        Alert.alert(
+          draft.kind === 'activation' ? 'Activación creada' : 'Sesión creada',
+          draft.kind === 'activation'
+            ? `Se creó una activación con ${label}.`
+            : `Se creó una sesión combinando ${label}.`,
+        );
       }
     } finally {
       setTemplateApplying(false);
@@ -881,7 +924,7 @@ export function ScheduleCalendarModal({
 
   const hasExpandedSessions = expandedItemIds.length > 0 || Boolean(inlineEditor);
   /** Con sesiones desplegadas el cuadrante crece con el contenido en lugar de recortarse al alto de pantalla. */
-  const stretchCalendar = isWideCalendar && !hasExpandedSessions && !editor;
+  const stretchCalendar = !embedded && isWideCalendar && !hasExpandedSessions && !editor;
 
   const calendarPanel = (
     <View
@@ -917,7 +960,8 @@ export function ScheduleCalendarModal({
   );
 
   const screenContent = (
-    <View style={styles.screen}>
+    <View style={[styles.screen, embedded && styles.screenEmbedded]}>
+      {embedded ? null : (
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.title}>{title}</Text>
@@ -935,6 +979,7 @@ export function ScheduleCalendarModal({
           </Pressable>
         ) : null}
       </View>
+      )}
 
       {formError && !editor ? <Text style={styles.headerError}>{formError}</Text> : null}
 
@@ -962,17 +1007,21 @@ export function ScheduleCalendarModal({
         </View>
       ) : null}
 
-      <ScrollView
-        style={styles.calendarScroll}
-        contentContainerStyle={[
-          styles.body,
-          stretchCalendar && styles.bodyFill,
-          hasExpandedSessions && styles.bodyExpanded,
-        ]}
-        showsVerticalScrollIndicator={hasExpandedSessions}
-      >
-        {calendarPanel}
-      </ScrollView>
+      {embedded ? (
+        calendarPanel
+      ) : (
+        <ScrollView
+          style={styles.calendarScroll}
+          contentContainerStyle={[
+            styles.body,
+            stretchCalendar && styles.bodyFill,
+            hasExpandedSessions && styles.bodyExpanded,
+          ]}
+          showsVerticalScrollIndicator={hasExpandedSessions}
+        >
+          {calendarPanel}
+        </ScrollView>
+      )}
       {editorOverlay}
     </View>
   );
@@ -1117,6 +1166,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
     position: 'relative',
+  },
+  screenEmbedded: {
+    flex: 0,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',

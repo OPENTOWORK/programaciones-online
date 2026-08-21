@@ -106,8 +106,8 @@ function BlockItems({
   return (
     <View style={styles.itemsList}>
       {items.map((item, index) => {
-        const exerciseName = parseExerciseLabelFromBlockItem(item);
         const display = parseBlockItemForDisplay(item);
+        const exerciseName = display.name || parseExerciseLabelFromBlockItem(item);
         const showVideo =
           hasExerciseVideo?.(exerciseName, undefined, display.youtubeVideoId) ?? false;
         const itemKey = sectionKey ? `${sectionKey}:b${blockIndex}:i${index}` : '';
@@ -316,23 +316,35 @@ function WorkoutBlockCard({ block, ...itemProps }: BlockCardProps) {
   const accent = getBlockAccent(block.label);
   const { blockTitle, pillTiming } = splitBlockTimingMetadata(block.timing);
   const timingParts = parseTimingForDisplay(pillTiming, block.label);
+  const pillParts = timingParts.filter((part) => part.icon !== 'info' || part.value.length <= 28);
+  const instructionNotes = timingParts
+    .filter((part) => part.icon === 'info' && part.value.length > 28)
+    .map((part) => part.value);
   const timingHint = getBlockTimingHint(block.label);
 
   return (
     <View style={[styles.blockCard, { borderColor: accent.border, backgroundColor: accent.bg }]}>
       <View style={styles.blockHeader}>
-        <View style={[styles.blockChip, { backgroundColor: `${accent.text}18` }]}>
-          <Text style={[styles.blockChipText, { color: accent.text }]}>{block.label}</Text>
+        <View style={styles.blockHeaderTop}>
+          <View style={[styles.blockChip, { backgroundColor: `${accent.text}18` }]}>
+            <Text style={[styles.blockChipText, { color: accent.text }]}>{block.label}</Text>
+          </View>
+          {blockTitle ? <Text style={styles.blockTitleText}>{blockTitle}</Text> : null}
         </View>
-        {blockTitle ? <Text style={styles.blockTitleText}>{blockTitle}</Text> : null}
-        {timingParts.length > 0 ? (
+        {pillParts.length > 0 ? (
           <View style={styles.timingRow}>
-            {timingParts.map((part, index) => (
+            {pillParts.map((part, index) => (
               <TimingPartPill key={`${part.icon}-${part.value}-${index}`} part={part} accentText={accent.text} />
             ))}
           </View>
         ) : null}
       </View>
+
+      {instructionNotes.map((note, index) => (
+        <Text key={`${note}-${index}`} style={styles.blockInstruction}>
+          {note}
+        </Text>
+      ))}
 
       {timingHint ? <Text style={styles.timingHint}>{timingHint}</Text> : null}
 
@@ -455,11 +467,14 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   blockHeader: {
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  blockHeaderTop: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
   },
   blockChip: {
     borderRadius: borderRadius.full,
@@ -476,6 +491,13 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.text,
     fontWeight: '600',
+    flexShrink: 1,
+  },
+  blockInstruction: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: spacing.xs,
   },
   timingPill: {
     flexDirection: 'row',

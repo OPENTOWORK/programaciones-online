@@ -6,7 +6,7 @@
 | --- | --- |
 | Nombre en Play Console | Training ProgLine |
 | Nombre del paquete | `com.trainingprogline.app` |
-| Versión | 1.0.8 (versionCode 9) |
+| Versión | 1.0.10 (versionCode 11) |
 | Política de privacidad (URL pública) | `https://carlosgarciacano87-dev.github.io/app-progras/privacy.html` |
 | Eliminación de cuenta (URL pública) | `https://carlosgarciacano87-dev.github.io/app-progras/account-deletion.html` |
 

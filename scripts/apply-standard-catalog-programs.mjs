@@ -4,13 +4,7 @@ import pg from 'pg';
 const DATABASE_URL = process.env.DATABASE_URL;
 const PLAN_DESCRIPTION = 'Estandar';
 
-const PROGRAMS = [
-  { name: 'Core', description: 'Trabajo específico de core y estabilidad.' },
-  {
-    name: '¿Cuánto tiempo tienes?',
-    description: 'Sesiones sueltas por duración: 2 horas, 1 hora, 30, 15 y 10 minutos.',
-  },
-];
+const PROGRAMS = [];
 
 // Se sustituyeron por la programación única "¿Cuánto tiempo tienes?".
 const OBSOLETE_PROGRAMS = [

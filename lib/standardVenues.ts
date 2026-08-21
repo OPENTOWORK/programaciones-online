@@ -1,6 +1,6 @@
 import type { AppIconName } from '@/constants/icons';
 
-export type StandardVenueId = 'home' | 'gym' | 'calisthenics';
+export type StandardVenueId = 'gym' | 'calisthenics';
 
 export interface StandardVenue {
   id: StandardVenueId;
@@ -12,13 +12,6 @@ export interface StandardVenue {
 }
 
 export const STANDARD_VENUES: StandardVenue[] = [
-  {
-    id: 'home',
-    label: 'Desde casa',
-    description: 'Programaciones para entrenar en casa.',
-    icon: 'home',
-    available: true,
-  },
   {
     id: 'gym',
     label: 'Desde el gym',

@@ -160,6 +160,7 @@ export function TrainerChatPanel({
             onAttachFile={onAttachFile}
             emojiOpen={emojiOpen}
             onToggleEmoji={() => setEmojiOpen((current) => !current)}
+            allowVideoAttachments={composer.allowVideoAttachments}
           />
 
           {emojiOpen ? <ChatEmojiPicker emojis={quickEmojis} onSelect={onEmojiSelect} /> : null}

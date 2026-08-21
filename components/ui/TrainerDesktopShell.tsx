@@ -14,7 +14,7 @@ const SIDEBAR_COLLAPSED_KEY = 'trainer-desktop-sidebar-collapsed';
 
 type NavItem = {
   label: string;
-  href: '/tabs/programs' | '/tabs/trainer' | '/library' | '/tabs/profile';
+  href: '/tabs/programs' | '/tabs/trainer' | '/library' | '/tabs/profile' | '/trainer/template';
   icon: AppIconName;
   match: (pathname: string) => boolean;
 };
@@ -51,6 +51,12 @@ const NAV_ITEMS: NavItem[] = [
     href: '/tabs/profile',
     icon: 'profile',
     match: (pathname) => pathname.startsWith('/tabs/profile') || pathname.startsWith('/profile/'),
+  },
+  {
+    label: 'Plantillas',
+    href: '/trainer/template',
+    icon: 'templates',
+    match: (pathname) => pathname.startsWith('/trainer/template'),
   },
 ];
 

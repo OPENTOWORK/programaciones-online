@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { ProfileAppointmentsCard } from '@/components/appointments/ProfileAppointmentsCard';
+import { SavedMetconsCard } from '@/components/program/SavedMetconsCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { PrivacyPolicyLink } from '@/components/legal/PrivacyPolicyLink';
@@ -11,21 +12,37 @@ import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { goalLabels, levelColors, colors, spacing, typography } from '@/constants/theme';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAuth } from '@/hooks/useAuth';
+import { useNutritionProfile } from '@/hooks/useNutritionProfile';
+import { usePhysicalProfile } from '@/hooks/usePhysicalProfile';
+import { useTrainingProfile } from '@/hooks/useTrainingProfile';
+import {
+  activityLevelLabels,
+  formatBmi,
+  formatDerived,
+  formatKcal,
+  formatMeasured,
+  primaryGoalLabels,
+  NOT_INDICATED,
+} from '@/lib/bodyMetrics';
+import { dietaryPreferenceLabels, trainingExperienceLabels } from '@/lib/profilePreferences';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { isTrainerRole } from '@/lib/athleteService';
 
-function formatOptionalValue(value: string | number | undefined, suffix = '') {
-  if (value === undefined || value === null || value === '') {
-    return 'No indicado';
-  }
+function formatList(values: string[]) {
+  return values.length > 0 ? values.join(', ') : NOT_INDICATED;
+}
 
-  return `${value}${suffix}`;
+function formatText(value?: string) {
+  return value?.trim() ? value.trim() : NOT_INDICATED;
 }
 
 export default function ProfileScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { user, signOut, refreshUser } = useAuth();
+  const { basics, measured, derived } = usePhysicalProfile();
+  const { profile: nutrition } = useNutritionProfile();
+  const { profile: training } = useTrainingProfile();
   const isAthlete = !isTrainerRole(user?.role);
   const { isComplete: intakeComplete, isLoading: intakeLoading } = useAthleteIntakeForm();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -123,16 +140,136 @@ export default function ProfileScreen() {
           </CollapsibleSection>
         ) : null}
 
-        <ProfileAppointmentsCard style={styles.sectionCard} />
+        <ProfileAppointmentsCard />
 
-        <CollapsibleSection title="Datos físicos" style={styles.sectionCard}>
-          <InfoRow label="Altura" value={formatOptionalValue(user.height, ' cm')} />
-          <InfoRow label="Peso" value={formatOptionalValue(user.weight, ' kg')} />
-          <InfoRow label="Limitaciones" value={formatOptionalValue(user.injuries)} />
-        </CollapsibleSection>
+        {isAthlete ? (
+          <CollapsibleSection
+            title="Metcons guardados"
+            subtitle="Entrenamientos que marcaste con la estrella"
+            style={styles.sectionCard}
+          >
+            <SavedMetconsCard />
+          </CollapsibleSection>
+        ) : null}
+
+        {isAthlete ? (
+          <>
+            <CollapsibleSection
+              title="Datos físicos"
+              subtitle="Medidas corporales y valores calculados"
+              style={styles.sectionCard}
+            >
+              <InfoRow label="Edad" value={formatDerived(derived.age, ' años', 0)} />
+              <InfoRow label="Altura" value={formatMeasured(basics.heightCm, ' cm')} />
+              <InfoRow label="Peso" value={formatMeasured(measured.weightKg, ' kg')} />
+              <InfoRow label="Cintura" value={formatMeasured(measured.waistCm, ' cm')} />
+              <InfoRow label="FC en reposo" value={formatMeasured(measured.restingHeartRate, ' lpm')} />
+              <InfoRow label="Peso objetivo" value={formatMeasured(basics.targetWeightKg, ' kg')} />
+              <InfoRow
+                label="Nivel de actividad"
+                value={basics.activityLevel ? activityLevelLabels[basics.activityLevel] : NOT_INDICATED}
+              />
+              <InfoRow
+                label="Objetivo principal"
+                value={basics.primaryGoal ? primaryGoalLabels[basics.primaryGoal] : NOT_INDICATED}
+              />
+
+              <GroupTitle title="Composición corporal" hint="Báscula inteligente o medición" />
+              <InfoRow label="Grasa corporal" value={formatMeasured(measured.bodyFatPercentage, ' %')} />
+              <InfoRow label="Masa muscular" value={formatMeasured(measured.muscleMassKg, ' kg')} />
+              <InfoRow label="Agua corporal" value={formatMeasured(measured.bodyWaterPercentage, ' %')} />
+              <InfoRow label="Grasa visceral" value={formatMeasured(measured.visceralFat)} />
+              <InfoRow label="Masa ósea" value={formatMeasured(measured.boneMassKg, ' kg')} />
+              {measured.metabolicAge !== undefined ? (
+                <InfoRow
+                  label="Edad metabólica"
+                  value={`${measured.metabolicAge} años`}
+                  hint="Estimación del dispositivo"
+                />
+              ) : null}
+
+              <GroupTitle title="Calculado por la app" hint="Se recalcula al guardar tus datos" />
+              <InfoRow label="IMC" value={formatBmi(derived.bmi)} />
+              <InfoRow label="Masa grasa" value={formatDerived(derived.fatMassKg, ' kg')} />
+              <InfoRow
+                label="Masa libre de grasa"
+                value={formatDerived(derived.leanBodyMassKg, ' kg')}
+                hint="Incluye músculo, hueso, órganos y agua"
+              />
+              <InfoRow label="Metabolismo basal" value={formatKcal(derived.bmrKcal)} />
+              <InfoRow
+                label="Gasto energético diario estimado"
+                value={formatKcal(derived.estimatedDailyExpenditureKcal)}
+              />
+              <Button
+                title="Editar datos físicos"
+                variant="outline"
+                onPress={handleEdit}
+                style={styles.sectionButton}
+              />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Nutrición"
+              subtitle="Preferencias y alimentos a evitar"
+              style={styles.sectionCard}
+            >
+              <InfoRow
+                label="Tipo de dieta"
+                value={
+                  nutrition.dietaryPreference
+                    ? dietaryPreferenceLabels[nutrition.dietaryPreference]
+                    : NOT_INDICATED
+                }
+              />
+              <InfoRow label="Comidas al día" value={formatMeasured(nutrition.mealsPerDay)} />
+              <InfoRow label="Alergias" value={formatList(nutrition.foodAllergies)} />
+              <InfoRow label="Intolerancias" value={formatList(nutrition.foodIntolerances)} />
+              <InfoRow label="Alimentos excluidos" value={formatList(nutrition.excludedFoods)} />
+              <InfoRow label="Notas" value={formatText(nutrition.nutritionNotes)} />
+              <Button
+                title="Editar datos de nutrición"
+                variant="outline"
+                onPress={() => router.push('/profile/nutrition')}
+                style={styles.sectionButton}
+              />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Entrenamiento"
+              subtitle="Disponibilidad y limitaciones"
+              style={styles.sectionCard}
+            >
+              <InfoRow
+                label="Experiencia"
+                value={
+                  training.trainingExperience
+                    ? trainingExperienceLabels[training.trainingExperience]
+                    : NOT_INDICATED
+                }
+              />
+              <InfoRow label="Días por semana" value={formatMeasured(training.trainingDaysPerWeek)} />
+              <InfoRow label="Días preferidos" value={formatList(training.preferredTrainingDays)} />
+              <InfoRow
+                label="Duración de sesión"
+                value={formatMeasured(training.sessionDurationMinutes, ' min')}
+              />
+              <InfoRow label="Lesiones o limitaciones" value={formatText(training.injuriesOrLimitations)} />
+              <InfoRow label="Notas" value={formatText(training.trainingNotes)} />
+              <Button
+                title="Editar datos de entrenamiento"
+                variant="outline"
+                onPress={() => router.push('/profile/training')}
+                style={styles.sectionButton}
+              />
+            </CollapsibleSection>
+          </>
+        ) : null}
       </View>
 
-      <Button title="Editar perfil" onPress={handleEdit} variant="outline" style={styles.btn} />
+      {isAthlete ? (
+        <Button title="Editar perfil" onPress={handleEdit} variant="outline" style={styles.btn} />
+      ) : null}
 
       {showLogoutConfirm ? (
         <View style={styles.confirmBox}>
@@ -163,10 +300,22 @@ export default function ProfileScreen() {
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function GroupTitle({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <View style={styles.groupTitle}>
+      <Text style={styles.groupTitleText}>{title}</Text>
+      {hint ? <Text style={styles.groupTitleHint}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+function InfoRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
+      <View style={styles.rowLabelWrap}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {hint ? <Text style={styles.rowHint}>{hint}</Text> : null}
+      </View>
       <Text style={styles.rowValue}>{value}</Text>
     </View>
   );
@@ -188,16 +337,24 @@ const styles = StyleSheet.create({
   email: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 4 },
   badges: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   sectionCard: { marginTop: spacing.md },
+  sectionButton: { marginTop: spacing.md },
   intakeCardPending: { borderColor: colors.accent },
+  groupTitle: { marginTop: spacing.md, marginBottom: spacing.xs },
+  groupTitleText: { ...typography.bodySmall, color: colors.text, fontWeight: '700' },
+  groupTitleHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  rowLabelWrap: { flexShrink: 1 },
   rowLabel: { ...typography.body, color: colors.textSecondary },
-  rowValue: { ...typography.body, color: colors.text, fontWeight: '500' },
+  rowHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  rowValue: { ...typography.body, color: colors.text, fontWeight: '500', textAlign: 'right' },
   btn: { marginTop: spacing.md },
   confirmBox: {
     marginTop: spacing.md,

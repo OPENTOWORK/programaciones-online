@@ -1,4 +1,3 @@
-import { createActivationAfterSession } from '@/lib/planActivation';
 import { serializePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import {
   getNextSessionNumber,
@@ -7,8 +6,6 @@ import {
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import {
   defaultDayOrder,
-  isActivationSessionDraft,
-  isRestDaySessionDraft,
   renameSessionCopy,
   type SessionDraft,
 } from '@/lib/trainerSessionDraft';
@@ -59,11 +56,6 @@ export async function copyCalendarDaySessions({
     return 'No hay sesiones que copiar en este día.';
   }
 
-  const sourceDrafts = planItems
-    .map((item) => loadDraft(item))
-    .filter((draft): draft is SessionDraft => Boolean(draft));
-  const copyingActivations = sourceDrafts.some((draft) => isActivationSessionDraft(draft));
-
   const nextNumberByGroup = new Map<string, number>();
   const sessionsByGroup = new Map<string, AthletePlan[]>();
 
@@ -109,37 +101,6 @@ export async function copyCalendarDaySessions({
     });
     sessionsByGroup.set(groupKey, existingSessions);
     nextNumberByGroup.set(groupKey, nextNumber + 1);
-
-    if (
-      !copyingActivations &&
-      !isActivationSessionDraft(copiedDraft) &&
-      !isRestDaySessionDraft(copiedDraft)
-    ) {
-      const activationError = await createActivationAfterSession(
-        copiedDraft,
-        nextNumber,
-        {
-          athleteId: source.athleteId,
-          title: group.title,
-          planGroupId: group.planGroupId,
-          existingSessions,
-        },
-        async (input) => {
-          const activationResult = await createPlan({
-            athleteId: input.athleteId,
-            planType: source.planType,
-            title: input.title,
-            content: input.content,
-            planGroupId: input.planGroupId,
-            sessionNumber: input.sessionNumber,
-            athleteName,
-          });
-          return { error: activationResult.error };
-        },
-      );
-
-      if (activationError) return activationError;
-    }
   }
 
   return null;

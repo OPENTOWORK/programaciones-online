@@ -285,6 +285,13 @@ async function main() {
          from public.programas pr
          join public.planes pl on pl.id = pr.id_planes
          where pr.name = $1 and pl.descripcion = 'Estandar'
+         order by
+           case
+             when coalesce(pr.descripcion, '') ilike '%@venue:home%' then 2
+             when coalesce(pr.descripcion, '') ilike '%@venue:calisthenics%' then 2
+             else 1
+           end,
+           pr.id
          limit 1`,
         [programName],
       );

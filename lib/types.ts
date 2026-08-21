@@ -71,6 +71,12 @@ export interface Program {
   equipment: string[];
   trainingDays: string[];
   weeks: ProgramWeek[];
+  /** Nº de sesiones en catálogo; sirve para preferir la programación real frente a duplicados vacíos. */
+  catalogSessionCount?: number;
+  /** Precio de venta en catálogo Estándar (solo UI). */
+  catalogPrice?: string;
+  /** Etiqueta de familia en catálogo, p. ej. Push / Pull / Skills. */
+  catalogNameTag?: string;
 }
 
 export interface UserProfile {
@@ -83,6 +89,7 @@ export interface UserProfile {
   height?: number;
   weight?: number;
   injuries?: string;
+  bmi?: number;
   currentProgramId?: string;
   currentProgram?: UserActiveProgram;
   currentPrograms?: UserActiveProgram[];
@@ -95,6 +102,16 @@ export interface UserActiveProgram {
   duration: string;
   sessionsPerWeek: number;
   icon?: string;
+}
+
+export interface SavedMetcon {
+  id: string;
+  userId: string;
+  workoutId: string;
+  programId: string;
+  workoutName: string;
+  programName?: string;
+  savedAt: string;
 }
 
 export interface WorkoutLog {
@@ -344,6 +361,30 @@ export interface AthleteIntakeForm {
   hasMedicalCondition?: boolean;
   completedAt?: string;
   updatedAt?: string;
+}
+
+export type DietaryPreference = 'omnivora' | 'vegetariana' | 'vegana' | 'pescetariana' | 'otra';
+
+/** Preferencias para el nutricionista. Se guardan aparte de los datos físicos. */
+export interface NutritionProfile {
+  dietaryPreference?: DietaryPreference;
+  foodAllergies: string[];
+  foodIntolerances: string[];
+  excludedFoods: string[];
+  mealsPerDay?: number;
+  nutritionNotes?: string;
+}
+
+/** Preferencias para el preparador físico. Se guardan aparte de los datos físicos. */
+export interface TrainingProfile {
+  /** Reutiliza `"Perfil".nivel`. */
+  trainingExperience?: FitnessLevel;
+  trainingDaysPerWeek?: number;
+  preferredTrainingDays: string[];
+  sessionDurationMinutes?: number;
+  /** Reutiliza `"Perfil".lesiones`. */
+  injuriesOrLimitations?: string;
+  trainingNotes?: string;
 }
 
 export interface ActiveProgramSummary {
