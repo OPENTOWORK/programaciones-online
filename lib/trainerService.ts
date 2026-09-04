@@ -74,7 +74,10 @@ export async function sendAthleteMessage(
     .select('id, sender, text, created_at')
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    console.error('sendAthleteMessage', error?.message ?? 'unknown error');
+    return null;
+  }
 
   const uploaded = await uploadMessageAttachments({
     athleteUserId: userId,
@@ -127,6 +130,51 @@ export async function fetchUnansweredMessageCounts(athleteIds: string[]): Promis
   }
 
   return counts;
+}
+
+export type TrainerChatPreview = {
+  athleteId: string;
+  lastText: string;
+  lastAt: string;
+  lastSender: 'user' | 'trainer';
+  unread: number;
+};
+
+export async function fetchTrainerChatPreviews(
+  athleteIds: string[],
+): Promise<Record<string, TrainerChatPreview>> {
+  if (athleteIds.length === 0) return {};
+
+  const { getSupabase } = await import('@/lib/supabase');
+  const supabase = getSupabase();
+  if (!supabase) return {};
+
+  const { data, error } = await supabase
+    .from('trainer_messages')
+    .select('user_id, sender, text, created_at')
+    .in('user_id', athleteIds)
+    .order('created_at', { ascending: true });
+
+  if (error || !data) return {};
+
+  const previews: Record<string, TrainerChatPreview> = {};
+
+  for (const row of data) {
+    const athleteId = String(row.user_id);
+    const lastSender = row.sender === 'trainer' ? 'trainer' : 'user';
+    const existing = previews[athleteId];
+    const unread = lastSender === 'user' ? (existing?.unread ?? 0) + 1 : 0;
+
+    previews[athleteId] = {
+      athleteId,
+      lastText: String(row.text ?? '').trim(),
+      lastAt: String(row.created_at),
+      lastSender,
+      unread,
+    };
+  }
+
+  return previews;
 }
 
 async function uploadMessageAttachments(input: {

@@ -14,15 +14,15 @@ import { useChatComposer } from '@/hooks/useChatComposer';
 import { useTrainerMessages } from '@/hooks/useTrainerMessages';
 import { isTrainerRole } from '@/lib/athleteService';
 import { takeChatPrefill } from '@/lib/chatPrefill';
+import { getFeedbackChatHref } from '@/lib/navigation';
 
 function AthleteChatScreen() {
   const router = useRouter();
   const { prefill } = useLocalSearchParams<{ prefill?: string | string[] }>();
   const { messages, isEmpty, sendMessage } = useTrainerMessages();
-  const { isComplete: intakeComplete, isLoading: intakeLoading } = useAthleteIntakeForm();
+  const { isComplete: intakeComplete, isLoading: intakeLoading, defaultTemplateId } = useAthleteIntakeForm();
   const { plans: personalizedPlans } = useMyAthletePlans('personalized');
   const composer = useChatComposer({
-    disabled: !intakeLoading && !intakeComplete,
     allowVideoAttachments: personalizedPlans.length > 0,
     onSend: (text, attachments) => sendMessage(text, attachments),
   });
@@ -63,12 +63,22 @@ function AthleteChatScreen() {
     <ScreenWrapper scrollable={false} padded={false}>
       <View style={styles.container}>
         {chatBlocked ? (
-          <Pressable onPress={() => router.push({ pathname: '/profile/intake-form', params: { returnTo: 'trainer' } })}>
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: '/profile/intake-form',
+                params: {
+                  returnTo: 'trainer',
+                  ...(defaultTemplateId ? { templateId: defaultTemplateId } : {}),
+                },
+              })
+            }
+          >
             <Card style={styles.intakeBanner}>
               <Text style={styles.intakeBannerTitle}>Completa el formulario de bienvenida</Text>
               <Text style={styles.intakeBannerText}>
-                Es imprescindible para poder contactar con tu entrenador y empezar tu entrenamiento
-                online. Toca aquí para rellenarlo.
+                Ayuda a tu entrenador a conocerte. Toca aquí para rellenarlo. Ya puedes escribirle
+                mientras tanto.
               </Text>
             </Card>
           </Pressable>
@@ -87,9 +97,17 @@ function AthleteChatScreen() {
           emptyText="Escribe a tu entrenador para empezar la conversación"
           messages={messages}
           isEmpty={isEmpty}
-          disabled={chatBlocked}
-          disabledMessage="Completa el formulario de bienvenida para escribir"
           composer={composer}
+          onOpenFeedback={(message) =>
+            router.push(
+              getFeedbackChatHref({
+                asTrainer: false,
+                athleteId: '',
+                sessionLogId: message.sessionLogId,
+                scheduledDate: message.scheduledDate,
+              }),
+            )
+          }
         />
       </View>
     </ScreenWrapper>

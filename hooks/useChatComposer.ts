@@ -19,12 +19,14 @@ interface UseChatComposerOptions {
   disabled?: boolean;
   /** Los atletas de Base/HYPE no envían vídeo; solo Personal · Coaching. */
   allowVideoAttachments?: boolean;
+  attachmentsEnabled?: boolean;
   onSend: (text: string, attachments: ChatAttachmentDraft[]) => Promise<boolean>;
 }
 
 export function useChatComposer({
   disabled = false,
   allowVideoAttachments = true,
+  attachmentsEnabled = true,
   onSend,
 }: UseChatComposerOptions) {
   const recorder = useVoiceNoteRecorder();
@@ -36,6 +38,7 @@ export function useChatComposer({
   const [sending, setSending] = useState(false);
 
   const addDraft = useCallback((draft: ChatAttachmentDraft) => {
+    if (!attachmentsEnabled) return;
     if (!allowVideoAttachments && draft.kind === 'video') {
       setAttachError('El envío de vídeo está disponible solo en Personal · Coaching.');
       return;
@@ -49,9 +52,10 @@ export function useChatComposer({
       }
       return next.drafts;
     });
-  }, [allowVideoAttachments]);
+  }, [allowVideoAttachments, attachmentsEnabled]);
 
   const addDrafts = useCallback((incoming: ChatAttachmentDraft[]) => {
+    if (!attachmentsEnabled) return;
     if (incoming.length === 0) return;
     const allowed = allowVideoAttachments
       ? incoming
@@ -69,7 +73,7 @@ export function useChatComposer({
       }
       return next.drafts;
     });
-  }, [allowVideoAttachments]);
+  }, [allowVideoAttachments, attachmentsEnabled]);
 
   const removeDraft = useCallback((index: number) => {
     setDrafts((current) => current.filter((_, position) => position !== index));
@@ -189,6 +193,8 @@ export function useChatComposer({
 
     if (sent) {
       clearComposer();
+    } else {
+      setAttachError('No se pudo enviar el mensaje. Inténtalo de nuevo.');
     }
 
     return sent;
@@ -250,6 +256,7 @@ export function useChatComposer({
     onAttachCamera: () => void handleAttachPhoto(true),
     onAttachVideo: () => void handleAttachVideo(),
     allowVideoAttachments,
+    attachmentsEnabled,
     onAttachGif: () => void handleAttachGif(),
     onAttachFile: () => void handleAttachFile(),
     onToggleRecording: () => void handleToggleRecording(),
