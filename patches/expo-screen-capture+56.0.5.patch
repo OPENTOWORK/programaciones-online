@@ -1,0 +1,16 @@
+diff --git a/node_modules/expo-screen-capture/ios/ScreenCaptureModule.swift b/node_modules/expo-screen-capture/ios/ScreenCaptureModule.swift
+index 870ba58..963922a 100644
+--- a/node_modules/expo-screen-capture/ios/ScreenCaptureModule.swift
++++ b/node_modules/expo-screen-capture/ios/ScreenCaptureModule.swift
+@@ -11,7 +11,10 @@ public final class ScreenCaptureModule: Module {
+   private var blurEffectView: AnimatedBlurEffectView?
+   private var blurIntensity: CGFloat = 0.5
+   private var keyWindow: UIWindow? {
+-    return SceneGeometry.keyWindow()
++    return UIApplication.shared.connectedScenes
++      .compactMap { $0 as? UIWindowScene }
++      .flatMap(\.windows)
++      .first(where: \.isKeyWindow)
+   }
+ 
+   public func definition() -> ModuleDefinition {

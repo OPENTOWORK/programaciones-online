@@ -1,9 +1,10 @@
+import { isTrainerOnlyRole } from '@/lib/athleteService';
 import { mockAthletePlans } from '@/lib/mockData';
 import { buildNutritionSummaryText, hasNutritionContent, sanitizeNutritionPlan } from '@/lib/nutritionPlanContent';
 import type { PickedPlanPdf } from '@/lib/planPdfPicker';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { addCrmActivity, buildPlanAssignedMessage } from '@/lib/trainerCrmActivity';
-import type { AthletePlan, AthletePlanType, NutritionPlanData } from '@/lib/types';
+import type { AthletePlan, AthletePlanType, NutritionPlanData, UserRole } from '@/lib/types';
 
 const TABLE = 'athlete_plans';
 const PERFIL_TABLE = 'Perfil';
@@ -200,10 +201,20 @@ export async function fetchAthletePlansForUser(
   return attachPdfUrls(plans, rows);
 }
 
-/** Los entrenadores trabajan en equipo, así que la lista incluye las de todos. */
-export async function fetchTrainerAthletePlans(planType?: AthletePlanType): Promise<AthletePlan[]> {
+/** Cada entrenador ve solo los planes que ha creado para sus atletas. Los administradores ven todos. */
+export async function fetchTrainerAthletePlans(
+  planType?: AthletePlanType,
+  options?: { trainerId?: string; role?: UserRole },
+): Promise<AthletePlan[]> {
+  const scopeToTrainer =
+    isTrainerOnlyRole(options?.role) && Boolean(options?.trainerId);
+
   if (!isSupabaseConfigured) {
-    return demoPlans.filter((plan) => !planType || plan.planType === planType);
+    return demoPlans.filter((plan) => {
+      if (planType && plan.planType !== planType) return false;
+      if (scopeToTrainer && plan.trainerId !== options?.trainerId) return false;
+      return true;
+    });
   }
 
   const supabase = getSupabase();
@@ -214,6 +225,10 @@ export async function fetchTrainerAthletePlans(planType?: AthletePlanType): Prom
 
     if (planType) {
       query = query.eq('plan_type', planType);
+    }
+
+    if (scopeToTrainer) {
+      query = query.eq('trainer_id', options!.trainerId!);
     }
 
     return query;
@@ -227,6 +242,80 @@ export async function fetchTrainerAthletePlans(planType?: AthletePlanType): Prom
   const plans = rows.map((row) => mapRow(row));
   const withNames = await attachAthleteNames(plans);
   return attachPdfUrls(withNames, rows);
+}
+
+function buildMemberNameMap(
+  members: Array<{ user_id: string; first_name: string; last_name: string }>,
+) {
+  const names = new Map<string, string>();
+  for (const member of members) {
+    const name = `${member.first_name} ${member.last_name}`.trim();
+    if (member.user_id && name) {
+      names.set(member.user_id, name);
+    }
+  }
+  return names;
+}
+
+/** Planes de atletas vinculados como miembros del gimnasio (cualquier entrenador que los haya creado). */
+export async function fetchGymAthletePlans(
+  gymId: string,
+  planType?: AthletePlanType,
+): Promise<AthletePlan[]> {
+  if (!gymId) return [];
+
+  if (!isSupabaseConfigured) {
+    return demoPlans.filter((plan) => !planType || plan.planType === planType);
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  const { data: members, error: membersError } = await supabase
+    .from('gym_members')
+    .select('user_id, first_name, last_name')
+    .eq('gym_id', gymId)
+    .not('user_id', 'is', null)
+    .in('status', ['active', 'inactive']);
+
+  if (membersError) {
+    throw new Error(membersError.message);
+  }
+
+  const athleteIds = (members ?? [])
+    .map((member) => member.user_id as string)
+    .filter(Boolean);
+
+  if (athleteIds.length === 0) return [];
+
+  const memberNames = buildMemberNameMap(
+    (members ?? []) as Array<{ user_id: string; first_name: string; last_name: string }>,
+  );
+
+  const { data, error } = await selectPlanRows((select) => {
+    let query = supabase
+      .from(TABLE)
+      .select(select)
+      .in('athlete_id', athleteIds)
+      .order('created_at', { ascending: false });
+
+    if (planType) {
+      query = query.eq('plan_type', planType);
+    }
+
+    return query;
+  });
+
+  if (error) {
+    if (isMissingAthletePlansTableError(error)) return [];
+    throw new Error(error.message);
+  }
+
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  const plans = rows.map((row) =>
+    mapRow(row, memberNames.get(row.athlete_id as string)),
+  );
+  return attachPdfUrls(plans, rows);
 }
 
 export async function fetchAthletePlanById(planId: string): Promise<AthletePlan | null> {

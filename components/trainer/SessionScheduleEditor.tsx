@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import {
   formatScheduleSummary,
   RECURRENCE_OPTIONS,
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   },
   weekdayBtnActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}22`,
+    backgroundColor: withAlpha(colors.accent, '22'),
   },
   weekdayBtnText: {
     ...typography.bodySmall,
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   },
   recurrenceBtnActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   recurrenceBtnText: {
     ...typography.caption,

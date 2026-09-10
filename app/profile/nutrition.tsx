@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useNutritionProfile } from '@/hooks/useNutritionProfile';
 import { parseIntegerInput } from '@/lib/bodyMetrics';
@@ -75,7 +75,7 @@ export default function NutritionProfileScreen() {
       return;
     }
 
-    setSuccessMessage('Datos de nutrición guardados.');
+    setSuccessMessage(result.warning ?? 'Datos de nutrición guardados.');
     setTimeout(() => safeGoBack(router, '/tabs/profile'), 800);
   };
 
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   },
   optionChipSelected: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}22`,
+    backgroundColor: withAlpha(colors.accent, '22'),
   },
   optionText: { ...typography.bodySmall, color: colors.textSecondary },
   optionTextSelected: { color: colors.accent, fontWeight: '600' },

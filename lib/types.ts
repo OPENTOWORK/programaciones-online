@@ -13,7 +13,7 @@ export type ProgramCategory =
   | 'nutrition'
   | 'home_training'
   | 'gym_training';
-export type UserRole = 'atleta' | 'entrenador';
+export type UserRole = 'atleta' | 'entrenador' | 'administrador' | 'gimnasio';
 
 export type ExerciseMetricType = 'reps' | 'rir' | 'cal' | 'lbs';
 
@@ -77,6 +77,10 @@ export interface Program {
   catalogPrice?: string;
   /** Etiqueta de familia en catálogo, p. ej. Push / Pull / Skills. */
   catalogNameTag?: string;
+  /** Público al que va dirigida la programación en catálogo. */
+  catalogDesignedFor?: string;
+  /** Monitor que lleva la programación en catálogo. */
+  catalogMonitor?: string;
 }
 
 export interface UserProfile {
@@ -140,7 +144,12 @@ export interface TrainerMessage {
   timestamp: string;
   /** Los mensajes originados en un feedback del entrenador se marcan para diferenciarlos en el chat. */
   origin?: 'chat' | 'feedback';
+  feedbackId?: string;
+  sessionLogId?: string;
+  scheduledDate?: string;
   attachments?: TrainerChatAttachment[];
+  authorId?: string;
+  authorLabel?: string;
 }
 
 export interface AthleteAlertSummary {
@@ -148,6 +157,12 @@ export interface AthleteAlertSummary {
   sessionCount: number;
   intakeChanged: boolean;
   total: number;
+  chatActivityCount?: number;
+  sessionActivityCount?: number;
+  intakeCompleted?: boolean;
+  lastChatAt?: string;
+  lastSessionAt?: string;
+  lastIntakeAt?: string;
 }
 
 export type TrainerFeedbackAttachmentKind = 'video' | 'audio';
@@ -182,6 +197,8 @@ export interface TrainerAthleteFeedback {
   /** Entrenador que lo envió. El feedback es común a todo el equipo. */
   trainerName?: string;
   athleteId: string;
+  /** Registro de sesión al que responde este feedback, si aplica. */
+  sessionLogId?: string;
   message: string;
   createdAt: string;
   updatedAt: string;
@@ -245,6 +262,11 @@ export interface AthleteSummary {
   alerts?: AthleteAlertSummary;
   /** Rol actual en la app. Solo se rellena donde puede diferir de 'atleta' (tablero CRM). */
   role?: UserRole;
+  /** Ficha CRM del gimnasio cuando el atleta proviene de gym_members. */
+  gymMemberId?: string;
+  /** Entrenador dueño de la ficha (columna Cliente cedido, solo administrador). */
+  assignedTrainerId?: string;
+  assignedTrainerName?: string;
   /** @deprecated Use alerts instead. */
   unansweredCount?: number;
 }
@@ -306,12 +328,16 @@ export interface AthletePlan {
   pdfUrl?: string;
 }
 
+export type CrmStageSystemKey = 'ceded_client' | 'gyms';
+
 export interface CrmStage {
   id: string;
   name: string;
   position: number;
   /** Si está definido, mover un lead a esta columna le asigna ese rol en la app. */
   roleSlug?: UserRole;
+  /** Columna de sistema: no dispara cambio de rol ni se puede gestionar como el resto. */
+  systemKey?: CrmStageSystemKey;
 }
 
 export interface CrmLeadPosition {

@@ -5,17 +5,34 @@ import { usePathname, useRouter } from 'expo-router';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { AppLogo } from '@/components/ui/AppLogo';
 import { Button } from '@/components/ui/Button';
-import { colors, spacing, typography } from '@/constants/theme';
+import { NavCountBadge } from '@/components/ui/NavCountBadge';
+import { ThemePicker } from '@/components/ui/ThemePicker';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
+import { useAppTheme } from '@/hooks/useAppTheme';
 import { useAuth } from '@/hooks/useAuth';
+import { useSupportUnreadBadge } from '@/hooks/useSupportUnreadBadge';
+import { useTrainerNotifications } from '@/hooks/useTrainerNotifications';
+import { isAdminRole } from '@/lib/athleteService';
 
 const SIDEBAR_WIDTH = 248;
 const SIDEBAR_COLLAPSED_KEY = 'trainer-desktop-sidebar-collapsed';
 
 type NavItem = {
   label: string;
-  href: '/tabs/programs' | '/tabs/trainer' | '/library' | '/tabs/profile' | '/trainer/template';
+  href:
+    | '/tabs/programs'
+    | '/tabs/trainer'
+    | '/library'
+    | '/tabs/profile'
+    | '/trainer/template'
+    | '/trainer/chats'
+    | '/trainer/support'
+    | '/trainer/gyms';
   icon: AppIconName;
+  badge?: 'athletes' | 'chats' | 'profile' | 'support';
+  /** Solo visible para administradores (la ruta también lo comprueba). */
+  adminOnly?: boolean;
   match: (pathname: string) => boolean;
 };
 
@@ -34,11 +51,20 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Atletas',
     href: '/tabs/trainer',
     icon: 'trainer',
+    badge: 'athletes',
     match: (pathname) =>
       pathname.startsWith('/tabs/trainer') ||
       pathname.startsWith('/trainer/athlete/') ||
-      pathname.startsWith('/trainer/chat/') ||
+      pathname.startsWith('/trainer/staff/') ||
       pathname.startsWith('/trainer/plan/'),
+  },
+  {
+    label: 'Chats',
+    href: '/trainer/chats',
+    icon: 'chat',
+    badge: 'chats',
+    match: (pathname) =>
+      pathname.startsWith('/trainer/chats') || pathname.startsWith('/trainer/chat/'),
   },
   {
     label: 'Biblioteca',
@@ -50,13 +76,31 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Perfil',
     href: '/tabs/profile',
     icon: 'profile',
-    match: (pathname) => pathname.startsWith('/tabs/profile') || pathname.startsWith('/profile/'),
+    badge: 'profile',
+    match: (pathname) =>
+      pathname.startsWith('/tabs/profile') ||
+      pathname.startsWith('/profile/'),
   },
   {
     label: 'Plantillas',
     href: '/trainer/template',
     icon: 'templates',
     match: (pathname) => pathname.startsWith('/trainer/template'),
+  },
+  {
+    label: 'Soporte',
+    href: '/trainer/support',
+    icon: 'support',
+    badge: 'support',
+    adminOnly: true,
+    match: (pathname) => pathname.startsWith('/trainer/support'),
+  },
+  {
+    label: 'CRM Gimnasios',
+    href: '/trainer/gyms',
+    icon: 'gym',
+    adminOnly: true,
+    match: (pathname) => pathname.startsWith('/trainer/gyms'),
   },
 ];
 
@@ -77,7 +121,24 @@ export function TrainerDesktopShell({ children }: TrainerDesktopShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, signOut } = useAuth();
+  const { nightMode, canChooseTheme, canToggleNightMode, toggleNightMode } = useAppTheme();
+  const { counts, chatUnread } = useTrainerNotifications();
+  const { count: supportCount } = useSupportUnreadBadge();
   const [collapsed, setCollapsed] = useState(false);
+
+  const isAdmin = isAdminRole(user?.role);
+  const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const collapsedBadgeCount = counts.total + (isAdmin ? supportCount : 0);
+
+  const badgeFor = (item: NavItem) => {
+    if (item.badge === 'chats') return chatUnread;
+    if (item.badge === 'profile') return counts.total;
+    if (item.badge === 'support') return supportCount;
+    if (item.badge === 'athletes') {
+      return counts.sessions + counts.intake + counts.appointment;
+    }
+    return 0;
+  };
 
   useEffect(() => {
     setCollapsed(readCollapsedPreference());
@@ -113,12 +174,18 @@ export function TrainerDesktopShell({ children }: TrainerDesktopShellProps) {
           </View>
 
           <View style={styles.nav}>
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const isActive = item.match(pathname);
+              const badgeCount = badgeFor(item);
               return (
                 <Pressable
                   key={item.href}
                   onPress={() => router.push(item.href)}
+                  accessibilityLabel={
+                    badgeCount > 0
+                      ? `${item.label}, ${badgeCount} aviso${badgeCount === 1 ? '' : 's'}`
+                      : item.label
+                  }
                   style={[styles.navItem, isActive && styles.navItemActive]}
                 >
                   <AppIcon
@@ -130,6 +197,7 @@ export function TrainerDesktopShell({ children }: TrainerDesktopShellProps) {
                   <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
                     {item.label}
                   </Text>
+                  <NavCountBadge count={badgeCount} />
                 </Pressable>
               );
             })}
@@ -142,6 +210,30 @@ export function TrainerDesktopShell({ children }: TrainerDesktopShellProps) {
             <Text style={styles.userEmail} numberOfLines={1}>
               {user?.email}
             </Text>
+            {canToggleNightMode ? (
+              <Pressable
+                onPress={toggleNightMode}
+                accessibilityRole="button"
+                accessibilityLabel={nightMode ? 'Activar modo día' : 'Activar modo noche'}
+                accessibilityState={{ selected: nightMode }}
+                style={({ pressed }) => [
+                  styles.nightModeBtn,
+                  nightMode && styles.nightModeBtnActive,
+                  pressed && styles.toggleBtnPressed,
+                ]}
+              >
+                <AppIcon
+                  name={nightMode ? 'sunny' : 'moon'}
+                  size={16}
+                  color={nightMode ? colors.accent : colors.textSecondary}
+                  outlined={!nightMode}
+                />
+                <Text style={[styles.nightModeLabel, nightMode && styles.nightModeLabelActive]}>
+                  {nightMode ? 'Modo día' : 'Modo noche'}
+                </Text>
+              </Pressable>
+            ) : null}
+            {canChooseTheme ? <ThemePicker /> : null}
             <Button
               title="Cerrar sesión"
               variant="ghost"
@@ -155,15 +247,43 @@ export function TrainerDesktopShell({ children }: TrainerDesktopShellProps) {
 
       <View style={styles.main}>
         {collapsed ? (
-          <Pressable
-            onPress={() => setSidebarCollapsed(false)}
-            accessibilityLabel="Mostrar menú"
-            style={({ pressed }) => [styles.showMenuBtn, pressed && styles.toggleBtnPressed]}
-          >
-            <AppLogo size={22} />
-            <AppIcon name="chevronRight" size={16} color={colors.textMuted} />
-            <Text style={styles.showMenuLabel}>Menú</Text>
-          </Pressable>
+          <View style={styles.collapsedTools}>
+            <Pressable
+              onPress={() => setSidebarCollapsed(false)}
+              accessibilityLabel={
+                collapsedBadgeCount > 0
+                  ? `Mostrar menú, ${collapsedBadgeCount} avisos pendientes`
+                  : 'Mostrar menú'
+              }
+              style={({ pressed }) => [styles.showMenuBtn, pressed && styles.toggleBtnPressed]}
+            >
+              <AppLogo size={22} />
+              <AppIcon name="chevronRight" size={16} color={colors.textMuted} />
+              <Text style={styles.showMenuLabel}>Menú</Text>
+              <NavCountBadge count={collapsedBadgeCount} />
+            </Pressable>
+            {canToggleNightMode ? (
+              <Pressable
+                onPress={toggleNightMode}
+                accessibilityRole="button"
+                accessibilityLabel={nightMode ? 'Activar modo día' : 'Activar modo noche'}
+                accessibilityState={{ selected: nightMode }}
+                style={({ pressed }) => [
+                  styles.collapsedNightBtn,
+                  nightMode && styles.nightModeBtnActive,
+                  pressed && styles.toggleBtnPressed,
+                ]}
+              >
+                <AppIcon
+                  name={nightMode ? 'sunny' : 'moon'}
+                  size={16}
+                  color={nightMode ? colors.accent : colors.textSecondary}
+                  outlined={!nightMode}
+                />
+              </Pressable>
+            ) : null}
+            {canChooseTheme ? <ThemePicker compact /> : null}
+          </View>
         ) : null}
         <View style={styles.content}>{children}</View>
       </View>
@@ -220,11 +340,18 @@ const styles = StyleSheet.create({
   toggleBtnPressed: {
     opacity: 0.85,
   },
-  showMenuBtn: {
+  collapsedTools: {
     position: 'absolute',
     top: spacing.md,
     left: 0,
     zIndex: 20,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    maxWidth: 280,
+  },
+  showMenuBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
@@ -240,6 +367,17 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '700',
   },
+  collapsedNightBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
   nav: {
     gap: spacing.xs,
     flex: 1,
@@ -253,12 +391,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   navItemActive: {
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   navLabel: {
     ...typography.bodySmall,
     color: colors.textSecondary,
     fontWeight: '600',
+    flex: 1,
   },
   navLabelActive: {
     color: colors.text,
@@ -278,6 +417,32 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     marginBottom: spacing.xs,
+  },
+  nightModeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.xs,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    cursor: 'pointer',
+  },
+  nightModeBtnActive: {
+    borderColor: colors.accent,
+    backgroundColor: withAlpha(colors.accent, '18'),
+  },
+  nightModeLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '700',
+  },
+  nightModeLabelActive: {
+    color: colors.accent,
   },
   signOutBtn: {
     alignSelf: 'flex-start',

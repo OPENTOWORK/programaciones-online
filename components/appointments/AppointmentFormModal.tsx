@@ -4,7 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import {
   APPOINTMENT_DURATION_OPTIONS,
   buildTimeSlots,
@@ -56,6 +56,7 @@ export function AppointmentFormModal({
   const [notes, setNotes] = useState('');
   const [meetingUrl, setMeetingUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [timeOpen, setTimeOpen] = useState(false);
 
   const athletesRef = useRef(athletes);
   athletesRef.current = athletes;
@@ -75,6 +76,7 @@ export function AppointmentFormModal({
     setNotes('');
     setMeetingUrl('');
     setError(null);
+    setTimeOpen(false);
   }, [visible]);
 
   const providerLabel = useMemo(() => {
@@ -151,7 +153,12 @@ export function AppointmentFormModal({
             </Pressable>
           </View>
 
-          <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+          <ScrollView
+            style={styles.body}
+            contentContainerStyle={styles.bodyContent}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+          >
             {isTrainer ? (
               <View style={styles.field}>
                 <Text style={styles.label}>Atleta</Text>
@@ -223,21 +230,49 @@ export function AppointmentFormModal({
 
             <View style={styles.field}>
               <Text style={styles.label}>Hora</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-                {TIME_SLOTS.map((slot) => (
-                  <Pressable
-                    key={slot}
-                    onPress={() => setTime(slot)}
-                    style={({ pressed }) => [
-                      styles.chip,
-                      time === slot && styles.chipActive,
-                      pressed && styles.chipPressed,
-                    ]}
+              <Pressable
+                onPress={() => setTimeOpen((open) => !open)}
+                accessibilityRole="button"
+                accessibilityLabel={`Hora ${time}`}
+                accessibilityState={{ expanded: timeOpen }}
+                style={({ pressed }) => [styles.selectTrigger, pressed && styles.dateNavPressed]}
+              >
+                <Text style={styles.selectValue}>{time}</Text>
+                <AppIcon
+                  name="chevronDown"
+                  size={16}
+                  color={colors.textSecondary}
+                  style={timeOpen ? styles.selectChevronOpen : undefined}
+                />
+              </Pressable>
+              {timeOpen ? (
+                <View style={styles.selectMenu}>
+                  <ScrollView
+                    nestedScrollEnabled
+                    style={styles.selectMenuScroll}
+                    keyboardShouldPersistTaps="handled"
                   >
-                    <Text style={[styles.chipText, time === slot && styles.chipTextActive]}>{slot}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
+                    {TIME_SLOTS.map((slot) => (
+                      <Pressable
+                        key={slot}
+                        onPress={() => {
+                          setTime(slot);
+                          setTimeOpen(false);
+                        }}
+                        style={({ pressed }) => [
+                          styles.selectOption,
+                          time === slot && styles.selectOptionActive,
+                          pressed && styles.chipPressed,
+                        ]}
+                      >
+                        <Text style={[styles.selectOptionText, time === slot && styles.selectOptionTextActive]}>
+                          {slot}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
             </View>
 
             <View style={styles.field}>
@@ -395,9 +430,50 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '600',
   },
-  chipRow: {
-    gap: spacing.xs,
-    paddingRight: spacing.sm,
+  selectTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+  },
+  selectValue: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  selectChevronOpen: {
+    transform: [{ rotate: '180deg' }],
+  },
+  selectMenu: {
+    marginTop: spacing.xs,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceLight,
+    overflow: 'hidden',
+  },
+  selectMenuScroll: {
+    maxHeight: 220,
+  },
+  selectOption: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  selectOptionActive: {
+    backgroundColor: withAlpha(colors.accent, '1A'),
+  },
+  selectOptionText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  selectOptionTextActive: {
+    color: colors.accent,
   },
   chipWrap: {
     flexDirection: 'row',
@@ -414,7 +490,7 @@ const styles = StyleSheet.create({
   },
   chipActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}1A`,
+    backgroundColor: withAlpha(colors.accent, '1A'),
   },
   chipPressed: {
     opacity: 0.85,

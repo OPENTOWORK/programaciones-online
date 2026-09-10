@@ -1,11 +1,14 @@
-import { Redirect, Tabs } from 'expo-router';
+import { Redirect, Tabs, usePathname } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { isGymRole, isTrainerRole } from '@/lib/athleteService';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { isGymRoleAthleteRouteAllowed } from '@/lib/platformAccess';
 
 export default function TabLayout() {
   const { user, isLoading } = useAuth();
+  const pathname = usePathname();
 
   if (isLoading) {
     return (
@@ -17,6 +20,10 @@ export default function TabLayout() {
 
   if (!user) {
     return <Redirect href="/auth/login" />;
+  }
+
+  if (isGymRole(user.role) && !isGymRoleAthleteRouteAllowed(pathname)) {
+    return <Redirect href="/gym" />;
   }
 
   return (
@@ -36,7 +43,7 @@ export default function TabLayout() {
       <Tabs.Screen name="progress" options={{ title: 'Progreso' }} />
       <Tabs.Screen
         name="trainer"
-        options={{ title: user.role === 'entrenador' ? 'Atletas' : 'Entrenador' }}
+        options={{ title: isTrainerRole(user.role) ? 'Atletas' : 'Entrenador' }}
       />
       <Tabs.Screen name="profile" options={{ title: 'Perfil' }} />
     </Tabs>

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { AthletePlanCard } from '@/components/program/AthletePlanCard';
@@ -5,28 +6,33 @@ import { PersonalizedPlanGroupCard } from '@/components/program/PersonalizedPlan
 import { ProgramCard } from '@/components/program/ProgramCard';
 import { ServicePlanEmptyCard } from '@/components/program/ServicePlanEmptyCard';
 import { HomeTrainingCalendarPanel } from '@/components/homeTraining/HomeTrainingCalendarPanel';
-import { TrainerCatalogPanel } from '@/components/trainer/TrainerCatalogPanel';
 import { TrainerPlansPanel } from '@/components/trainer/TrainerPlansPanel';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { SUPPORT_ROUTE } from '@/constants/support';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyAthletePlans } from '@/hooks/useAthletePlans';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { usePrograms } from '@/hooks/usePrograms';
-import { isTrainerRole } from '@/lib/athleteService';
-import { isTrainerDesktopWeb } from '@/lib/platformAccess';
-import { isTrainerEditableCategory, type Plan } from '@/lib/programService';
+import { isTrainerOnlyRole, isTrainerRole, isGymRole } from '@/lib/athleteService';
 import { queueChatPrefill } from '@/lib/chatPrefill';
+import { partitionHypePlanPrograms } from '@/lib/hypeCatalog';
+import { isTrainerDesktopWeb } from '@/lib/platformAccess';
 import { groupPersonalizedPlans } from '@/lib/personalizedPlanGroups';
+import { type Plan } from '@/lib/programService';
+import { queueSupportPrefill } from '@/lib/supportPrefill';
 import { resolveStandardVenuePrograms } from '@/lib/standardVenueCatalog';
 import type { StandardVenueId } from '@/lib/standardVenues';
 import {
   isServicePlanCategory,
   isSessionBasedAthletePlanType,
+  isGymAthletePlanStaffCategory,
+  HOME_TRAINING_STAFF_JOIN,
+  getServicePlanContent,
   PERSONALIZED_GYM_PLAN_CONTENT,
-  SERVICE_PLAN_CONTENT,
+  usesAthleteServiceView,
   type AthletePlanType,
 } from '@/lib/trainerConstants';
 
@@ -49,11 +55,13 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
   const isTrainerDesktop = isTrainerDesktopWeb(user?.role);
   const useProgramGrid = isTrainerDesktop && width >= 960;
   const { getByPlanId, refresh } = usePrograms();
-  const isTrainer = isTrainerRole(user?.role);
+  const serviceCategory = isServicePlanCategory(plan.category) ? plan.category : undefined;
+  const isStaff = isTrainerRole(user?.role);
+  const isGymAthletePlansStaff =
+    isGymRole(user?.role) && isGymAthletePlanStaffCategory(serviceCategory);
+  const useAthleteView = usesAthleteServiceView(user?.role, plan.category);
   const { isComplete: intakeComplete, isLoading: intakeLoading } = useAthleteIntakeForm();
 
-  const canEditCatalog = isTrainer && isTrainerEditableCategory(plan.category);
-  const serviceCategory = isServicePlanCategory(plan.category) ? plan.category : undefined;
   const isHomeTraining = serviceCategory === 'home_training';
   const athletePlanType =
     serviceCategory === 'personalized' ||
@@ -71,7 +79,7 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
   useFocusRefresh(
     () => refresh(),
     () => {
-      if (!isTrainer) {
+      if (useAthleteView) {
         void refreshAthletePlans();
       }
     },
@@ -79,16 +87,31 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
   const programs = standardVenue
     ? resolveStandardVenuePrograms(standardVenue, getByPlanId(planId), planId)
     : getByPlanId(planId);
-  const servicePlanContent = serviceCategory ? SERVICE_PLAN_CONTENT[serviceCategory] : null;
+  const { catalogPrograms, weeklyChallenge } = useMemo(
+    () =>
+      plan.category === 'hype'
+        ? partitionHypePlanPrograms(programs, planId)
+        : { catalogPrograms: programs, weeklyChallenge: null },
+    [plan.category, programs, planId],
+  );
+  const athleteHasWeeklyChallenge = Boolean(
+    weeklyChallenge &&
+      (user?.currentProgramId === weeklyChallenge.id ||
+        user?.currentPrograms?.some((item) => item.id === weeklyChallenge.id)),
+  );
+  const showWeeklyChallenge = Boolean(weeklyChallenge && (isStaff || athleteHasWeeklyChallenge));
+  const servicePlanContent = serviceCategory
+    ? getServicePlanContent(serviceCategory, user?.role)
+    : null;
   const isServiceRequestPlan = serviceCategory === 'gym_training';
   const showAthleteAssignedPlans =
-    !isTrainer &&
+    useAthleteView &&
     !isHomeTraining &&
     athletePlanType &&
     (athletePlansLoading || myAthletePlans.length > 0);
   const showServiceEmptyCard =
     Boolean(servicePlanContent && serviceCategory) &&
-    !isTrainer &&
+    useAthleteView &&
     !isHomeTraining &&
     !athletePlansLoading &&
     myAthletePlans.length === 0 &&
@@ -97,15 +120,21 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
         (serviceCategory === 'nutrition' || serviceCategory === 'personalized')));
   const showPersonalizedGymCard =
     serviceCategory === 'personalized' &&
+    !isGymRole(user?.role) &&
     programs.length === 0 &&
     myAthletePlans.length === 0 &&
     !athletePlansLoading &&
-    !isTrainer;
+    useAthleteView;
 
   const openTrainerChat = (prefill: string) => {
     queueChatPrefill(prefill);
 
-    if (!isTrainer && !intakeLoading && !intakeComplete) {
+    if (isTrainerOnlyRole(user?.role)) {
+      router.push('/trainer/client-chat');
+      return;
+    }
+
+    if (!isStaff && !intakeLoading && !intakeComplete) {
       router.push({
         pathname: '/profile/intake-form',
         params: { returnTo: 'trainer' },
@@ -119,13 +148,49 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
     });
   };
 
+  const openGymAthletePlanCreate = () => {
+    if (!athletePlanType) return;
+    router.push({
+      pathname: '/trainer/plan/create',
+      params: { type: athletePlanType },
+    });
+  };
+
+  const openServicePlanRequest = (prefill: string, subject: string) => {
+    if (isGymRole(user?.role)) {
+      if (serviceCategory === 'personalized') {
+        openGymAthletePlanCreate();
+        return;
+      }
+
+      queueSupportPrefill({
+        category: 'programs',
+        subject,
+        message: prefill,
+      });
+      router.replace(SUPPORT_ROUTE);
+      return;
+    }
+
+    openTrainerChat(prefill);
+  };
+
   const groupedPersonalizedPlans = groupPersonalizedPlans(
     myAthletePlans.filter((item) => isSessionBasedAthletePlanType(item.planType)),
   );
   const nutritionPlans = myAthletePlans.filter((item) => item.planType === 'nutrition');
 
   if (isHomeTraining) {
-    return <HomeTrainingCalendarPanel />;
+    return (
+      <HomeTrainingCalendarPanel
+        asAthlete={useAthleteView}
+        onRequestHomeTrainerJoin={
+          isTrainerOnlyRole(user?.role)
+            ? () => openTrainerChat(HOME_TRAINING_STAFF_JOIN.prefill)
+            : undefined
+        }
+      />
+    );
   }
 
   return (
@@ -148,17 +213,17 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
         </View>
       ) : null}
 
-      {isServiceRequestPlan && !isTrainer && servicePlanContent && serviceCategory && myAthletePlans.length === 0 ? (
+      {isServiceRequestPlan && useAthleteView && servicePlanContent && serviceCategory && myAthletePlans.length === 0 ? (
         <View style={styles.serviceCards}>
           <ServicePlanEmptyCard
             category={serviceCategory}
             title={servicePlanContent.title}
             text={servicePlanContent.text}
             button={servicePlanContent.button}
-            onRequest={() => openTrainerChat(servicePlanContent.prefill)}
+            onRequest={() => openServicePlanRequest(servicePlanContent.prefill, servicePlanContent.title)}
           />
         </View>
-      ) : programs.length === 0 ? (
+      ) : catalogPrograms.length === 0 ? (
         showServiceEmptyCard && servicePlanContent && serviceCategory ? (
           <View style={styles.serviceCards}>
             <ServicePlanEmptyCard
@@ -166,20 +231,25 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
               title={servicePlanContent.title}
               text={servicePlanContent.text}
               button={servicePlanContent.button}
-              onRequest={() => openTrainerChat(servicePlanContent.prefill)}
+              onRequest={() => openServicePlanRequest(servicePlanContent.prefill, servicePlanContent.title)}
             />
             {showPersonalizedGymCard ? (
               <ServicePlanEmptyCard
-                category="personalized"
+                category="gym_training"
                 icon="strength"
                 title={PERSONALIZED_GYM_PLAN_CONTENT.title}
                 text={PERSONALIZED_GYM_PLAN_CONTENT.text}
                 button={PERSONALIZED_GYM_PLAN_CONTENT.button}
-                onRequest={() => openTrainerChat(PERSONALIZED_GYM_PLAN_CONTENT.prefill)}
+                onRequest={() =>
+                  openServicePlanRequest(
+                    PERSONALIZED_GYM_PLAN_CONTENT.prefill,
+                    PERSONALIZED_GYM_PLAN_CONTENT.title,
+                  )
+                }
               />
             ) : null}
           </View>
-        ) : !isTrainer && serviceCategory && myAthletePlans.length > 0 ? null : !isTrainer ? (
+        ) : useAthleteView && serviceCategory && myAthletePlans.length > 0 ? null : useAthleteView ? (
           <Card style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Sin programaciones disponibles</Text>
             <Text style={styles.emptyText}>Todavía no hay programaciones publicadas en este plan.</Text>
@@ -187,7 +257,7 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
         ) : null
       ) : (
         <View style={useProgramGrid ? styles.programGrid : undefined}>
-          {programs.map((program) => (
+          {catalogPrograms.map((program) => (
             <View key={program.id} style={useProgramGrid ? styles.programGridItem : undefined}>
               <ProgramCard program={program} />
             </View>
@@ -195,11 +265,19 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
         </View>
       )}
 
-      {isTrainer && canEditCatalog ? (
-        <TrainerCatalogPanel planId={plan.id} category={plan.category} standardVenue={standardVenue} />
+      {showWeeklyChallenge && weeklyChallenge ? (
+        <View style={styles.weeklyChallengeSection}>
+          <ProgramCard program={weeklyChallenge} />
+        </View>
       ) : null}
 
-      {isTrainer && athletePlanType ? <TrainerPlansPanel activePlanType={athletePlanType} /> : null}
+      {isStaff && !useAthleteView && athletePlanType ? (
+        <TrainerPlansPanel activePlanType={athletePlanType} />
+      ) : isGymAthletePlansStaff && athletePlanType ? (
+        <TrainerPlansPanel activePlanType={athletePlanType} audience="gym" />
+      ) : isGymRole(user?.role) && serviceCategory === 'nutrition' ? (
+        <TrainerPlansPanel activePlanType="nutrition" audience="gym" allowCreate={false} />
+      ) : null}
     </>
   );
 }
@@ -220,5 +298,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: '48%',
     minWidth: 320,
+  },
+  weeklyChallengeSection: {
+    marginTop: spacing.md,
   },
 });

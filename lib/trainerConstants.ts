@@ -1,4 +1,5 @@
-import type { AthletePlanType } from '@/lib/types';
+import { isAdminRole, isGymRole, isTrainerOnlyRole } from '@/lib/athleteService';
+import type { AthletePlanType, UserRole } from '@/lib/types';
 
 export type { AthletePlanType };
 
@@ -12,10 +13,26 @@ export const PERSONALIZED_NUTRITION_REQUEST_MESSAGE =
   'Hola, me gustaría solicitar un plan nutricional personalizado adaptado a mis objetivos y hábitos. ¿Podemos empezar?';
 
 export const HOME_TRAINING_REQUEST_MESSAGE =
-  'Hola, me gustaría solicitar entrenamiento personal en mi domicilio adaptado a mi objetivo, nivel y disponibilidad. ¿Podemos empezar?';
+  'Hola, me gustaría solicitar entrenamiento personal a domicilio en Madrid, adaptado a mi objetivo, nivel y disponibilidad. ¿Podemos empezar?';
+
+export const HOME_TRAINING_STAFF_JOIN_MESSAGE =
+  'Hola, me gustaría unirme al equipo para hacerme entrenador a domicilio en Madrid. ¿Podemos hablarlo?';
+
+export const HOME_TRAINING_STAFF_JOIN = {
+  title: 'Únete al equipo a domicilio en Madrid',
+  text: 'Solicita unirte al equipo para dar entrenamiento personal a domicilio en Madrid.',
+  button: 'Solicitar unirme al equipo para hacerme entrenador a domicilio en Madrid',
+  prefill: HOME_TRAINING_STAFF_JOIN_MESSAGE,
+};
 
 export const GYM_TRAINING_REQUEST_MESSAGE =
   'Hola, me gustaría solicitar una programación para entrenar en mi gimnasio, adaptada a mi objetivo, nivel y equipamiento disponible. ¿Podemos empezar?';
+
+export const GYM_ATHLETE_PROGRAMMING_REQUEST_MESSAGE =
+  'Hola, me gustaría solicitar una programación personalizada para los atletas de mi gimnasio. ¿Podemos empezar?';
+
+export const GYM_ATHLETE_NUTRITION_REQUEST_MESSAGE =
+  'Hola, me gustaría solicitar información nutricional para atletas de mi gimnasio. Nos gustaría conocer las condiciones y la comisión aplicable. ¿Podemos empezar?';
 
 export type ServicePlanCategory = 'personalized' | 'nutrition' | 'home_training' | 'gym_training';
 
@@ -36,9 +53,9 @@ export const SERVICE_PLAN_CONTENT: Record<
     prefill: PERSONALIZED_NUTRITION_REQUEST_MESSAGE,
   },
   home_training: {
-    title: 'Aún no tienes entrenamiento personal en tu domicilio',
-    text: 'Solicita entrenamiento personal a domicilio, adaptado a tu objetivo, nivel y disponibilidad.',
-    button: 'Pide entrenamiento personal a domicilio',
+    title: 'Aún no tienes entrenamiento personal a domicilio en Madrid',
+    text: 'Solicita entrenamiento personal a domicilio en Madrid, adaptado a tu objetivo, nivel y disponibilidad.',
+    button: 'Pide entrenamiento personal a domicilio en Madrid',
     prefill: HOME_TRAINING_REQUEST_MESSAGE,
   },
   gym_training: {
@@ -56,6 +73,32 @@ export const PERSONALIZED_GYM_PLAN_CONTENT = {
   prefill: PERSONALIZED_GYM_PLAN_REQUEST_MESSAGE,
 };
 
+const GYM_ROLE_SERVICE_PLAN_CONTENT: Partial<
+  Record<ServicePlanCategory, { title: string; text: string; button: string; prefill: string }>
+> = {
+  personalized: {
+    title: 'Programación para tus atletas',
+    text: 'Crea y asigna planes personalizados a los miembros de tu gimnasio.',
+    button: 'Asignar plan personalizado a un atleta',
+    prefill: GYM_ATHLETE_PROGRAMMING_REQUEST_MESSAGE,
+  },
+  nutrition: {
+    title: 'Nutrición para tus atletas',
+    text: 'Solicita información nutricional para tus miembros. Nuestro equipo la preparará y te indicará la comisión correspondiente.',
+    button: 'Solicitar información nutricional',
+    prefill: GYM_ATHLETE_NUTRITION_REQUEST_MESSAGE,
+  },
+  gym_training: PERSONALIZED_GYM_PLAN_CONTENT,
+};
+
+export function getServicePlanContent(category: ServicePlanCategory, role?: UserRole) {
+  if (isGymRole(role)) {
+    const gymContent = GYM_ROLE_SERVICE_PLAN_CONTENT[category];
+    if (gymContent) return gymContent;
+  }
+  return SERVICE_PLAN_CONTENT[category];
+}
+
 export function isServicePlanCategory(category?: string): category is ServicePlanCategory {
   return (
     category === 'personalized' ||
@@ -65,17 +108,37 @@ export function isServicePlanCategory(category?: string): category is ServicePla
   );
 }
 
+/** Nutrición, domicilio y gimnasio: el entrenador las consume como atleta. */
+export function isAthleteFacingServiceCategory(
+  category?: string,
+): category is Exclude<ServicePlanCategory, 'personalized'> {
+  return category === 'nutrition' || category === 'home_training' || category === 'gym_training';
+}
+
+/** Categorías en las que el rol gimnasio crea y asigna planes a sus miembros vinculados. */
+export function isGymAthletePlanStaffCategory(category?: string): boolean {
+  return category === 'personalized';
+}
+
+/** El administrador sigue viendo herramientas de staff; el entrenador, la vista de atleta en esas categorías. */
+export function usesAthleteServiceView(role?: UserRole, category?: string): boolean {
+  if (isAdminRole(role)) return false;
+  if (isGymRole(role) && isGymAthletePlanStaffCategory(category)) return false;
+  if (isTrainerOnlyRole(role)) return isAthleteFacingServiceCategory(category);
+  return true;
+}
+
 export const ATHLETE_PLAN_TYPE_LABELS: Record<AthletePlanType, string> = {
   personalized: 'Plan personalizado',
   nutrition: 'Plan nutricional',
-  home_training: 'Entrenamiento a domicilio',
+  home_training: 'Entrenamiento a domicilio en Madrid',
   gym_training: 'Programación para gimnasio',
 };
 
 export const CREATE_ATHLETE_PLAN_LABELS: Record<AthletePlanType, string> = {
   personalized: 'Crear plan personalizado',
   nutrition: 'Crear plan nutricional',
-  home_training: 'Crear entrenamiento a domicilio',
+  home_training: 'Crear entrenamiento a domicilio en Madrid',
   gym_training: 'Crear programación para gimnasio',
 };
 

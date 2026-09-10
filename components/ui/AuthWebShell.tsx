@@ -17,7 +17,7 @@ export function AuthWebShell({ children }: AuthWebShellProps) {
 const styles = StyleSheet.create({
   outer: {
     flex: 1,
-    backgroundColor: '#080B10',
+    backgroundColor: colors.background,
     alignItems: 'center',
     minHeight: '100vh' as unknown as number,
     paddingVertical: 32,
@@ -26,7 +26,7 @@ const styles = StyleSheet.create({
   frame: {
     width: '100%',
     maxWidth: 480,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,

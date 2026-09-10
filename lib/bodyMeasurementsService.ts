@@ -5,11 +5,12 @@ import {
   type MeasuredBodyMetrics,
   type MeasurementSource,
 } from '@/lib/bodyMetrics';
+import { readPersistedRecord, writePersistedRecord } from '@/lib/localUserDataStorage';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const TABLE = 'body_measurements';
+const LOCAL_STORAGE_KEY = 'body-measurements-v1';
 
-/** Fallback en memoria para modo demo o cuando la tabla todavía no existe. */
 const localByUser = new Map<string, BodyMeasurement[]>();
 
 function isMissingTableError(error: { message?: string; code?: string } | null | undefined) {
@@ -53,15 +54,37 @@ function sortByDate(entries: BodyMeasurement[]) {
   return [...entries].sort((left, right) => left.measuredAt.localeCompare(right.measuredAt));
 }
 
-function localHistory(userId: string) {
-  return sortByDate(localByUser.get(userId) ?? []);
+async function localHistory(userId: string) {
+  if (!localByUser.has(userId)) {
+    const persisted = await readPersistedRecord<BodyMeasurement[]>(LOCAL_STORAGE_KEY);
+    localByUser.set(userId, sortByDate(persisted[userId] ?? []));
+  }
+  return localByUser.get(userId) ?? [];
+}
+
+async function persistLocalHistory(userId: string, entries: BodyMeasurement[]) {
+  const sorted = sortByDate(entries);
+  localByUser.set(userId, sorted);
+  const all = await readPersistedRecord<BodyMeasurement[]>(LOCAL_STORAGE_KEY);
+  all[userId] = sorted;
+  await writePersistedRecord(LOCAL_STORAGE_KEY, all);
+}
+
+function mergeMeasurements(remote: BodyMeasurement[], local: BodyMeasurement[]) {
+  const merged = new Map<string, BodyMeasurement>();
+  for (const entry of remote) merged.set(entry.id, entry);
+  for (const entry of local) {
+    if (!merged.has(entry.id)) merged.set(entry.id, entry);
+  }
+  return sortByDate([...merged.values()]);
 }
 
 export async function fetchBodyMeasurements(userId: string): Promise<BodyMeasurement[]> {
   if (!userId) return [];
 
+  const local = await localHistory(userId);
   const supabase = isSupabaseConfigured ? getSupabase() : null;
-  if (!supabase) return localHistory(userId);
+  if (!supabase) return local;
 
   const { data, error } = await supabase
     .from(TABLE)
@@ -71,9 +94,12 @@ export async function fetchBodyMeasurements(userId: string): Promise<BodyMeasure
     .eq('user_id', userId)
     .order('measured_at', { ascending: true });
 
-  if (error) return localHistory(userId);
+  if (error) return local;
 
-  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+  const remote = (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+  const merged = mergeMeasurements(remote, local);
+  await persistLocalHistory(userId, merged);
+  return merged;
 }
 
 export function latestBodyMeasurement(entries: BodyMeasurement[]): BodyMeasurement | undefined {
@@ -88,7 +114,7 @@ export async function recordBodyMeasurement(
   userId: string,
   metrics: MeasuredBodyMetrics,
   source: MeasurementSource = 'manual',
-): Promise<{ error?: string; measurement?: BodyMeasurement }> {
+): Promise<{ error?: string; warning?: string; measurement?: BodyMeasurement }> {
   if (!userId || !hasAnyMeasuredValue(metrics)) return {};
 
   const measurement: BodyMeasurement = {
@@ -99,13 +125,14 @@ export async function recordBodyMeasurement(
     ...metrics,
   };
 
-  const persistLocal = () => {
-    localByUser.set(userId, [...(localByUser.get(userId) ?? []), measurement]);
+  const persistLocal = async (saved: BodyMeasurement) => {
+    const current = await localHistory(userId);
+    await persistLocalHistory(userId, [...current, saved]);
   };
 
   const supabase = isSupabaseConfigured ? getSupabase() : null;
   if (!supabase) {
-    persistLocal();
+    await persistLocal(measurement);
     return { measurement };
   }
 
@@ -127,12 +154,18 @@ export async function recordBodyMeasurement(
   const { data, error } = await supabase.from(TABLE).insert(payload).select('id').maybeSingle();
 
   if (error) {
-    persistLocal();
-    if (isMissingTableError(error)) return { measurement };
+    await persistLocal(measurement);
+    if (isMissingTableError(error)) {
+      return {
+        measurement,
+        warning:
+          'Mediciones guardadas en este dispositivo. Ejecuta npm run supabase:physical-profile para sincronizar.',
+      };
+    }
     return { error: error.message, measurement };
   }
 
-  return {
-    measurement: { ...measurement, id: data?.id ? String(data.id) : measurement.id },
-  };
+  const saved = { ...measurement, id: data?.id ? String(data.id) : measurement.id };
+  await persistLocal(saved);
+  return { measurement: saved };
 }

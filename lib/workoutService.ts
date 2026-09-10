@@ -1,3 +1,4 @@
+import { isAnnualTemplateDate, isWeekdayDate, toAnnualTemplateDate } from '@/lib/annualProgramSchedule';
 import type { Exercise, Workout } from '@/lib/types';
 import { isMissingScheduleConfigError } from '@/lib/scheduleConfigColumn';
 import { parseScheduleFromJson } from '@/lib/sessionSchedule';
@@ -173,6 +174,25 @@ async function fetchWorkoutsWithExercisesByProgram(programId: string): Promise<W
   }
 }
 
+export async function fetchWorkoutsByIds(workoutIds: string[]): Promise<Workout[]> {
+  const uniqueIds = [...new Set(workoutIds.filter(Boolean))];
+  if (!isSupabaseConfigured || uniqueIds.length === 0) return [];
+
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await queryEntrenos((select) =>
+      supabase.from('entrenos_diarios').select(select).in('id', uniqueIds),
+    );
+
+    if (error || !data) return [];
+    return (data as EntrenoRow[]).map((row) => mapEntreno(row));
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchWorkoutById(workoutId: string): Promise<Workout | null> {
   if (!isSupabaseConfigured) return null;
 
@@ -231,13 +251,45 @@ export async function fetchTodayWorkoutForProgram(programId: string): Promise<Wo
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+  const annualKey = toAnnualTemplateDate(today);
 
-  const { data, error } = await queryEntrenos((select) =>
-    supabase.from('entrenos_diarios').select(select).eq('program_id', programId).eq('workout_date', today).maybeSingle(),
+  const lookupDates = isWeekdayDate(today)
+    ? todayKey === annualKey
+      ? [todayKey]
+      : [todayKey, annualKey]
+    : [todayKey];
+
+  for (const workoutDate of lookupDates) {
+    const { data, error } = await queryEntrenos((select) =>
+      supabase
+        .from('entrenos_diarios')
+        .select(select)
+        .eq('program_id', programId)
+        .eq('workout_date', workoutDate)
+        .maybeSingle(),
+    );
+
+    if (!error && data) {
+      return mapEntreno(data as EntrenoRow);
+    }
+  }
+
+  return null;
+}
+
+export function resolveAnnualWorkoutForDate(workouts: Workout[], date: Date): Workout | null {
+  if (!isWeekdayDate(date)) return null;
+
+  const annualKey = toAnnualTemplateDate(date);
+  const exact = workouts.find((workout) => workout.workoutDate === annualKey);
+  if (exact) return exact;
+
+  return (
+    workouts.find((workout) => {
+      if (!workout.workoutDate || isAnnualTemplateDate(workout.workoutDate)) return false;
+      return workout.workoutDate.slice(5) === annualKey.slice(5);
+    }) ?? null
   );
-
-  if (error || !data) return null;
-
-  return mapEntreno(data as EntrenoRow);
 }

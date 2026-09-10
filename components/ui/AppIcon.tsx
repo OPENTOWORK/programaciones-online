@@ -1,6 +1,6 @@
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 
-import { colors } from '@/constants/theme';
+import { colors, withAlpha } from '@/constants/theme';
 import { resolveIconName, type AppIconName } from '@/constants/icons';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -25,6 +25,7 @@ interface IconBadgeProps {
   size?: number;
   containerSize?: number;
   color?: string;
+  outlined?: boolean;
   style?: ViewStyle;
 }
 
@@ -33,6 +34,7 @@ export function IconBadge({
   size = 26,
   containerSize = 52,
   color = colors.accent,
+  outlined = false,
   style,
 }: IconBadgeProps) {
   return (
@@ -47,16 +49,16 @@ export function IconBadge({
         style,
       ]}
     >
-      <AppIcon name={name} size={size} color={color} />
+      <AppIcon name={name} size={size} color={color} outlined={outlined} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   badge: {
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
     borderWidth: 1,
-    borderColor: `${colors.accent}33`,
+    borderColor: withAlpha(colors.accent, '33'),
     alignItems: 'center',
     justifyContent: 'center',
   },

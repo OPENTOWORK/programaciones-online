@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { NutritionPlanContent } from '@/components/program/NutritionPlanContent';
-import { PersonalizedPlanContent } from '@/components/program/PersonalizedPlanContent';
 import { NutritionPlanBuilder } from '@/components/trainer/NutritionPlanBuilder';
 import {
   PersonalizedPlanSessionLayout,
@@ -19,16 +18,20 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { SessionPdfCard } from '@/components/workout/SessionPdfCard';
+import { SessionWorkoutView } from '@/components/workout/SessionWorkoutView';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import { useAthletePlan, useTrainerAthletePlans } from '@/hooks/useAthletePlans';
+import { useAuth } from '@/hooks/useAuth';
+import { useExerciseVideos } from '@/hooks/useExerciseVideos';
 import { fetchAthletePlansForAthlete } from '@/lib/athletePlanService';
 import {
   parseSchedulePreviewItemKey,
   type SchedulePreviewItem,
 } from '@/lib/programSchedulePreview';
 import { normalizeRouteParam } from '@/lib/routeParams';
-import { safeGoBack } from '@/lib/navigation';
+import { getTrainerAthleteProfileHref, safeGoBack } from '@/lib/navigation';
 import {
   findPlanGroup,
   getNextSessionNumber,
@@ -39,8 +42,11 @@ import {
 import { createEmptyNutritionPlan } from '@/lib/nutritionPlanContent';
 import { openPlanPdf } from '@/lib/openPlanPdf';
 import { pickPlanPdf, type PickedPlanPdf } from '@/lib/planPdfPicker';
+import { importAthletePlanPdfToCalendar, resolvePlanPdfWeekStartDate } from '@/lib/planPdfImportService';
+import { hasSessionBlockContent } from '@/lib/sessionBlockSections';
 import {
   createPersonalizedPlanPreviewProgram,
+  isPdfOnlyPlanSession,
   isStructuredPersonalizedPlanContent,
   parsePersonalizedPlanContent,
   serializePersonalizedPlanContent,
@@ -51,7 +57,7 @@ import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
 import { moveCalendarSessionToDate } from '@/lib/moveCalendarSession';
 import { collectExerciseNamesFromSessionDraft } from '@/lib/exerciseTextParser';
 import { syncExerciseVideosForNames } from '@/lib/exerciseVideoSyncService';
-import { createEmptySessionDraft, createRestDayDraft, renameSessionCopy, type SessionDraft } from '@/lib/trainerSessionDraft';
+import { createEmptySessionDraft, createRestDayDraft, PDF_SESSION_DURATION, pdfSessionTitle, renameSessionCopy, type SessionDraft } from '@/lib/trainerSessionDraft';
 import { ATHLETE_PLAN_TYPE_LABELS, isSessionBasedAthletePlanType } from '@/lib/trainerConstants';
 import type { AthletePlan, AthletePlanType, NutritionPlanData } from '@/lib/types';
 import {
@@ -59,7 +65,9 @@ import {
   toLocalDateString,
   toWeekdayIndex,
 } from '@/lib/sessionSchedule';
+import { allowsTrainerFeedbackVideos } from '@/lib/feedbackVideoAccess';
 import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
+import { draftToPreviewWorkout } from '@/lib/trainerPreviewContext';
 
 function applyDateToDraft(draft: SessionDraft, date: Date): SessionDraft {
   const schedule = {
@@ -94,6 +102,8 @@ export default function TrainerPlanDetailScreen() {
   const wantsGroupEdit = editParam === 'group';
 
   const { plan, isLoading, error: loadError, refresh } = useAthletePlan(planId);
+  const { user } = useAuth();
+  const { getVideoId, hasVideo } = useExerciseVideos();
   const { createPlan, updatePlan, removePlan } = useTrainerAthletePlans();
 
   const [mode, setMode] = useState<'view' | 'edit' | 'editGroup'>('view');
@@ -106,13 +116,33 @@ export default function TrainerPlanDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [pickingPdf, setPickingPdf] = useState(false);
+  const [importingPdf, setImportingPdf] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [groupSessions, setGroupSessions] = useState<AthletePlan[]>([]);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const isNutrition = plan?.planType === 'nutrition';
   const hasStructuredNutrition = Boolean(plan?.nutritionData && plan.nutritionData.meals.length > 0);
-  const hasStructuredPersonalized = Boolean(plan?.content && isStructuredPersonalizedPlanContent(plan.content));
+
+  const athleteSessionPreview = useMemo(() => {
+    if (!plan?.content || !isStructuredPersonalizedPlanContent(plan.content)) return null;
+
+    const draft = parsePersonalizedPlanContent(plan.content, (plan.sessionNumber ?? 1) - 1);
+    const isPdfOnly = isPdfOnlyPlanSession(plan, draft);
+    const sessionName =
+      isPdfOnly && plan.pdfFileName
+        ? pdfSessionTitle(plan.pdfFileName)
+        : draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
+
+    return {
+      draft,
+      workout: {
+        ...draftToPreviewWorkout(draft, sessionName),
+        sessionNumber: plan.sessionNumber ?? 1,
+        estimatedDuration: isPdfOnly ? PDF_SESSION_DURATION : draft.estimatedDuration,
+      },
+    };
+  }, [plan]);
 
   const resetFormFromPlan = () => {
     if (!plan) return;
@@ -239,7 +269,7 @@ export default function TrainerPlanDetailScreen() {
 
     if (sessionId === plan?.id) {
       setCalendarOpen(false);
-      safeGoBack(router, { pathname: '/trainer/athlete/[id]/calendar', params: { id: plan.athleteId } });
+      safeGoBack(router, getTrainerAthleteProfileHref(plan.athleteId));
       return null;
     }
 
@@ -247,7 +277,7 @@ export default function TrainerPlanDetailScreen() {
     return null;
   };
 
-  const handleViewCalendarCopy = async (item: SchedulePreviewItem) => {
+  const handleViewCalendarCopy = async (item: SchedulePreviewItem, targetDate: Date) => {
     if (!plan) return 'No se pudo copiar la sesión.';
     const sessionId = planIdFromCalendarItem(item);
     const source = groupSessions.find((session) => session.id === sessionId);
@@ -255,7 +285,7 @@ export default function TrainerPlanDetailScreen() {
 
     const nextNumber = getNextSessionNumber(groupSessions);
     const draft = parsePersonalizedPlanContent(source.content, (source.sessionNumber ?? 1) - 1);
-    const copiedDraft = renameSessionCopy(draft, nextNumber);
+    const copiedDraft = applyDateToDraft(renameSessionCopy(draft, nextNumber), targetDate);
     const result = await createPlan({
       athleteId: source.athleteId,
       planType: plan.planType,
@@ -353,6 +383,61 @@ export default function TrainerPlanDetailScreen() {
 
     setRemovePdfFlag(false);
     setAttachedPdf(picked);
+  };
+
+  const handleImportPdfToCalendar = async () => {
+    if (!plan || !user?.id) return;
+
+    const pdfSource: PickedPlanPdf | null =
+      attachedPdf ??
+      (plan.pdfUrl
+        ? {
+            uri: plan.pdfUrl,
+            fileName: plan.pdfFileName ?? 'plan.pdf',
+            mimeType: 'application/pdf',
+          }
+        : null);
+
+    if (!pdfSource) {
+      setFormError('Adjunta un PDF antes de importarlo al calendario.');
+      return;
+    }
+
+    setImportingPdf(true);
+    setFormError(null);
+
+    const scheduleStart = sessionDraft.schedule.startDate;
+    const weekStartDate = resolvePlanPdfWeekStartDate(scheduleStart);
+
+    try {
+      const result = await importAthletePlanPdfToCalendar({
+        athleteId: plan.athleteId,
+        trainerId: user.id,
+        title: title.trim() || plan.title,
+        pdf: pdfSource,
+        athleteName: plan.athleteName,
+        planGroupId: getPlanGroupId(plan),
+        weekStartDate,
+        replacePlanIds: groupSessions.map((session) => session.id),
+      });
+
+      if (result.error) {
+        setFormError(result.error);
+        return;
+      }
+
+      const firstPlan = result.plans[0];
+      await refresh();
+      if (firstPlan) {
+        router.replace({ pathname: '/trainer/plan/[id]', params: { id: firstPlan.id } });
+      }
+    } catch (importError) {
+      setFormError(
+        importError instanceof Error ? importError.message : 'No se pudo importar el PDF al calendario',
+      );
+    } finally {
+      setImportingPdf(false);
+    }
   };
 
   const handleTitleChange = (value: string) => {
@@ -465,6 +550,19 @@ export default function TrainerPlanDetailScreen() {
 
     try {
       if (!isNutrition) {
+        const groupHasContent = groupSessions.some((session) => {
+          const draft = parsePersonalizedPlanContent(session.content, (session.sessionNumber ?? 1) - 1);
+          return hasSessionBlockContent(draft);
+        });
+        const currentHasContent = hasSessionBlockContent(sessionDraft);
+        const hasPdfSource = Boolean(attachedPdf) || Boolean(plan.pdfFileName && !removePdfFlag);
+
+        if (hasPdfSource && !groupHasContent && !currentHasContent) {
+          await handleImportPdfToCalendar();
+          setMode('view');
+          return;
+        }
+
         const draftError = await persistSessionDraft(sessionDraft);
         if (draftError) {
           setFormError(draftError);
@@ -547,7 +645,7 @@ export default function TrainerPlanDetailScreen() {
         return;
       }
 
-      safeGoBack(router, `/trainer/athlete/${plan.athleteId}/calendar`);
+      safeGoBack(router, getTrainerAthleteProfileHref(plan.athleteId));
     };
 
     if (Platform.OS === 'web') {
@@ -626,6 +724,17 @@ export default function TrainerPlanDetailScreen() {
                   </Text>
                 </Pressable>
                 <View style={styles.sessionRowActions}>
+                  {!active ? (
+                    <Pressable
+                      onPress={() =>
+                        router.replace({ pathname: '/trainer/plan/[id]', params: { id: session.id } })
+                      }
+                      hitSlop={6}
+                      style={styles.sessionChevronBtn}
+                    >
+                      <Text style={styles.planChevron}>›</Text>
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     onPress={() => setCalendarOpen(true)}
                     accessibilityLabel="Ver en el calendario"
@@ -635,18 +744,6 @@ export default function TrainerPlanDetailScreen() {
                     <Ionicons name="calendar-outline" size={14} color={colors.accent} />
                     <Text style={styles.calendarBtnText}>Calendario</Text>
                   </Pressable>
-                  {active ? (
-                    <Text style={styles.sessionCurrent}>Actual</Text>
-                  ) : (
-                    <Pressable
-                      onPress={() =>
-                        router.replace({ pathname: '/trainer/plan/[id]', params: { id: session.id } })
-                      }
-                      hitSlop={6}
-                    >
-                      <Text style={styles.planChevron}>›</Text>
-                    </Pressable>
-                  )}
                 </View>
               </View>
             );
@@ -745,30 +842,71 @@ export default function TrainerPlanDetailScreen() {
 
       {mode === 'view' ? (
         <>
-          <Card style={styles.contentCard}>
-            {hasStructuredNutrition ? (
+          {hasStructuredNutrition ? (
+            <Card style={styles.contentCard}>
               <NutritionPlanContent data={plan.nutritionData!} />
-            ) : hasStructuredPersonalized ? (
-              <PersonalizedPlanContent content={plan.content} sessionNumber={plan.sessionNumber ?? undefined} />
-            ) : plan.content ? (
-              <Text style={styles.contentText}>{plan.content}</Text>
-            ) : null}
+            </Card>
+          ) : athleteSessionPreview ? (
+            <View style={styles.athletePreview}>
+              <SessionWorkoutView
+                workout={athleteSessionPreview.workout}
+                meta={[athleteSessionPreview.draft.dayLabel, athleteSessionPreview.workout.estimatedDuration]
+                  .filter(Boolean)
+                  .join(' · ')}
+                checklist={[]}
+                completed={{}}
+                feelings=""
+                onFeelingsChange={() => {}}
+                onToggleItem={() => {}}
+                onSave={() => {}}
+                saving={false}
+                getVideoId={getVideoId}
+                hasVideo={hasVideo}
+                preview
+                allowFeedbackVideos={allowsTrainerFeedbackVideos({ planType: plan.planType })}
+                attachment={
+                  plan.pdfUrl ? (
+                    <SessionPdfCard fileName={plan.pdfFileName} url={plan.pdfUrl} />
+                  ) : null
+                }
+              />
+              {plan.pdfUrl && !isNutrition ? (
+                <Button
+                  title="Desglosar PDF en días del calendario"
+                  onPress={() => void handleImportPdfToCalendar()}
+                  loading={importingPdf}
+                  style={styles.pdfImportBtn}
+                />
+              ) : null}
+            </View>
+          ) : (
+            <Card style={styles.contentCard}>
+              {plan.content ? <Text style={styles.contentText}>{plan.content}</Text> : null}
 
-            {plan.pdfUrl ? (
-              <View style={styles.pdfWrap}>
-                <AppIcon name="programs" size={16} color={colors.textMuted} />
-                <View style={styles.pdfInfo}>
-                  <Text style={styles.pdfLabel}>{plan.pdfFileName ?? 'Plan.pdf'}</Text>
-                  <Button
-                    title="Ver PDF"
-                    variant="outline"
-                    onPress={() => void openPlanPdf(plan.pdfUrl!)}
-                    style={styles.pdfOpenBtn}
-                  />
+              {plan.pdfUrl ? (
+                <View style={styles.pdfWrap}>
+                  <AppIcon name="programs" size={16} color={colors.textMuted} />
+                  <View style={styles.pdfInfo}>
+                    <Text style={styles.pdfLabel}>{plan.pdfFileName ?? 'Plan.pdf'}</Text>
+                    <Button
+                      title="Ver PDF"
+                      variant="outline"
+                      onPress={() => void openPlanPdf(plan.pdfUrl!)}
+                      style={styles.pdfOpenBtn}
+                    />
+                    {!isNutrition ? (
+                      <Button
+                        title="Desglosar PDF en días del calendario"
+                        onPress={() => void handleImportPdfToCalendar()}
+                        loading={importingPdf}
+                        style={styles.pdfOpenBtn}
+                      />
+                    ) : null}
+                  </View>
                 </View>
-              </View>
-            ) : null}
-          </Card>
+              ) : null}
+            </Card>
+          )}
 
           {formError ? <Text style={styles.error}>{formError}</Text> : null}
 
@@ -910,7 +1048,7 @@ export default function TrainerPlanDetailScreen() {
           visible={calendarOpen}
           onClose={() => setCalendarOpen(false)}
           title={plan.title}
-          subtitle={`Sesiones programadas de ${plan.athleteName ?? 'este atleta'}. Despliega una sesión para ver su contenido.`}
+          subtitle={`Sesiones programadas de ${plan.athleteName ?? 'este atleta'}.`}
           source={viewCalendarSource}
           loadSessionDraft={loadViewCalendarSessionDraft}
           buildSessionDraft={(date) =>
@@ -944,6 +1082,8 @@ const styles = StyleSheet.create({
   title: { ...typography.h2, color: colors.text },
   meta: { ...typography.caption, color: colors.textMuted, marginTop: 4 },
   contentCard: { marginBottom: spacing.md },
+  athletePreview: { marginBottom: spacing.md, gap: spacing.md },
+  pdfImportBtn: { alignSelf: 'stretch' },
   contentText: { ...typography.bodySmall, color: colors.textSecondary, lineHeight: 22 },
   pdfWrap: {
     flexDirection: 'row',
@@ -994,7 +1134,7 @@ const styles = StyleSheet.create({
   },
   sessionRowActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}10`,
+    backgroundColor: withAlpha(colors.accent, '10'),
   },
   sessionRowMain: {
     flex: 1,
@@ -1011,7 +1151,13 @@ const styles = StyleSheet.create({
   sessionRowActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
+    flexShrink: 0,
+  },
+  sessionChevronBtn: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calendarBtn: {
     flexDirection: 'row',
@@ -1021,18 +1167,14 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: `${colors.accent}55`,
-    backgroundColor: `${colors.accent}14`,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '14'),
+    flexShrink: 0,
   },
   calendarBtnPressed: {
-    backgroundColor: `${colors.accent}26`,
+    backgroundColor: withAlpha(colors.accent, '26'),
   },
   calendarBtnText: {
-    ...typography.caption,
-    color: colors.accent,
-    fontWeight: '700',
-  },
-  sessionCurrent: {
     ...typography.caption,
     color: colors.accent,
     fontWeight: '700',
@@ -1040,6 +1182,7 @@ const styles = StyleSheet.create({
   planChevron: {
     ...typography.h3,
     color: colors.textMuted,
+    lineHeight: 22,
   },
   addSessionBtn: {
     marginTop: spacing.sm,

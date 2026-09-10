@@ -1,11 +1,14 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/ui/AppIcon';
+import { NavCountBadge } from '@/components/ui/NavCountBadge';
 import { colors } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import { useAuth } from '@/hooks/useAuth';
+import { useTrainerNotifications } from '@/hooks/useTrainerNotifications';
+import { isTrainerRole } from '@/lib/athleteService';
+import { useBottomSafeInset } from '@/lib/mobileInsets';
 
 type TabHref = '/tabs/home' | '/tabs/programs' | '/tabs/progress' | '/tabs/trainer' | '/tabs/profile';
 
@@ -13,14 +16,17 @@ type TabItem = {
   href: TabHref;
   label: string;
   icon: AppIconName;
+  badge?: number;
   match: (pathname: string) => boolean;
 };
 
 export function AthleteTabBar() {
   const router = useRouter();
   const pathname = usePathname();
-  const insets = useSafeAreaInsets();
+  const bottomInset = useBottomSafeInset();
   const { user } = useAuth();
+  const isTrainer = isTrainerRole(user?.role);
+  const { counts } = useTrainerNotifications();
 
   const tabs: TabItem[] = [
     {
@@ -52,21 +58,23 @@ export function AthleteTabBar() {
     },
     {
       href: '/tabs/trainer',
-      label: user?.role === 'entrenador' ? 'Atletas' : 'Entrenador',
+      label: isTrainer ? 'Atletas' : 'Entrenador',
       icon: 'trainer',
+      badge: isTrainer ? counts.sessions + counts.intake + counts.appointment : 0,
       match: (path) => path.startsWith('/tabs/trainer'),
     },
     {
       href: '/tabs/profile',
       label: 'Perfil',
       icon: 'profile',
+      badge: isTrainer ? counts.total : 0,
       match: (path) =>
         path.startsWith('/tabs/profile') || path.startsWith('/profile/'),
     },
   ];
 
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View style={[styles.bar, { paddingBottom: bottomInset }]}>
       {tabs.map((tab) => {
         const focused = tab.match(pathname);
 
@@ -76,7 +84,11 @@ export function AthleteTabBar() {
             onPress={() => router.push(tab.href)}
             accessibilityRole="button"
             accessibilityState={{ selected: focused }}
-            accessibilityLabel={tab.label}
+            accessibilityLabel={
+              tab.badge
+                ? `${tab.label}, ${tab.badge} aviso${tab.badge === 1 ? '' : 's'}`
+                : tab.label
+            }
             style={styles.item}
           >
             <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
@@ -86,6 +98,11 @@ export function AthleteTabBar() {
                 color={focused ? colors.accent : colors.textMuted}
                 outlined={!focused}
               />
+              {tab.badge ? (
+                <View style={styles.badgeWrap}>
+                  <NavCountBadge count={tab.badge} />
+                </View>
+              ) : null}
             </View>
             <Text style={[styles.label, focused && styles.labelActive]}>{tab.label}</Text>
           </Pressable>
@@ -114,6 +131,12 @@ const styles = StyleSheet.create({
   iconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  badgeWrap: {
+    position: 'absolute',
+    top: -8,
+    right: -14,
   },
   iconWrapActive: {
     transform: [{ scale: 1.05 }],

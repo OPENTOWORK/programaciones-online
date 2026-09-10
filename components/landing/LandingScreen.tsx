@@ -14,7 +14,7 @@ import {
 import { AppIcon } from '@/components/ui/AppIcon';
 import { AppLogo } from '@/components/ui/AppLogo';
 import { PRIVACY_POLICY_ROUTE } from '@/constants/legal';
-import { borderRadius, colors, shadows, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, shadows, spacing, typography, withAlpha } from '@/constants/theme';
 
 const ANDROID_APP_URL = 'https://play.google.com/store/apps/details?id=com.trainingprogline.app';
 
@@ -55,15 +55,12 @@ export function LandingScreen() {
     <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
       <View style={[styles.page, isWide && styles.pageWide]}>
         <View style={styles.brand}>
-          <AppLogo size={40} />
-          <View>
-            <Text style={styles.brandName}>Training ProgLine</Text>
-            <Text style={styles.brandTagline}>Entrenamiento con método</Text>
-          </View>
+          <AppLogo size={56} />
+          <Text style={styles.brandTagline}>Entrenamiento con método</Text>
         </View>
 
         <LinearGradient
-          colors={[`${colors.accent}1F`, 'transparent']}
+          colors={[withAlpha(colors.accent, '1F'), 'transparent']}
           style={[styles.hero, isWide && styles.heroWide]}
         >
           <Text style={styles.eyebrow}>Programaciones personalizadas</Text>
@@ -154,9 +151,8 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   brand: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
+    alignItems: 'flex-start',
+    gap: spacing.xs,
   },
   brandName: {
     ...typography.h3,
@@ -279,7 +275,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: borderRadius.md,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: withAlpha(colors.accent, '14'),
     alignItems: 'center',
     justifyContent: 'center',
   },

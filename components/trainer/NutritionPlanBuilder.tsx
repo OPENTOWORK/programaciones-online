@@ -5,7 +5,7 @@ import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from '
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import {
   cloneMealForDay,
   createEmptyFoodItem,
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   },
   dayTabActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   dayTabText: {
     ...typography.bodySmall,

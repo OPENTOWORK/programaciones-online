@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import {
   getWeekDays,
   itemsForDate,
@@ -33,8 +33,15 @@ function sessionCardStyle(item: SchedulePreviewItem) {
   if (item.kind === 'activation') return styles.sessionActivation;
   if (item.kind === 'metcon') return styles.sessionMetcon;
   if (item.kind === 'rest') return styles.sessionRest;
+  if (item.kind === 'pdf') return styles.sessionPdf;
   if (item.isCurrent) return styles.sessionCurrent;
   return styles.sessionDefault;
+}
+
+function sessionMetaLabel(item: SchedulePreviewItem) {
+  if (item.kind === 'rest') return 'Día de descanso';
+  if (item.kind === 'pdf') return 'PDF adjunto';
+  return item.estimatedDuration;
 }
 
 export function AthleteWeekListView({
@@ -107,9 +114,7 @@ export function AthleteWeekListView({
                       <Text style={styles.sessionName} numberOfLines={2}>
                         {item.name}
                       </Text>
-                      <Text style={styles.sessionMeta}>
-                        {item.kind === 'rest' ? 'Día de descanso' : item.estimatedDuration}
-                      </Text>
+                      <Text style={styles.sessionMeta}>{sessionMetaLabel(item)}</Text>
                     </View>
                     {onSessionPress ? <Text style={styles.sessionAction}>Ver</Text> : null}
                   </Pressable>
@@ -136,8 +141,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   dayCardToday: {
-    borderColor: `${colors.accent}99`,
-    backgroundColor: `${colors.accent}0F`,
+    borderColor: withAlpha(colors.accent, '99'),
+    backgroundColor: withAlpha(colors.accent, '0F'),
   },
   dayCardEmpty: {
     opacity: 0.72,
@@ -207,7 +212,7 @@ const styles = StyleSheet.create({
   },
   sessionCurrent: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: withAlpha(colors.accent, '14'),
   },
   sessionActivation: {
     borderColor: `${colors.activation}99`,
@@ -220,6 +225,10 @@ const styles = StyleSheet.create({
   sessionRest: {
     borderColor: `${colors.restDay}99`,
     backgroundColor: `${colors.restDay}1A`,
+  },
+  sessionPdf: {
+    borderColor: withAlpha(colors.textSecondary, '55'),
+    backgroundColor: withAlpha(colors.textSecondary, '12'),
   },
   sessionPressed: {
     opacity: 0.88,

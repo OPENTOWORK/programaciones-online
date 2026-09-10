@@ -1,0 +1,121 @@
+✓ 14 productos migrados a rutas por tema
+Generando 77 imágenes para Hype (tema: rose)…
+→ 1 Agua · rose… ok
+→ 2 Barebells chocolatina · rose… ok
+→ 3 Barrita Staff · rose… ok
+→ 4 Batido · rose… ok
+→ 5 Batido Staff · rose… ok
+→ 6 Belevels - Clean gut · rose… ok
+→ 7 Belevels - Gutday · rose… ok
+→ 8 Belevels - Omega 3 · rose… ok
+→ 9 Belevels - Triple magnesium · rose… ok
+→ 10 Belevels be calm · rose… ok
+→ 11 Belevels Chill mood · rose… ok
+→ 12 Belevels Colageno · rose… ok
+→ 13 Belevels Fem Balance · rose… ok
+→ 14 Belevels Vitamina D3 + K2 · rose… ok
+→ 15 Belevels Wake up · rose… ok
+→ 16 Bono Personal 10 · rose… ok
+→ 17 calcetines · rose… ok
+→ 18 Calleras - Quad Pro · rose… ok
+→ 19 Calleras Quad Competition · rose… ok
+→ 20 COLETERO VELITES · rose… ok
+→ 21 Comba earth · rose… ok
+→ 22 Creatina 500 creapure · rose… ok
+→ 23 Crema Magma · rose… ok
+→ 24 Crema Polar · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 25 Crop Top Holo Coral · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 26 Crop Top Holo Negro by HY-PE · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 27 Drop in · rose… ok
+→ 28 EAAS · rose… ok
+→ 29 Foam roller · rose… ok
+→ 30 Gafas Sol Horizon · rose… ok
+→ 31 Gafas Sol Raptor · rose… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 32 Gafas Sol Urban · rose… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 33 Gorra · rose… ok
+→ 34 Hy-pe - Parche · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 35 Hybrid 1.0 - Bubblegum · rose… ok
+→ 36 Hybrid 1.0 - Caribbean Blue · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 37 Hybrid 1.0 - Deep forest · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 38 Hybrid 1.0 - Deep ocean · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 39 L-Carnitina · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 40 Leggin largo burdeos · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 41 Leggin largo negro · rose… ok
+→ 42 Legging Coral Corto · rose… ok
+→ 43 Leggins Largo Morado · rose… ok
+→ 44 Leggins Largos Verdes · rose… ok
+→ 45 Lija manos · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 46 Magnesio liquido · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 47 Minimal 1.0 · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 48 Mochila Storm · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 49 Mochila Urban · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 50 QNS - Glucogen · rose… ok
+→ 51 QNS - ISO - PROTEIN 1KG · rose… ok
+→ 52 QNS Magnesio 4 · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 53 QNS Super omega 3 · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 54 Red Bull · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 55 Riñonera Urban · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 56 Shirt 1.0 - Black · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 57 Shirt 1.0 - Coral · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 58 Shirt 1.0 - Gris · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 59 Short Holo · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 60 Sudadera Holo - Black · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 61 T-shirt Holo Black · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 62 T-Shirt Holo Coral · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 63 T-Shirt Holo Gris · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 64 Taza - Drop 1.0 · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 65 Totebag urban · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 66 Velites - Calleras Quad ultra · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 67 Velites - Cinturon · rose… ok
+→ 68 Velites - gorro · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 69 Velites - Head Band · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 70 Velites - mochila · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 71 Velites - Muñequeras nylon · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 72 Velites - Muñequeras tela · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 73 Velites Calleras All terrain · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 74 Velites Comba Cyclone · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 75 Velites Comba Fire 2.0 · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 76 Vitamin well · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 77 Vitamina D3 · rose… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+✓ 36 imágenes generadas, 41 fallos.
+  · Crema Polar (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Crop Top Holo Coral (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Crop Top Holo Negro by HY-PE (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Gafas Sol Raptor (rose): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Gafas Sol Urban (rose): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Hy-pe - Parche (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hybrid 1.0 - Caribbean Blue (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hybrid 1.0 - Deep forest (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hybrid 1.0 - Deep ocean (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · L-Carnitina (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Leggin largo burdeos (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Lija manos (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Magnesio liquido (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Minimal 1.0 (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Mochila Storm (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Mochila Urban (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS Magnesio 4 (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS Super omega 3 (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Red Bull (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Riñonera Urban (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Black (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Coral (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Gris (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Short Holo (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Sudadera Holo - Black (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-shirt Holo Black (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-Shirt Holo Coral (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-Shirt Holo Gris (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Taza - Drop 1.0 (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Totebag urban (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Calleras Quad ultra (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - gorro (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Head Band (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - mochila (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Muñequeras nylon (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Muñequeras tela (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Calleras All terrain (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Comba Cyclone (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Comba Fire 2.0 (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Vitamin well (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Vitamina D3 (rose): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.

@@ -14,6 +14,7 @@ export interface FeedbackAttachmentDraft {
   mimeType: string;
   fileName: string;
   durationSeconds?: number;
+  file?: Blob;
 }
 
 function extensionFor(kind: TrainerFeedbackAttachmentKind, mimeType: string) {
@@ -167,7 +168,9 @@ export async function uploadFeedbackAttachment(input: {
   if (!supabase) return { error: 'Supabase no está disponible.' };
 
   try {
-    const fileData = await uriToArrayBuffer(draft.uri);
+    const fileData = draft.file
+      ? await draft.file.arrayBuffer()
+      : await uriToArrayBuffer(draft.uri);
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, fileData, {
       contentType: draft.mimeType,
       upsert: false,

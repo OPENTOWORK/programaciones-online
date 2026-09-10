@@ -1,21 +1,26 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
-import { borderRadius, goalLabels, levelColors, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, goalLabels, levelColors, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAthlete } from '@/hooks/useAthletes';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
+import { useAthleteIntakeForms } from '@/hooks/useAthleteIntakeForms';
 import { useAuth } from '@/hooks/useAuth';
+import { useCanManageAthleteChat } from '@/hooks/useCanManageAthleteChat';
+import { isAdminRole } from '@/lib/athleteService';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { usePhysicalProfile } from '@/hooks/usePhysicalProfile';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
+import { useTrainerAthleteFeedback } from '@/hooks/useTrainerAthleteFeedback';
 import { useTrainerCrmActivity } from '@/hooks/useTrainerCrmActivity';
 import { fetchAthletePlansForAthlete } from '@/lib/athletePlanService';
-import { copyCalendarDaySessions } from '@/lib/copyCalendarDaySessions';
+import { copyCalendarDaySessions, copyCalendarSession } from '@/lib/copyCalendarDaySessions';
 import {
   createPersonalizedPlanPreviewProgram,
   parsePersonalizedPlanContent,
@@ -23,6 +28,8 @@ import {
   validatePersonalizedPlanDraft,
 } from '@/lib/personalizedPlanContent';
 import { getNextSessionNumber, groupPersonalizedPlans, splitAssignedPlans, type PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
+import { applyPlanValidityToContent, countSessionsOutsidePlanValidity, earliestScheduledDateForPlans, formatPlanDateDisplay, type PlanValidity } from '@/lib/planValidity';
+import { convertSessionContentToWeeklyRecurrence } from '@/lib/planGroupRecurrence';
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
 import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
@@ -46,16 +53,23 @@ import {
 } from '@/lib/bodyMetrics';
 import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
 import { fetchAthleteSessionLogs } from '@/lib/sessionLogService';
-import { markAthleteDetailAlertsRead } from '@/lib/trainerAthleteAlerts';
+import {
+  markAthleteAlertRead,
+  withAlertSourceCleared,
+  type AlertSource,
+} from '@/lib/trainerAthleteAlerts';
 import type { AthletePlan } from '@/lib/types';
-import { AthleteSessionLogCard } from '@/components/trainer/AthleteSessionLogCard';
+import { AlertDismissButton } from '@/components/trainer/AlertDismissButton';
+import { AthleteSessionLogsPanel } from '@/components/trainer/AthleteSessionLogsPanel';
 import { AthleteFeedbackPanel } from '@/components/trainer/AthleteFeedbackPanel';
+import { AthleteProgressPanel } from '@/components/trainer/AthleteProgressPanel';
 import {
   ScheduleCalendarModal,
   type CalendarSessionSaveInput,
 } from '@/components/trainer/ScheduleCalendarModal';
 import { AssignedPlansList } from '@/components/program/AssignedPlansList';
 import { IntakeAnswersTable } from '@/components/trainer/IntakeAnswersTable';
+import { DynamicIntakeAnswersTable } from '@/components/intake/DynamicIntakeAnswersTable';
 
 function formatActivityDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -78,24 +92,18 @@ function formatOptionalValue(value: string | number | undefined, suffix = '') {
   return `${value}${suffix}`;
 }
 
-function confirmDestructiveAction(message: string, onConfirm: () => void) {
-  if (Platform.OS === 'web') {
-    if (window.confirm(message)) {
-      onConfirm();
-    }
-    return;
-  }
-
-  Alert.alert('Confirmar', message, [
-    { text: 'Cancelar', style: 'cancel' },
-    { text: 'Eliminar', style: 'destructive', onPress: onConfirm },
-  ]);
-}
+type PendingDelete = {
+  title: string;
+  message: string;
+  onConfirm: () => void;
+};
 
 export default function AthleteDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
+  const canOpenAthleteCalendar = isAdminRole(user?.role);
+  const canChat = useCanManageAthleteChat(id ?? '');
   const { removePlan, createPlan, updatePlan } = useTrainerAthletePlans();
   const { athlete, isLoading, refresh: refreshAthlete } = useAthlete(id ?? '');
   const {
@@ -105,19 +113,33 @@ export default function AthleteDetailScreen() {
     addNote,
     removeEntry: removeActivityEntry,
   } = useTrainerCrmActivity(id ?? '');
-  const { form: intakeForm, isLoading: intakeLoading, isComplete: intakeComplete } = useAthleteIntakeForm(id);
+  const { form: intakeForm, isLoading: intakeLoading, isComplete: intakeComplete, usesCustomForms } =
+    useAthleteIntakeForm(id, user?.id);
+  const { statuses: intakeStatuses, isLoading: intakeStatusesLoading } = useAthleteIntakeForms(id, user?.id);
   const {
     basics: physicalBasics,
     measured: physicalMeasured,
     derived: physicalDerived,
+    history: physicalHistory,
   } = usePhysicalProfile(id, { heightCm: athlete?.height, weightKg: athlete?.weight });
+  const athleteFeedback = useTrainerAthleteFeedback(id ?? '');
   const [noteText, setNoteText] = useState('');
   const [assignedPlans, setAssignedPlans] = useState<AthletePlan[]>([]);
   const [sessionLogs, setSessionLogs] = useState<Awaited<ReturnType<typeof fetchAthleteSessionLogs>>>([]);
+  const [sessionLogViewMode, setSessionLogViewMode] = useState<'list' | 'calendar'>('list');
+  const [dismissedAlertSources, setDismissedAlertSources] = useState<AlertSource[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [logsLoading, setLogsLoading] = useState(true);
   const [planActionError, setPlanActionError] = useState<string | null>(null);
   const [calendarGroup, setCalendarGroup] = useState<PersonalizedPlanGroup | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [sectionsKey, setSectionsKey] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      setSectionsKey((current) => current + 1);
+    }, []),
+  );
 
   const loadAssignedPlans = useCallback(async () => {
     if (!id || !user?.id) {
@@ -173,16 +195,27 @@ export default function AthleteDetailScreen() {
   }, [id]);
 
   useEffect(() => {
-    if (
-      !id ||
-      !athlete?.alerts ||
-      (athlete.alerts.sessionCount === 0 && !athlete.alerts.intakeChanged)
-    ) {
-      return;
-    }
+    setDismissedAlertSources([]);
+  }, [id]);
 
-    void markAthleteDetailAlertsRead(id);
-  }, [id, athlete?.alerts]);
+  const visibleAlerts = useMemo(() => {
+    if (!athlete?.alerts) return null;
+    const hiddenSources = canChat ? dismissedAlertSources : [...dismissedAlertSources, 'chat' as AlertSource];
+    return hiddenSources.reduce(
+      (current, source) => withAlertSourceCleared(current, source),
+      athlete.alerts,
+    );
+  }, [athlete?.alerts, canChat, dismissedAlertSources]);
+
+  const dismissAlert = useCallback(
+    (source: AlertSource) => {
+      setDismissedAlertSources((current) => (current.includes(source) ? current : [...current, source]));
+      if (id) {
+        void markAthleteAlertRead(id, source);
+      }
+    },
+    [id],
+  );
 
   const handleDeletePlan = async (planId: string) => {
     const result = await removePlan(planId);
@@ -194,16 +227,20 @@ export default function AthleteDetailScreen() {
   };
 
   const handleDeleteSession = (planId: string, label: string) => {
-    confirmDestructiveAction(
-      `¿Eliminar ${label}? Esta acción no se puede deshacer.`,
-      () => void handleDeletePlan(planId),
-    );
+    setPendingDelete({
+      title: 'Eliminar sesión',
+      message: `Se eliminará ${label}. Esta acción no se puede deshacer.`,
+      onConfirm: () => void handleDeletePlan(planId),
+    });
   };
 
   const handleDeleteGroup = (group: PersonalizedPlanGroup) => {
-    confirmDestructiveAction(
-      `¿Eliminar el plan "${group.title}" y sus ${group.sessions.length} sesión${group.sessions.length === 1 ? '' : 'es'}?`,
-      () => {
+    const sessionCount = group.sessions.length;
+    const sessionLabel = sessionCount === 1 ? 'su sesión' : `sus ${sessionCount} sesiones`;
+    setPendingDelete({
+      title: 'Eliminar plan',
+      message: `Se eliminará «${group.title}» y ${sessionLabel}. Esta acción no se puede deshacer.`,
+      onConfirm: () => {
         void (async () => {
           for (const session of group.sessions) {
             const result = await removePlan(session.id);
@@ -215,14 +252,67 @@ export default function AthleteDetailScreen() {
           await loadAssignedPlans();
         })();
       },
-    );
+    });
+  };
+
+  const handleUpdateGroupValidity = async (group: PersonalizedPlanGroup, validity: PlanValidity) => {
+    setPlanActionError(null);
+
+    const hiddenCount = countSessionsOutsidePlanValidity(group.sessions, validity);
+    if (hiddenCount > 0) {
+      const earliest = earliestScheduledDateForPlans(group.sessions);
+      setPlanActionError(
+        `La vigencia ocultaría ${hiddenCount} sesión${hiddenCount === 1 ? '' : 'es'} del calendario. ` +
+          `La primera sesión programada es el ${earliest ? formatPlanDateDisplay(earliest) : '—'}: ajusta "Desde" a esa fecha o anterior.`,
+      );
+      return;
+    }
+
+    for (const session of group.sessions) {
+      const sessionNumber = session.sessionNumber ?? 1;
+      const content = applyPlanValidityToContent(session.content, validity);
+      const result = await updatePlan(session.id, {
+        athleteId: session.athleteId,
+        planType: session.planType,
+        title: session.title,
+        content,
+      });
+      if (result.error) {
+        setPlanActionError(result.error);
+        return;
+      }
+    }
+
+    await loadAssignedPlans();
+  };
+
+  const handleRepeatGroupWeekly = async (group: PersonalizedPlanGroup) => {
+    setPlanActionError(null);
+
+    for (const session of group.sessions) {
+      const sessionNumber = session.sessionNumber ?? 1;
+      const content = convertSessionContentToWeeklyRecurrence(session.content, sessionNumber);
+      const result = await updatePlan(session.id, {
+        athleteId: session.athleteId,
+        planType: session.planType,
+        title: session.title,
+        content,
+      });
+      if (result.error) {
+        setPlanActionError(result.error);
+        return;
+      }
+    }
+
+    await loadAssignedPlans();
   };
 
   const handleDeleteNutritionPlan = (planId: string, title: string) => {
-    confirmDestructiveAction(
-      `¿Eliminar el plan nutricional "${title}"? Esta acción no se puede deshacer.`,
-      () => void handleDeletePlan(planId),
-    );
+    setPendingDelete({
+      title: 'Eliminar plan nutricional',
+      message: `Se eliminará «${title}». Esta acción no se puede deshacer.`,
+      onConfirm: () => void handleDeletePlan(planId),
+    });
   };
 
   const openPlanGroupEditor = (group: PersonalizedPlanGroup) => {
@@ -283,25 +373,25 @@ export default function AthleteDetailScreen() {
     return null;
   };
 
-  const handleCalendarCopy = async (item: SchedulePreviewItem) => {
-    const planId = planIdFromCalendarItem(item);
-    const source = calendarGroup?.sessions.find((session) => session.id === planId);
-    if (!source || !calendarGroup || !user?.id) return 'No se pudo copiar la sesión.';
+  const handleCalendarCopy = async (item: SchedulePreviewItem, targetDate: Date) => {
+    if (!calendarGroup) return 'No hay plan cargado.';
 
-    const nextNumber = getNextSessionNumber(calendarGroup.sessions);
-    const draft = parsePersonalizedPlanContent(source.content, (source.sessionNumber ?? 1) - 1);
-    const copiedDraft = renameSessionCopy(draft, nextNumber);
-    const result = await createPlan({
-      athleteId: source.athleteId,
-      planType: 'personalized',
-      title: calendarGroup.title,
-      content: serializePersonalizedPlanContent(copiedDraft, nextNumber),
-      planGroupId: calendarGroup.planGroupId,
-      sessionNumber: nextNumber,
+    const error = await copyCalendarSession({
+      item,
+      targetDate,
+      planIdFromItem: planIdFromCalendarItem,
+      findPlan: (planId) => calendarGroup.sessions.find((session) => session.id === planId),
+      findPlanGroup: () => calendarGroup,
+      loadDraft: loadCalendarSessionDraft,
+      applyDateToDraft,
+      createPlan: async (input) => {
+        const result = await createPlan(input);
+        return { error: result.error };
+      },
       athleteName: athlete?.name,
     });
 
-    if (result.error) return result.error;
+    if (error) return error;
 
     await refreshCalendarGroup();
     return null;
@@ -448,7 +538,11 @@ export default function AthleteDetailScreen() {
   };
 
   const handleDeleteActivityEntry = (entryId: string) => {
-    confirmDestructiveAction('¿Eliminar esta entrada del seguimiento?', () => void removeActivityEntry(entryId));
+    setPendingDelete({
+      title: 'Eliminar entrada',
+      message: 'Se eliminará esta entrada del seguimiento. Esta acción no se puede deshacer.',
+      onConfirm: () => void removeActivityEntry(entryId),
+    });
   };
 
   if (isLoading) {
@@ -477,14 +571,23 @@ export default function AthleteDetailScreen() {
         </View>
         <Text style={styles.name}>{athlete.name}</Text>
         <Text style={styles.email}>{athlete.email}</Text>
-        <Pressable
-          onPress={() =>
-            router.push({ pathname: '/trainer/athlete/[id]/calendar', params: { id: athlete.id } })
-          }
-          style={({ pressed }) => [styles.calendarLink, pressed && styles.calendarLinkPressed]}
-        >
-          <Text style={styles.calendarLinkText}>Ver calendario del atleta</Text>
-        </Pressable>
+        {canChat ? (
+          <Button
+            title="Abrir chat"
+            onPress={() => router.push({ pathname: '/trainer/chat/[id]', params: { id: athlete.id } })}
+            style={styles.chatBtnHeader}
+          />
+        ) : null}
+        {canOpenAthleteCalendar ? (
+          <Pressable
+            onPress={() =>
+              router.push({ pathname: '/trainer/athlete/[id]/calendar', params: { id: athlete.id } })
+            }
+            style={({ pressed }) => [styles.calendarLink, pressed && styles.calendarLinkPressed]}
+          >
+            <Text style={styles.calendarLinkText}>Ver calendario del atleta</Text>
+          </Pressable>
+        ) : null}
         <View style={styles.badges}>
           {athlete.fitnessLevel ? (
             <Text style={[styles.badge, { color: levelColors[athlete.fitnessLevel] }]}>
@@ -497,45 +600,49 @@ export default function AthleteDetailScreen() {
         </View>
       </View>
 
-      {athlete.alerts && athlete.alerts.total > 0 ? (
+      <View key={sectionsKey}>
+      {visibleAlerts && visibleAlerts.total > 0 ? (
         <CollapsibleSection
           style={styles.alertCard}
-          title={`${athlete.alerts.total} alerta${athlete.alerts.total === 1 ? '' : 's'} pendiente${athlete.alerts.total === 1 ? '' : 's'}`}
+          title={`${visibleAlerts.total} alerta${visibleAlerts.total === 1 ? '' : 's'} pendiente${visibleAlerts.total === 1 ? '' : 's'}`}
           subtitle="Origen de las novedades de este atleta"
         >
-          {athlete.alerts.chatCount > 0 ? (
-            <Pressable
-              onPress={() =>
-                router.push({ pathname: '/trainer/chat/[id]', params: { id: athlete.id } })
-              }
-              style={({ pressed }) => [styles.alertRow, pressed && styles.alertRowPressed]}
-            >
-              <AppIcon name="chat" size={20} color={colors.warning} />
-              <View style={styles.alertCopy}>
-                <Text style={styles.alertTitle}>
-                  {athlete.alerts.chatCount} mensaje{athlete.alerts.chatCount === 1 ? '' : 's'} nuevo
-                  {athlete.alerts.chatCount === 1 ? '' : 's'} en el chat
-                </Text>
-                <Text style={styles.alertText}>Abre el chat para leer y quitar esta alerta.</Text>
-              </View>
-              <AppIcon name="chevronRight" size={18} color={colors.textMuted} />
-            </Pressable>
+          {visibleAlerts.chatCount > 0 ? (
+            <View style={styles.alertRow}>
+              <Pressable
+                onPress={() =>
+                  router.push({ pathname: '/trainer/chat/[id]', params: { id: athlete.id } })
+                }
+                style={({ pressed }) => [styles.alertRowMain, pressed && styles.alertRowPressed]}
+              >
+                <AppIcon name="chat" size={20} color={colors.warning} />
+                <View style={styles.alertCopy}>
+                  <Text style={styles.alertTitle}>
+                    {visibleAlerts.chatCount} mensaje{visibleAlerts.chatCount === 1 ? '' : 's'} nuevo
+                    {visibleAlerts.chatCount === 1 ? '' : 's'} en el chat
+                  </Text>
+                  <Text style={styles.alertText}>Ábrelo para responder o márcalo como visto.</Text>
+                </View>
+              </Pressable>
+              <AlertDismissButton onPress={() => dismissAlert('chat')} />
+            </View>
           ) : null}
 
-          {athlete.alerts.sessionCount > 0 ? (
+          {visibleAlerts.sessionCount > 0 ? (
             <View style={styles.alertRow}>
               <AppIcon name="stats" size={20} color={colors.warning} />
               <View style={styles.alertCopy}>
                 <Text style={styles.alertTitle}>
-                  {athlete.alerts.sessionCount} registro{athlete.alerts.sessionCount === 1 ? '' : 's'} de entreno nuevo
-                  {athlete.alerts.sessionCount === 1 ? '' : 's'}
+                  {visibleAlerts.sessionCount} registro{visibleAlerts.sessionCount === 1 ? '' : 's'} de entreno nuevo
+                  {visibleAlerts.sessionCount === 1 ? '' : 's'}
                 </Text>
                 <Text style={styles.alertText}>Puedes revisarlo en “Registro de entrenos” más abajo.</Text>
               </View>
+              <AlertDismissButton onPress={() => dismissAlert('sessions')} />
             </View>
           ) : null}
 
-          {athlete.alerts.intakeChanged ? (
+          {visibleAlerts.intakeChanged ? (
             <View style={styles.alertRow}>
               <AppIcon name="info" size={20} color={colors.warning} />
               <View style={styles.alertCopy}>
@@ -544,6 +651,7 @@ export default function AthleteDetailScreen() {
                   El atleta ha completado o modificado su formulario de bienvenida.
                 </Text>
               </View>
+              <AlertDismissButton onPress={() => dismissAlert('intake')} />
             </View>
           ) : null}
         </CollapsibleSection>
@@ -608,12 +716,11 @@ export default function AthleteDetailScreen() {
         )}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Datos físicos">
+      <CollapsibleSection style={styles.programCard} title="Datos físicos">
         <InfoRow label="Edad" value={formatDerived(physicalDerived.age, ' años', 0)} />
         <InfoRow label="Altura" value={formatMeasured(physicalBasics.heightCm, ' cm')} />
         <InfoRow label="Peso" value={formatMeasured(physicalMeasured.weightKg, ' kg')} />
         <InfoRow label="IMC" value={formatBmi(physicalDerived.bmi)} />
-        <InfoRow label="Cintura" value={formatMeasured(physicalMeasured.waistCm, ' cm')} />
         <InfoRow label="FC en reposo" value={formatMeasured(physicalMeasured.restingHeartRate, ' lpm')} />
         <InfoRow label="Grasa corporal" value={formatMeasured(physicalMeasured.bodyFatPercentage, ' %')} />
         <InfoRow label="Masa grasa" value={formatDerived(physicalDerived.fatMassKg, ' kg')} />
@@ -633,11 +740,33 @@ export default function AthleteDetailScreen() {
 
       <CollapsibleSection
         style={styles.programCard}
-        title="Formulario de bienvenida"
-        subtitle="Respuestas del cuestionario previo al entrenamiento online"
+        title="Formularios del atleta"
+        subtitle="Respuestas de los cuestionarios personalizados"
       >
-        {intakeLoading ? (
+        {intakeLoading || intakeStatusesLoading ? (
           <ActivityIndicator color={colors.accent} style={styles.loader} />
+        ) : usesCustomForms && intakeStatuses.length > 0 ? (
+          <View style={styles.intakeFormsList}>
+            {intakeStatuses.map((status) => (
+              <View key={status.template.id} style={styles.intakeFormBlock}>
+                <Text style={styles.intakeFormTitle}>
+                  {status.template.name}
+                  {status.template.isDefault ? ' · Por defecto' : ''}
+                </Text>
+                {status.isComplete && status.submission ? (
+                  <DynamicIntakeAnswersTable
+                    schema={status.template.schema}
+                    answers={status.submission.answers}
+                    completedAt={status.submission.completedAt}
+                  />
+                ) : (
+                  <Text style={styles.emptyProgram}>
+                    Este atleta todavía no ha completado este formulario.
+                  </Text>
+                )}
+              </View>
+            ))}
+          </View>
         ) : intakeForm && intakeComplete ? (
           <IntakeAnswersTable form={intakeForm} />
         ) : (
@@ -670,6 +799,8 @@ export default function AthleteDetailScreen() {
               }
               onViewGroupCalendar={setCalendarGroup}
               onEditGroup={openPlanGroupEditor}
+              onUpdateGroupValidity={handleUpdateGroupValidity}
+              onRepeatGroupWeekly={handleRepeatGroupWeekly}
               onDeleteSession={handleDeleteSession}
               onDeleteGroup={handleDeleteGroup}
             />
@@ -714,41 +845,35 @@ export default function AthleteDetailScreen() {
         title="Registro de entrenos"
         subtitle="Sensaciones, progreso y videos por sesión"
       >
-        {logsLoading ? (
-          <ActivityIndicator color={colors.accent} />
-        ) : sessionLogs.length === 0 ? (
-          <Text style={styles.emptyProgram}>
-            Todavía no hay sesiones registradas desde el calendario.
-          </Text>
-        ) : (
-          sessionLogs.map((log) => (
-            <AthleteSessionLogCard
-              key={log.id}
-              log={log}
-              onPress={() =>
-                router.push({
-                  pathname: '/trainer/athlete/[id]/log/[logId]',
-                  params: { id: athlete.id, logId: log.id },
-                })
-              }
-            />
-          ))
-        )}
+        <AthleteSessionLogsPanel
+          logs={sessionLogs}
+          loading={logsLoading}
+          feedback={athleteFeedback}
+          viewMode={sessionLogViewMode}
+          onViewModeChange={setSessionLogViewMode}
+          onOpenLog={(logId) =>
+            router.push({
+              pathname: '/trainer/athlete/[id]/log/[logId]',
+              params: { id: athlete.id, logId },
+            })
+          }
+        />
       </CollapsibleSection>
 
-      <AthleteFeedbackPanel athleteId={athlete.id} style={styles.programCard} />
+      <AthleteFeedbackPanel feedback={athleteFeedback} style={styles.programCard} />
 
-      <Button
-        title="Abrir chat"
-        onPress={() => router.push({ pathname: '/trainer/chat/[id]', params: { id: athlete.id } })}
-        style={styles.chatBtn}
+      <AthleteProgressPanel
+        athleteId={athlete.id}
+        metricHistory={physicalHistory}
+        style={styles.programCard}
       />
+      </View>
 
       <ScheduleCalendarModal
         visible={calendarGroup !== null}
         onClose={() => setCalendarGroup(null)}
         title={calendarGroup?.title ?? 'Calendario del plan'}
-        subtitle={`Sesiones programadas de ${athlete.name}. Despliega una sesión para ver su contenido.`}
+        subtitle={`Sesiones programadas de ${athlete.name}.`}
         source={calendarSource}
         loadSessionDraft={loadCalendarSessionDraft}
         buildSessionDraft={(date) =>
@@ -766,6 +891,21 @@ export default function AthleteDetailScreen() {
         onSessionDelete={handleCalendarDelete}
         onSessionMoveToDate={handleCalendarMoveToDate}
         onSessionReorderDay={handleCalendarReorderDay}
+      />
+
+      <ConfirmModal
+        visible={pendingDelete !== null}
+        title={pendingDelete?.title ?? ''}
+        message={pendingDelete?.message}
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        destructive
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          const action = pendingDelete?.onConfirm;
+          setPendingDelete(null);
+          action?.();
+        }}
       />
     </ScreenWrapper>
   );
@@ -796,6 +936,12 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 32, fontWeight: '700', color: colors.accentBlue },
   name: { ...typography.h2, color: colors.text },
   email: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 4 },
+  chatBtnHeader: {
+    marginTop: spacing.md,
+    alignSelf: 'stretch',
+    maxWidth: 360,
+    width: '100%',
+  },
   calendarLink: {
     marginTop: spacing.sm,
     borderWidth: 1,
@@ -803,7 +949,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: 8,
-    backgroundColor: `${colors.accent}12`,
+    backgroundColor: withAlpha(colors.accent, '12'),
   },
   calendarLinkPressed: {
     opacity: 0.85,
@@ -828,6 +974,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  alertRowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   alertRowPressed: {
     opacity: 0.7,
   },
@@ -846,6 +998,13 @@ const styles = StyleSheet.create({
   },
   programCard: { marginTop: spacing.md },
   emptyProgram: { ...typography.bodySmall, color: colors.textMuted },
+  intakeFormsList: { gap: spacing.md },
+  intakeFormBlock: { gap: spacing.sm },
+  intakeFormTitle: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontWeight: '600',
+  },
   planActionError: {
     ...typography.bodySmall,
     color: colors.danger,
@@ -875,7 +1034,6 @@ const styles = StyleSheet.create({
   },
   rowLabel: { ...typography.body, color: colors.textSecondary },
   rowValue: { ...typography.body, color: colors.text, fontWeight: '500' },
-  chatBtn: { marginTop: spacing.lg },
   activityWarning: {
     ...typography.caption,
     color: colors.warning,

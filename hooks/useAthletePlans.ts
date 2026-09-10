@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useGym } from '@/hooks/useGym';
 import {
   createAthletePlan,
   deleteAthletePlan,
   fetchAthletePlanById,
   fetchAthletePlansForUser,
+  fetchGymAthletePlans,
   fetchTrainerAthletePlans,
   updateAthletePlan,
 } from '@/lib/athletePlanService';
+import { isAdminRole, isGymRole, isTrainerRole } from '@/lib/athleteService';
 import { createStaleRefresh } from '@/lib/staleRefresh';
 import type { PickedPlanPdf } from '@/lib/planPdfPicker';
 import type { AthletePlan, AthletePlanType, NutritionPlanData } from '@/lib/types';
@@ -25,7 +28,7 @@ export function useMyAthletePlans(planType?: AthletePlanType) {
       if (authLoading || !user?.id) return;
       if (!force && silent && !refreshGate.current.shouldRefresh(false)) return;
 
-      if (user.role === 'entrenador') {
+      if (isAdminRole(user.role)) {
         setPlans((current) => (current.length === 0 ? current : []));
         setError((current) => (current === null ? current : null));
         setIsLoading((current) => (current ? false : current));
@@ -69,6 +72,7 @@ export function useMyAthletePlans(planType?: AthletePlanType) {
 
 export function useTrainerAthletePlans(planType?: AthletePlanType) {
   const { user, isDemoMode, isLoading: authLoading } = useAuth();
+  const { gym } = useGym();
   const [plans, setPlans] = useState<AthletePlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +83,17 @@ export function useTrainerAthletePlans(planType?: AthletePlanType) {
       if (authLoading || !user?.id) return;
       if (!force && silent && !refreshGate.current.shouldRefresh(false)) return;
 
-      if (user.role !== 'entrenador') {
+      const isGymOperator = isGymRole(user.role);
+      const isTrainerStaff = isTrainerRole(user.role);
+
+      if (!isTrainerStaff && !isGymOperator) {
+        setPlans((current) => (current.length === 0 ? current : []));
+        setError((current) => (current === null ? current : null));
+        setIsLoading((current) => (current ? false : current));
+        return;
+      }
+
+      if (isGymOperator && !gym?.id) {
         setPlans((current) => (current.length === 0 ? current : []));
         setError((current) => (current === null ? current : null));
         setIsLoading((current) => (current ? false : current));
@@ -92,7 +106,12 @@ export function useTrainerAthletePlans(planType?: AthletePlanType) {
       setError((current) => (current === null ? current : null));
 
       try {
-        const data = await fetchTrainerAthletePlans(planType);
+        const data = isGymOperator
+          ? await fetchGymAthletePlans(gym!.id, planType)
+          : await fetchTrainerAthletePlans(planType, {
+              trainerId: user.id,
+              role: user.role,
+            });
         setPlans(data);
         refreshGate.current.markFetched();
       } catch (loadError) {
@@ -102,7 +121,7 @@ export function useTrainerAthletePlans(planType?: AthletePlanType) {
         setIsLoading(false);
       }
     },
-    [authLoading, planType, user?.id, user?.role],
+    [authLoading, gym?.id, planType, user?.id, user?.role],
   );
 
   useEffect(() => {

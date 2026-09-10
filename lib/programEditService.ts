@@ -1,3 +1,8 @@
+import {
+  HYPE_WEEKLY_CHALLENGE,
+  isHypeWeeklyChallengePlaceholder,
+  isHypeWeeklyChallengeProgram,
+} from '@/lib/hypeCatalog';
 import { mockPrograms, mockWorkouts } from '@/lib/mockData';
 import {
   formatStandardVenueDescription,
@@ -177,6 +182,73 @@ export async function ensureVenueCatalogProgram(
     description: formatStandardVenueDescription(slot.description, venue),
     category: 'standard',
   });
+}
+
+export async function ensureHypeWeeklyChallengeProgram(
+  placeholder: Program,
+): Promise<{ program?: Program; error?: string }> {
+  if (!isHypeWeeklyChallengePlaceholder(placeholder)) {
+    return { program: placeholder };
+  }
+
+  if (!placeholder.planId) {
+    return { error: 'Falta el plan asociado' };
+  }
+
+  const existing = await findExistingHypeWeeklyChallengeProgram(placeholder.planId);
+  if (existing.program) return { program: existing.program };
+  if (existing.error) return { error: existing.error };
+
+  return createProgramCatalog({
+    planId: placeholder.planId,
+    name: HYPE_WEEKLY_CHALLENGE.name,
+    description: HYPE_WEEKLY_CHALLENGE.description,
+    category: 'hype',
+  });
+}
+
+async function findExistingHypeWeeklyChallengeProgram(
+  planId: string,
+): Promise<{ program?: Program; error?: string }> {
+  if (!isSupabaseConfigured) {
+    const match = demoPrograms.find(
+      (program) => program.planId === planId && isHypeWeeklyChallengeProgram(program),
+    );
+    return match ? { program: match } : {};
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) return { error: 'Supabase no está disponible' };
+
+  const { data, error } = await supabase
+    .from('programas')
+    .select('id, name, id_planes, descripcion')
+    .eq('id_planes', planId);
+
+  if (error) return { error: error.message };
+  if (!data?.length) return {};
+
+  const match = data.find((row) => isHypeWeeklyChallengeProgram({ category: 'hype', name: row.name }));
+  if (!match) return {};
+
+  return {
+    program: {
+      id: match.id,
+      name: HYPE_WEEKLY_CHALLENGE.name,
+      planId: match.id_planes,
+      category: 'hype',
+      level: 'intermedio',
+      duration: 'Por definir',
+      goal: 'rendimiento',
+      sessionsPerWeek: 1,
+      status: 'disponible',
+      icon: HYPE_WEEKLY_CHALLENGE.icon,
+      description: HYPE_WEEKLY_CHALLENGE.description,
+      equipment: HYPE_WEEKLY_CHALLENGE.equipment,
+      trainingDays: [],
+      weeks: [],
+    },
+  };
 }
 
 async function findExistingVenueCatalogProgram(

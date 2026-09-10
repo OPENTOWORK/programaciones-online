@@ -19,8 +19,13 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ExerciseNamePickerModal } from '@/components/trainer/ExerciseNamePickerModal';
 import { ExerciseVideoPickerModal } from '@/components/trainer/ExerciseVideoPickerModal';
-import { borderRadius, colors, shadows, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, shadows, spacing, typography, withAlpha } from '@/constants/theme';
 import { useExerciseVideos } from '@/hooks/useExerciseVideos';
+import {
+  parseFreeTextBlockContent,
+  serializeFreeTextBlockContent,
+  type FreeTextBlockVideo,
+} from '@/lib/freeTextBlockVideos';
 import { getBlockAccent } from '@/lib/workoutContentParser';
 import {
   blockUsesSeries,
@@ -33,7 +38,7 @@ import {
   getMovementLoadMetric,
   getMovementLoadMetricLabel,
   getMovementLoadValue,
-  MOVEMENT_LOAD_METRICS,
+  MOVEMENT_PRIMARY_LOAD_METRICS,
   movementLoadPlaceholder,
   getWorkoutBlockSummary,
   parseTimingDuration,
@@ -138,7 +143,10 @@ function SavedBlockCard({
   const movements = block.items
     .map((item) => formatBlockItemLine(item, block.type))
     .filter(Boolean);
-  const freeText = block.type === 'free_text' ? block.timing.trim() : '';
+  const freeTextContent =
+    block.type === 'free_text' ? parseFreeTextBlockContent(block.timing) : null;
+  const freeText = freeTextContent?.body.trim() ?? '';
+  const freeTextVideos = freeTextContent?.videos ?? [];
 
   return (
     <Card style={StyleSheet.flatten([styles.blockCard, styles.savedBlockCard, { borderColor: `${CONFIRM_GREEN}55` }])}>
@@ -170,16 +178,107 @@ function SavedBlockCard({
           {freeText}
         </Text>
       ) : null}
+      {freeTextVideos.length > 0 ? (
+        <Text style={styles.savedVideosLine}>
+          {freeTextVideos.length} vídeo{freeTextVideos.length === 1 ? '' : 's'}:{' '}
+          {freeTextVideos.map((video) => video.label.trim() || 'Vídeo').join(', ')}
+        </Text>
+      ) : null}
       {!freeText && movements.length > 0 ? (
         <View style={styles.savedMovements}>
-          {movements.slice(0, 5).map((movement) => (
-            <Text key={movement} style={styles.savedMovementLine} numberOfLines={1}>
+          {movements.slice(0, 5).map((movement, index) => (
+            <Text key={`${index}-${movement}`} style={styles.savedMovementLine} numberOfLines={1}>
               • {movement}
             </Text>
           ))}
         </View>
       ) : null}
     </Card>
+  );
+}
+
+function FreeTextVideoRow({
+  video,
+  onUpdate,
+  onRemove,
+}: {
+  video: FreeTextBlockVideo;
+  onUpdate: (patch: Partial<FreeTextBlockVideo>) => void;
+  onRemove: () => void;
+}) {
+  const [videoPickerOpen, setVideoPickerOpen] = useState(false);
+  const [namePickerOpen, setNamePickerOpen] = useState(false);
+  const { getVideoId } = useExerciseVideos();
+  const hasVideo = Boolean(video.youtubeVideoId);
+
+  return (
+    <View style={styles.freeTextVideoRow}>
+      <TextInput
+        value={video.label}
+        onChangeText={(label) => onUpdate({ label })}
+        placeholder="Ej. Back Squat"
+        placeholderTextColor={colors.textMuted}
+        style={[styles.input, styles.freeTextVideoInput]}
+      />
+      <Pressable
+        onPress={() => setNamePickerOpen(true)}
+        hitSlop={8}
+        style={({ pressed }) => [styles.libraryNameBtn, pressed && styles.libraryNameBtnPressed]}
+        accessibilityLabel="Buscar ejercicio en la biblioteca"
+      >
+        <Ionicons name="search-outline" size={16} color={colors.accent} />
+      </Pressable>
+      <Pressable
+        onPress={() => setVideoPickerOpen(true)}
+        style={({ pressed }) => [
+          styles.videoBtn,
+          hasVideo && styles.videoBtnActive,
+          pressed && styles.videoBtnPressed,
+        ]}
+        accessibilityLabel={hasVideo ? 'Cambiar vídeo' : 'Elegir vídeo'}
+      >
+        <Ionicons
+          name={hasVideo ? 'videocam' : 'videocam-outline'}
+          size={16}
+          color={hasVideo ? colors.accent : colors.textMuted}
+        />
+        <Text style={[styles.videoBtnText, hasVideo && styles.videoBtnTextActive]}>
+          {hasVideo ? 'Cambiar' : 'Elegir'}
+        </Text>
+      </Pressable>
+      <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Quitar vídeo">
+        <Ionicons name="close-circle-outline" size={18} color={colors.textMuted} />
+      </Pressable>
+
+      <ExerciseNamePickerModal
+        visible={namePickerOpen}
+        currentName={video.label}
+        onCancel={() => setNamePickerOpen(false)}
+        onConfirm={(option) => {
+          setNamePickerOpen(false);
+          const resolved = getVideoId(option.name, option.aimharderEjerId);
+          onUpdate({
+            label: option.name,
+            youtubeVideoId: resolved ?? video.youtubeVideoId,
+          });
+        }}
+      />
+
+      <ExerciseVideoPickerModal
+        visible={videoPickerOpen}
+        exerciseName={video.label}
+        currentVideoId={video.youtubeVideoId}
+        onCancel={() => setVideoPickerOpen(false)}
+        onConfirm={(selection) => {
+          setVideoPickerOpen(false);
+          if (!selection) return;
+          onUpdate({
+            youtubeVideoId: selection.youtubeVideoId,
+            label: video.label.trim() || selection.label || '',
+          });
+        }}
+      />
+    </View>
   );
 }
 
@@ -205,16 +304,17 @@ function MovementRow({
   const hasVideo = Boolean(resolvedVideoId);
 
   const setLoadMetric = (metric: MovementLoadMetric) => {
+    const percentRmValue = item.percent?.trim() || item.rm?.trim() || '';
     onUpdate({
-      loadMetric: metric,
+      loadMetric: metric === 'rm' ? 'percent' : metric,
       weightKg: metric === 'kg' ? item.weightKg ?? '' : '',
       calories: metric === 'cal' ? item.calories ?? '' : '',
       distance: metric === 'distance' ? item.distance ?? '' : '',
       minutes: metric === 'min' ? item.minutes ?? '' : '',
       seconds: metric === 'sec' ? item.seconds ?? '' : '',
       rir: metric === 'rir' ? item.rir ?? '' : '',
-      percent: metric === 'percent' ? item.percent ?? '' : '',
-      rm: metric === 'rm' ? item.rm ?? '' : '',
+      percent: metric === 'percent' || metric === 'rm' ? percentRmValue : '',
+      rm: '',
     });
   };
 
@@ -228,7 +328,7 @@ function MovementRow({
       seconds: metric === 'sec' ? value : '',
       rir: metric === 'rir' ? value : '',
       percent: metric === 'percent' ? value : '',
-      rm: metric === 'rm' ? value : '',
+      rm: '',
     });
   };
 
@@ -303,7 +403,7 @@ function MovementRow({
         <View style={styles.loadMetricField}>
           <Text style={styles.metricLabel}>Carga</Text>
           <View style={styles.loadMetricPicker}>
-            {MOVEMENT_LOAD_METRICS.map((metric) => {
+            {MOVEMENT_PRIMARY_LOAD_METRICS.map((metric) => {
               const active = loadMetric === metric;
               return (
                 <Pressable
@@ -410,6 +510,7 @@ function EditingBlockCard({
 }) {
   const config = getBlockTypeConfig(block.type);
   const accent = getBlockAccent(config.label);
+  const [addVideoOpen, setAddVideoOpen] = useState(false);
 
   const timingDuration = parseTimingDuration(block.timing);
   const showTimingPicker = Boolean(config.timingIsDuration) && usesTimingDurationPicker(block.timing);
@@ -434,6 +535,12 @@ function EditingBlockCard({
 
   const removeItem = (itemId: string) => {
     onUpdate({ items: block.items.filter((item) => item.id !== itemId) });
+  };
+
+  const freeTextContent = parseFreeTextBlockContent(block.type === 'free_text' ? block.timing : '');
+
+  const updateFreeText = (body: string, videos: FreeTextBlockVideo[]) => {
+    onUpdate({ timing: serializeFreeTextBlockContent(body, videos) });
   };
 
   return (
@@ -478,14 +585,61 @@ function EditingBlockCard({
 
           <Text style={styles.fieldLabel}>Texto libre</Text>
           <TextInput
-            value={block.timing}
-            onChangeText={(timing) => onUpdate({ timing })}
+            value={freeTextContent.body}
+            onChangeText={(body) => updateFreeText(body, freeTextContent.videos)}
             multiline
             numberOfLines={8}
             textAlignVertical="top"
             placeholder="Escribe aquí el contenido del bloque…"
             placeholderTextColor={colors.textMuted}
             style={styles.freeTextInput}
+          />
+
+          <View style={styles.freeTextVideosSection}>
+            <Text style={styles.fieldLabel}>Vídeos del bloque</Text>
+            <Text style={styles.freeTextVideosHint}>
+              El atleta verá un botón por vídeo debajo del texto.
+            </Text>
+            {freeTextContent.videos.map((video, index) => (
+              <FreeTextVideoRow
+                key={`${video.youtubeVideoId}-${index}`}
+                video={video}
+                onUpdate={(patch) =>
+                  updateFreeText(
+                    freeTextContent.body,
+                    freeTextContent.videos.map((entry, entryIndex) =>
+                      entryIndex === index ? { ...entry, ...patch } : entry,
+                    ),
+                  )
+                }
+                onRemove={() =>
+                  updateFreeText(
+                    freeTextContent.body,
+                    freeTextContent.videos.filter((_, entryIndex) => entryIndex !== index),
+                  )
+                }
+              />
+            ))}
+            <Button
+              title="+ Añadir vídeo"
+              variant="ghost"
+              onPress={() => setAddVideoOpen(true)}
+              style={styles.addItemBtn}
+              textStyle={StyleSheet.flatten([styles.addItemBtnText, { color: accent.text }])}
+            />
+          </View>
+
+          <ExerciseVideoPickerModal
+            visible={addVideoOpen}
+            onCancel={() => setAddVideoOpen(false)}
+            onConfirm={(selection) => {
+              setAddVideoOpen(false);
+              if (!selection) return;
+              updateFreeText(freeTextContent.body, [
+                ...freeTextContent.videos,
+                { label: selection.label ?? '', youtubeVideoId: selection.youtubeVideoId },
+              ]);
+            }}
           />
         </View>
       ) : (
@@ -1117,7 +1271,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: colors.border,
-    backgroundColor: `${colors.surfaceLight}66`,
+    backgroundColor: withAlpha(colors.surfaceLight, '66'),
   },
   emptySectionText: {
     ...typography.bodySmall,
@@ -1203,7 +1357,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   doneBtnText: {
     ...typography.caption,
@@ -1232,6 +1386,31 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+  savedVideosLine: {
+    ...typography.caption,
+    color: colors.accent,
+    marginTop: spacing.xs,
+    fontWeight: '600',
+  },
+  freeTextVideosSection: {
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  freeTextVideosHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
+    lineHeight: 18,
+  },
+  freeTextVideoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  freeTextVideoInput: {
+    flex: 1,
+    minWidth: 100,
   },
   typeChip: {
     borderRadius: borderRadius.full,
@@ -1345,8 +1524,8 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: borderRadius.sm,
     borderWidth: 1,
-    borderColor: `${colors.accent}55`,
-    backgroundColor: `${colors.accent}12`,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '12'),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1415,7 +1594,7 @@ const styles = StyleSheet.create({
   },
   videoBtnActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   videoBtnPressed: {
     opacity: 0.92,
@@ -1432,6 +1611,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 4,
+    alignItems: 'center',
   },
   loadMetricBtn: {
     borderWidth: 1,
@@ -1443,7 +1623,7 @@ const styles = StyleSheet.create({
   },
   loadMetricBtnActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   loadMetricBtnText: {
     ...typography.caption,

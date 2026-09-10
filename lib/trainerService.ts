@@ -215,6 +215,10 @@ export async function sendTrainerReply(
   const trainerId = sessionData.session?.user.id;
   if (!trainerId) return null;
 
+  const { fetchLeadOwnerId } = await import('@/lib/athleteService');
+  const ownerId = await fetchLeadOwnerId(athleteUserId);
+  if (ownerId && ownerId !== trainerId) return null;
+
   const messageText = text.trim();
 
   const { data, error } = await supabase

@@ -14,7 +14,7 @@ import {
   type SessionKind,
 } from '@/lib/trainerSessionDraft';
 import { isStructuredWorkoutContent } from '@/lib/workoutContentParser';
-import type { Program } from '@/lib/types';
+import type { AthletePlan, Program } from '@/lib/types';
 
 const META_START = '@@plan-meta:v1';
 const META_END = '@@/plan-meta';
@@ -66,6 +66,10 @@ export function serializePersonalizedPlanContent(draft: SessionDraft, sessionNum
 
   if (draft.kind === 'rest') {
     metaLines.push('kind=rest');
+  }
+
+  if (draft.kind === 'pdf') {
+    metaLines.push('kind=pdf');
   }
 
   if (typeof draft.dayOrder === 'number') {
@@ -124,6 +128,7 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
       if (value === 'activation') kind = 'activation';
       if (value === 'metcon') kind = 'metcon';
       if (value === 'rest') kind = 'rest';
+      if (value === 'pdf') kind = 'pdf';
     }
     if (line.startsWith('dayOrder=')) {
       const parsed = Number.parseInt(line.slice('dayOrder='.length).trim(), 10);
@@ -168,6 +173,18 @@ export function parsePersonalizedPlanContent(content: string, sessionIndex = 0):
   }
 
   return draft;
+}
+
+/**
+ * Sesión cuyo único contenido es el PDF adjunto: en el calendario se muestra como entreno en PDF
+ * y el atleta lo consulta abriendo el documento. Si el entrenador le añade bloques deja de serlo.
+ */
+export function isPdfOnlyPlanSession(
+  plan: Pick<AthletePlan, 'pdfFileName'>,
+  draft: SessionDraft,
+): boolean {
+  if (hasSessionBlockContent(draft)) return false;
+  return draft.kind === 'pdf' || Boolean(plan.pdfFileName);
 }
 
 export function validatePersonalizedPlanDraft(draft: SessionDraft): string | null {

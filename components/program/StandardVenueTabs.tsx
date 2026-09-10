@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.surfaceGhost,
   },
   iconWrapActive: {
     backgroundColor: 'rgba(255,255,255,0.12)',

@@ -4,7 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import {
   HOME_TRAINING_DURATION_OPTIONS,
   buildTimeSlots,
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   },
   chipSelected: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}22`,
+    backgroundColor: withAlpha(colors.accent, '22'),
   },
   chipText: {
     ...typography.caption,

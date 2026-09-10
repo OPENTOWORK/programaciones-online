@@ -1,7 +1,9 @@
+import { readPersistedRecord, writePersistedRecord } from '@/lib/localUserDataStorage';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DietaryPreference, NutritionProfile } from '@/lib/types';
 
 const TABLE = 'user_nutrition_profile';
+const LOCAL_STORAGE_KEY = 'user-nutrition-profile-v1';
 
 const localByUser = new Map<string, NutritionProfile>();
 
@@ -44,11 +46,27 @@ function mapRow(row: Record<string, unknown>): NutritionProfile {
   };
 }
 
+async function localProfile(userId: string) {
+  if (!localByUser.has(userId)) {
+    const persisted = await readPersistedRecord<NutritionProfile>(LOCAL_STORAGE_KEY);
+    localByUser.set(userId, persisted[userId] ?? emptyNutritionProfile);
+  }
+  return localByUser.get(userId) ?? emptyNutritionProfile;
+}
+
+async function persistLocalProfile(userId: string, profile: NutritionProfile) {
+  localByUser.set(userId, profile);
+  const all = await readPersistedRecord<NutritionProfile>(LOCAL_STORAGE_KEY);
+  all[userId] = profile;
+  await writePersistedRecord(LOCAL_STORAGE_KEY, all);
+}
+
 export async function fetchNutritionProfile(userId: string): Promise<NutritionProfile> {
   if (!userId) return emptyNutritionProfile;
 
+  const local = await localProfile(userId);
   const supabase = isSupabaseConfigured ? getSupabase() : null;
-  if (!supabase) return localByUser.get(userId) ?? emptyNutritionProfile;
+  if (!supabase) return local;
 
   const { data, error } = await supabase
     .from(TABLE)
@@ -58,20 +76,22 @@ export async function fetchNutritionProfile(userId: string): Promise<NutritionPr
     .eq('user_id', userId)
     .maybeSingle();
 
-  if (error || !data) return localByUser.get(userId) ?? emptyNutritionProfile;
+  if (error || !data) return local;
 
-  return mapRow(data as Record<string, unknown>);
+  const remote = mapRow(data as Record<string, unknown>);
+  await persistLocalProfile(userId, remote);
+  return remote;
 }
 
 export async function saveNutritionProfile(
   userId: string,
   profile: NutritionProfile,
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; warning?: string }> {
   if (!userId) return { error: 'No hay sesión activa' };
 
   const supabase = isSupabaseConfigured ? getSupabase() : null;
   if (!supabase) {
-    localByUser.set(userId, profile);
+    await persistLocalProfile(userId, profile);
     return {};
   }
 
@@ -90,15 +110,16 @@ export async function saveNutritionProfile(
   );
 
   if (error) {
-    localByUser.set(userId, profile);
+    await persistLocalProfile(userId, profile);
     if (isMissingTableError(error)) {
       return {
-        error:
-          'La tabla de datos de nutrición no está disponible. Ejecuta: npm run supabase:nutrition-training-profile',
+        warning:
+          'Guardado en este dispositivo. Ejecuta npm run supabase:nutrition-training-profile para sincronizar con tu perfil.',
       };
     }
     return { error: error.message };
   }
 
+  await persistLocalProfile(userId, profile);
   return {};
 }

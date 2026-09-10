@@ -1,0 +1,46 @@
+{
+  "day": {
+    "label": "Día",
+    "background": "fondo de estudio claro en gris perla (#F4F6F9), luz suave de día, ambiente limpio y luminoso"
+  },
+  "night": {
+    "label": "Noche",
+    "background": "fondo de estudio oscuro carbón (#0F1419), luz lateral suave, ambiente premium nocturno"
+  },
+  "navy": {
+    "label": "Azul",
+    "background": "fondo degradado azul marino profundo (#0C1A2E a #13253F), luz de estudio fría y elegante"
+  },
+  "forest": {
+    "label": "Verde",
+    "background": "fondo verde bosque oscuro (#0D1A10 a #152A18), luz natural suave, ambiente orgánico premium"
+  },
+  "sand": {
+    "label": "Arena",
+    "background": "fondo cálido arena y beige oscuro (#141210 a #1C1A16), luz cálida de estudio"
+  },
+  "slate": {
+    "label": "Niebla",
+    "background": "fondo gris pizarra oscuro (#131518 a #1A1D21), luz difusa minimalista"
+  },
+  "teal": {
+    "label": "Agua",
+    "background": "fondo verde azulado profundo (#0E1617 a #151F21), luz fresca de estudio"
+  },
+  "wine": {
+    "label": "Rosa",
+    "background": "fondo vino oscuro con matiz rosa (#1A1016 a #281820), luz suave y sofisticada"
+  },
+  "lavender": {
+    "label": "Lavanda",
+    "background": "fondo púrpura lavanda oscuro (#15101E a #201830), luz suave de estudio"
+  },
+  "olive": {
+    "label": "Oliva",
+    "background": "fondo verde oliva oscuro (#12140E a #1A1E14), luz cálida natural"
+  },
+  "rose": {
+    "label": "Rosa claro",
+    "background": "fondo rosa empolvado oscuro (#181012 a #241820), luz cálida suave"
+  }
+}

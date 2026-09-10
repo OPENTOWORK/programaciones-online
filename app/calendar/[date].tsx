@@ -6,7 +6,7 @@ import { AthleteScheduleCalendar } from '@/components/schedule/AthleteScheduleCa
 import { Card } from '@/components/ui/Card';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { usePrograms } from '@/hooks/usePrograms';
 import {
@@ -95,7 +95,11 @@ export default function CalendarDayScreen() {
               <Text style={styles.sessionMeta}>
                 {session.dayLabel} · {session.estimatedDuration}
               </Text>
-              <Text style={styles.sessionHint}>Pulsa para abrir y registrar tu entreno</Text>
+              <Text style={styles.sessionHint}>
+                {session.kind === 'pdf'
+                  ? 'Pulsa para abrir el PDF del entreno'
+                  : 'Pulsa para abrir y registrar tu entreno'}
+              </Text>
             </Pressable>
           ))}
         </View>
@@ -118,7 +122,7 @@ const styles = StyleSheet.create({
   },
   sessionCardPressed: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}10`,
+    backgroundColor: withAlpha(colors.accent, '10'),
   },
   sessionName: { ...typography.body, color: colors.text, fontWeight: '700' },
   sessionMeta: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 4 },

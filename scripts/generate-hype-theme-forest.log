@@ -1,0 +1,122 @@
+✓ 14 productos migrados a rutas por tema
+Generando 77 imágenes para Hype (tema: forest)…
+→ 1 Agua · forest… ok
+→ 2 Barebells chocolatina · forest… ok
+→ 3 Barrita Staff · forest… ok
+→ 4 Batido · forest… ok
+→ 5 Batido Staff · forest… ok
+→ 6 Belevels - Clean gut · forest… ok
+→ 7 Belevels - Gutday · forest… ok
+→ 8 Belevels - Omega 3 · forest… ok
+→ 9 Belevels - Triple magnesium · forest… ok
+→ 10 Belevels be calm · forest… ok
+→ 11 Belevels Chill mood · forest… ok
+→ 12 Belevels Colageno · forest… ok
+→ 13 Belevels Fem Balance · forest… ok
+→ 14 Belevels Vitamina D3 + K2 · forest… ok
+→ 15 Belevels Wake up · forest… ok
+→ 16 Bono Personal 10 · forest… ok
+→ 17 calcetines · forest… ok
+→ 18 Calleras - Quad Pro · forest… ok
+→ 19 Calleras Quad Competition · forest… ok
+→ 20 COLETERO VELITES · forest… ok
+→ 21 Comba earth · forest… ok
+→ 22 Creatina 500 creapure · forest… ok
+→ 23 Crema Magma · forest… ok
+→ 24 Crema Polar · forest… ok
+→ 25 Crop Top Holo Coral · forest… ok
+→ 26 Crop Top Holo Negro by HY-PE · forest… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 27 Drop in · forest… ok
+→ 28 EAAS · forest… ok
+→ 29 Foam roller · forest… ok
+→ 30 Gafas Sol Horizon · forest… ok
+→ 31 Gafas Sol Raptor · forest… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 32 Gafas Sol Urban · forest… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 33 Gorra · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 34 Hy-pe - Parche · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 35 Hybrid 1.0 - Bubblegum · forest… ok
+→ 36 Hybrid 1.0 - Caribbean Blue · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 37 Hybrid 1.0 - Deep forest · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 38 Hybrid 1.0 - Deep ocean · forest… ok
+→ 39 L-Carnitina · forest… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 40 Leggin largo burdeos · forest… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 41 Leggin largo negro · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 42 Legging Coral Corto · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 43 Leggins Largo Morado · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 44 Leggins Largos Verdes · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 45 Lija manos · forest… ok
+→ 46 Magnesio liquido · forest… ok
+→ 47 Minimal 1.0 · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 48 Mochila Storm · forest… ok
+→ 49 Mochila Urban · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 50 QNS - Glucogen · forest… ok
+→ 51 QNS - ISO - PROTEIN 1KG · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 52 QNS Magnesio 4 · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 53 QNS Super omega 3 · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 54 Red Bull · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 55 Riñonera Urban · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 56 Shirt 1.0 - Black · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 57 Shirt 1.0 - Coral · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 58 Shirt 1.0 - Gris · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 59 Short Holo · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 60 Sudadera Holo - Black · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 61 T-shirt Holo Black · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 62 T-Shirt Holo Coral · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 63 T-Shirt Holo Gris · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 64 Taza - Drop 1.0 · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 65 Totebag urban · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 66 Velites - Calleras Quad ultra · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 67 Velites - Cinturon · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 68 Velites - gorro · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 69 Velites - Head Band · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 70 Velites - mochila · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 71 Velites - Muñequeras nylon · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 72 Velites - Muñequeras tela · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 73 Velites Calleras All terrain · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 74 Velites Comba Cyclone · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 75 Velites Comba Fire 2.0 · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 76 Vitamin well · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 77 Vitamina D3 · forest… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+✓ 35 imágenes generadas, 42 fallos.
+  · Crop Top Holo Negro by HY-PE (forest): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Gafas Sol Raptor (forest): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Gafas Sol Urban (forest): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Gorra (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hy-pe - Parche (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hybrid 1.0 - Caribbean Blue (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hybrid 1.0 - Deep forest (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · L-Carnitina (forest): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Leggin largo burdeos (forest): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Leggin largo negro (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Legging Coral Corto (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Leggins Largo Morado (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Leggins Largos Verdes (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Minimal 1.0 (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Mochila Urban (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS - ISO - PROTEIN 1KG (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS Magnesio 4 (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS Super omega 3 (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Red Bull (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Riñonera Urban (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Black (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Coral (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Gris (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Short Holo (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Sudadera Holo - Black (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-shirt Holo Black (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-Shirt Holo Coral (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-Shirt Holo Gris (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Taza - Drop 1.0 (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Totebag urban (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Calleras Quad ultra (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Cinturon (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - gorro (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Head Band (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - mochila (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Muñequeras nylon (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Muñequeras tela (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Calleras All terrain (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Comba Cyclone (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Comba Fire 2.0 (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Vitamin well (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Vitamina D3 (forest): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.

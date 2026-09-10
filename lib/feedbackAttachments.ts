@@ -1,14 +1,16 @@
-import { pickSessionVideo } from '@/lib/sessionVideoPicker';
+import { pickSessionVideo, type SessionVideoSource } from '@/lib/sessionVideoPicker';
 import type { FeedbackAttachmentDraft } from '@/lib/trainerFeedbackMediaService';
 
 export const MAX_FEEDBACK_ATTACHMENTS = 4;
 
-export async function pickFeedbackVideo(): Promise<{
+export async function pickFeedbackVideo(
+  source: SessionVideoSource = 'library',
+): Promise<{
   draft?: FeedbackAttachmentDraft;
   error?: string;
   cancelled?: boolean;
 }> {
-  const picked = await pickSessionVideo();
+  const picked = await pickSessionVideo(source);
 
   if ('cancelled' in picked) return { cancelled: true };
   if ('error' in picked) return { error: picked.error };

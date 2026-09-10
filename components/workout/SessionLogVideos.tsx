@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ActionSheetModal } from '@/components/ui/ActionSheetModal';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
+import { SessionVideoSendModal } from '@/components/workout/SessionVideoSendModal';
+import { VideoTelestratorModal } from '@/components/trainer/VideoTelestratorModal';
+import { SessionVideoPlayer } from '@/components/workout/SessionVideoPlayer';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useSessionVideos } from '@/hooks/useSessionVideos';
 import type { SessionLogVideo } from '@/lib/sessionVideoService';
 import type { SessionVideoSource } from '@/lib/sessionVideoPicker';
+import type { FeedbackAttachmentDraft } from '@/lib/trainerFeedbackMediaService';
 
 function formatVideoDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-ES', {
@@ -18,49 +22,12 @@ function formatVideoDate(iso: string) {
   });
 }
 
-function openVideoUrl(url: string) {
-  if (Platform.OS === 'web') {
-    window.open(url, '_blank', 'noopener,noreferrer');
-    return;
-  }
-  void Linking.openURL(url);
-}
-
-function SessionVideoPlayer({ url }: { url: string; mimeType?: string }) {
-  if (Platform.OS === 'web') {
-    return (
-      <video
-        src={url}
-        controls
-        playsInline
-        style={{
-          width: '100%',
-          maxHeight: 240,
-          borderRadius: 12,
-          backgroundColor: colors.black,
-        }}
-      >
-        <track kind="captions" />
-      </video>
-    );
-  }
-
-  return (
-    <Pressable
-      onPress={() => openVideoUrl(url)}
-      style={({ pressed }) => [styles.nativeVideoBtn, pressed && styles.pressed]}
-    >
-      <AppIcon name="play" size={22} color={colors.accent} />
-      <Text style={styles.nativeVideoBtnText}>Reproducir video</Text>
-    </Pressable>
-  );
-}
-
 interface SessionLogVideosProps {
   logId?: string;
   userId?: string;
   readOnly?: boolean;
   compact?: boolean;
+  tone?: 'default' | 'subtle';
   requiresSavedLog?: boolean;
   canUpload?: boolean;
   videos?: SessionLogVideo[];
@@ -69,6 +36,7 @@ interface SessionLogVideosProps {
   error?: string | null;
   onUpload?: (source: SessionVideoSource) => void;
   onRemove?: (videoId: string) => void;
+  onAnnotatedVideo?: (draft: FeedbackAttachmentDraft, video: SessionLogVideo) => void;
 }
 
 export function SessionLogVideos({
@@ -76,6 +44,7 @@ export function SessionLogVideos({
   userId,
   readOnly = false,
   compact = false,
+  tone = 'default',
   requiresSavedLog = false,
   canUpload: canUploadProp,
   videos: videosProp,
@@ -84,10 +53,12 @@ export function SessionLogVideos({
   error: errorProp,
   onUpload,
   onRemove,
+  onAnnotatedVideo,
 }: SessionLogVideosProps) {
   const controlled = videosProp !== undefined;
   const internal = useSessionVideos(controlled ? undefined : logId, controlled ? undefined : userId);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [annotateVideo, setAnnotateVideo] = useState<SessionLogVideo | null>(null);
 
   const videos = videosProp ?? internal.videos;
   const isLoading = isLoadingProp ?? internal.isLoading;
@@ -97,6 +68,7 @@ export function SessionLogVideos({
   const canUpload =
     canUploadProp ?? (!readOnly && Boolean(logId && userId) && !requiresSavedLog);
   const needsSaveFirst = requiresSavedLog && !logId && !canUploadProp;
+  const subtle = tone === 'subtle';
 
   const handleUploadPress = () => {
     if (onUpload) {
@@ -107,14 +79,18 @@ export function SessionLogVideos({
   };
 
   return (
-    <View style={[styles.wrap, compact && styles.wrapCompact]}>
-      <View style={styles.header}>
-        <Text style={styles.label}>Videos del entreno</Text>
-        {videos.length > 0 ? <Text style={styles.count}>{videos.length}</Text> : null}
-      </View>
+    <View style={[styles.wrap, compact && styles.wrapCompact, subtle && styles.wrapSubtle]}>
+      {!subtle ? (
+        <View style={styles.header}>
+          <Text style={styles.label}>Videos del entreno</Text>
+          {videos.length > 0 ? <Text style={styles.count}>{videos.length}</Text> : null}
+        </View>
+      ) : null}
 
       {needsSaveFirst ? (
-        <Text style={styles.hint}>Guarda la sesión para poder subir videos de tu entrenamiento.</Text>
+        <Text style={[styles.hint, subtle && styles.hintSubtle]}>
+          Guarda la sesión para poder subir videos de tu entrenamiento.
+        </Text>
       ) : null}
 
       {canUpload && !readOnly ? (
@@ -129,47 +105,49 @@ export function SessionLogVideos({
       ) : null}
 
       {isLoading ? (
-        <Text style={styles.hint}>Cargando videos…</Text>
+        <Text style={[styles.hint, subtle && styles.hintSubtle]}>Cargando videos…</Text>
       ) : videos.length === 0 ? (
-        <Text style={styles.hint}>
-          {readOnly
-            ? 'Todavía no hay videos subidos para esta sesión.'
-            : 'Desde cada ejercicio puedes grabar un vídeo, o subir uno general de la sesión.'}
-        </Text>
+        <View style={[styles.emptyState, subtle && styles.emptyStateSubtle]}>
+          {!subtle ? null : <AppIcon name="camera" size={18} color={colors.textMuted} outlined />}
+          <Text style={[styles.hint, subtle && styles.hintSubtle]}>
+            {readOnly
+              ? 'Sin vídeos adjuntos en esta sesión.'
+              : 'Desde cada ejercicio puedes grabar un vídeo, o subir uno general de la sesión.'}
+          </Text>
+        </View>
       ) : (
-        videos.map((video) => (
-          <View key={video.id} style={styles.videoCard}>
-            <View style={styles.videoMeta}>
-              <Text style={styles.videoName} numberOfLines={1}>
-                {video.exerciseName?.trim() || video.fileName}
-              </Text>
-              {video.exerciseName?.trim() ? (
-                <Text style={styles.videoExercise} numberOfLines={1}>
-                  {video.fileName}
-                </Text>
-              ) : null}
-              <Text style={styles.videoDate}>{formatVideoDate(video.createdAt)}</Text>
-            </View>
-
-            <SessionVideoPlayer url={video.url} mimeType={video.mimeType} />
-
-            {!readOnly ? (
-              <Pressable
-                onPress={() => {
-                  if (onRemove) {
-                    onRemove(video.id);
-                    return;
-                  }
-                  void internal.removeVideo(video.id);
-                }}
-                style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}
-              >
-                <AppIcon name="trash" size={16} color={colors.danger} />
-                <Text style={styles.deleteText}>Eliminar</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ))
+        <View style={styles.videoList}>
+          {videos.map((video) => {
+            const title = video.exerciseName?.trim() || 'Vídeo de la sesión';
+            return (
+              <View key={video.id} style={styles.videoClip}>
+                <SessionVideoPlayer
+                  url={video.url}
+                  mimeType={video.mimeType}
+                  compact={compact || subtle}
+                  title={title}
+                  subtitle={formatVideoDate(video.createdAt)}
+                  onAnnotate={onAnnotatedVideo ? () => setAnnotateVideo(video) : undefined}
+                />
+                {!readOnly ? (
+                  <Pressable
+                    onPress={() => {
+                      if (onRemove) {
+                        onRemove(video.id);
+                        return;
+                      }
+                      void internal.removeVideo(video.id);
+                    }}
+                    style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}
+                  >
+                    <AppIcon name="trash" size={14} color={colors.danger} />
+                    <Text style={styles.deleteText}>Eliminar</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
       )}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -177,25 +155,17 @@ export function SessionLogVideos({
       <ActionSheetModal
         visible={pickerOpen}
         title="Subir video de la sesión"
-        subtitle={
-          Platform.OS === 'web'
-            ? 'Elige un vídeo de tu dispositivo.'
-            : 'Graba con la cámara o elige uno de la galería.'
-        }
+        subtitle="Graba con la cámara o elige uno de la galería."
         onClose={() => setPickerOpen(false)}
         actions={[
-          ...(Platform.OS === 'web'
-            ? []
-            : [
-                {
-                  key: 'camera',
-                  label: 'Grabar con la cámara',
-                  onPress: () => {
-                    setPickerOpen(false);
-                    onUpload?.('camera');
-                  },
-                },
-              ]),
+          {
+            key: 'camera',
+            label: 'Grabar con la cámara',
+            onPress: () => {
+              setPickerOpen(false);
+              onUpload?.('camera');
+            },
+          },
           {
             key: 'library',
             label: Platform.OS === 'web' ? 'Elegir vídeo' : 'Elegir de la galería',
@@ -206,6 +176,30 @@ export function SessionLogVideos({
           },
         ]}
       />
+
+      {!controlled ? (
+        <SessionVideoSendModal
+          visible={Boolean(internal.pendingUpload)}
+          exerciseName={internal.pendingUpload?.exerciseName}
+          sending={internal.isUploading}
+          onSend={() => void internal.confirmPendingUpload()}
+          onEdit={() => void internal.editPendingUpload()}
+          onCancel={internal.cancelPendingUpload}
+        />
+      ) : null}
+
+      {onAnnotatedVideo && annotateVideo ? (
+        <VideoTelestratorModal
+          visible
+          videoUrl={annotateVideo.url}
+          title={annotateVideo.exerciseName?.trim() || annotateVideo.fileName}
+          onClose={() => setAnnotateVideo(null)}
+          onComplete={(draft) => {
+            onAnnotatedVideo(draft, annotateVideo);
+            setAnnotateVideo(null);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -221,6 +215,10 @@ const styles = StyleSheet.create({
     marginTop: 0,
     paddingTop: 0,
     borderTopWidth: 0,
+  },
+  wrapSubtle: {
+    marginTop: 0,
+    paddingTop: 0,
   },
   header: {
     flexDirection: 'row',
@@ -245,55 +243,38 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 18,
   },
+  hintSubtle: {
+    ...typography.bodySmall,
+    lineHeight: 20,
+    fontStyle: 'normal',
+  },
+  emptyState: {
+    gap: spacing.xs,
+  },
+  emptyStateSubtle: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingLeft: 36,
+  },
   uploadBtn: {
     marginBottom: spacing.sm,
   },
-  videoCard: {
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  videoMeta: {
-    gap: 2,
-  },
-  videoName: {
-    ...typography.bodySmall,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  videoExercise: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
-  videoDate: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
-  nativeVideoBtn: {
+  videoList: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    borderRadius: 12,
-    backgroundColor: `${colors.accent}18`,
-    borderWidth: 1,
-    borderColor: `${colors.accent}44`,
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    alignItems: 'flex-start',
   },
-  nativeVideoBtnText: {
-    ...typography.bodySmall,
-    color: colors.accent,
-    fontWeight: '700',
+  videoClip: {
+    gap: spacing.xs,
   },
   deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     alignSelf: 'flex-start',
+    paddingLeft: 2,
   },
   deleteText: {
     ...typography.caption,

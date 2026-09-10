@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { Card } from '@/components/ui/Card';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { EXERCISE_METRIC_LABELS, guessMetricTypeFromName } from '@/lib/exercisePrescription';
 import { createEmptyExercise } from '@/lib/trainerSessionDraft';
 import type { Exercise, ExerciseMetricType } from '@/lib/types';
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: colors.border,
-    backgroundColor: `${colors.surfaceLight}66`,
+    backgroundColor: withAlpha(colors.surfaceLight, '66'),
   },
   emptyText: {
     ...typography.bodySmall,
@@ -400,12 +400,12 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: `${colors.accent}88`,
-    backgroundColor: `${colors.accent}08`,
+    borderColor: withAlpha(colors.accent, '88'),
+    backgroundColor: withAlpha(colors.accent, '08'),
   },
   addZonePressed: {
     opacity: 0.85,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: withAlpha(colors.accent, '14'),
   },
   addZoneText: {
     ...typography.bodySmall,

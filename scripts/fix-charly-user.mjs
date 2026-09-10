@@ -1,0 +1,101 @@
+import 'dotenv/config';
+import pg from 'pg';
+
+import { resolveDatabaseUrl } from './lib/annualWorkoutImport.mjs';
+
+const EMAIL = 'charly-7-8@hotmail.com';
+const PASSWORD = '5191996Ca';
+const NAME = 'Charly';
+const ROLE_SLUG = 'entrenador';
+const PROJECT_REF = 'nsdurlikkuoxqobabixr';
+
+const databaseUrl = resolveDatabaseUrl(PROJECT_REF);
+if (!databaseUrl) {
+  console.error('Falta DATABASE_URL o SUPABASE_DB_PASSWORD en .env');
+  process.exit(1);
+}
+
+const client = new pg.Client({
+  connectionString: databaseUrl,
+  ssl: { rejectUnauthorized: false },
+});
+
+await client.connect();
+
+const existing = await client.query(
+  `select id, email, email_confirmed_at
+   from auth.users
+   where lower(email) = lower($1)
+   limit 1`,
+  [EMAIL],
+);
+
+let userId = existing.rows[0]?.id;
+
+if (!userId) {
+  const insert = await client.query(
+    `insert into auth.users (
+       instance_id, id, aud, role, email, encrypted_password,
+       email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+       created_at, updated_at, confirmation_token, recovery_token,
+       email_change_token_new, email_change
+     )
+     values (
+       '00000000-0000-0000-0000-000000000000',
+       gen_random_uuid(),
+       'authenticated',
+       'authenticated',
+       $1,
+       crypt($2, gen_salt('bf')),
+       now(),
+       '{"provider":"email","providers":["email"]}'::jsonb,
+       $3::jsonb,
+       now(),
+       now(),
+       '', '', '', ''
+     )
+     returning id`,
+    [EMAIL, PASSWORD, JSON.stringify({ name: NAME })],
+  );
+  userId = insert.rows[0].id;
+  console.log(`✓ Usuario creado: ${EMAIL}`);
+} else {
+  await client.query(
+    `update auth.users
+     set encrypted_password = crypt($2, gen_salt('bf')),
+         email_confirmed_at = coalesce(email_confirmed_at, now()),
+         raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || $3::jsonb
+     where id = $1`,
+    [userId, PASSWORD, JSON.stringify({ name: NAME })],
+  );
+  console.log(`✓ Usuario actualizado: ${EMAIL}`);
+}
+
+const roleRes = await client.query('select id from roles where slug = $1 limit 1', [ROLE_SLUG]);
+if (roleRes.rows.length === 0) {
+  throw new Error(`Rol no encontrado: ${ROLE_SLUG}`);
+}
+
+await client.query(
+  `insert into public."Perfil" (id, email, name, id_roles)
+   values ($1, $2, $3, $4)
+   on conflict (id) do update set
+     email = excluded.email,
+     name = excluded.name,
+     id_roles = excluded.id_roles`,
+  [userId, EMAIL, NAME, roleRes.rows[0].id],
+);
+
+const verify = await client.query(
+  `select p.email, p.name, r.slug as role, u.email_confirmed_at is not null as email_confirmado
+   from public."Perfil" p
+   join auth.users u on u.id = p.id
+   left join roles r on r.id = p.id_roles
+   where p.id = $1`,
+  [userId],
+);
+
+console.log('✓ Perfil listo:', verify.rows[0]);
+console.log(`\nLogin:\n  Email: ${EMAIL}\n  Contraseña: ${PASSWORD}`);
+
+await client.end();

@@ -24,7 +24,7 @@ export function SavedMetconsCard({ style }: SavedMetconsCardProps) {
         <ActivityIndicator color={colors.metcon} style={styles.loader} />
       ) : entries.length === 0 ? (
         <Text style={styles.empty}>
-          Marca la estrella en un metcon para guardarlo aquí y tenerlo a mano.
+          Marca la estrella en un entrenamiento para añadirlo a favoritos.
         </Text>
       ) : (
         <View style={styles.list}>
@@ -57,7 +57,7 @@ export function SavedMetconsCard({ style }: SavedMetconsCardProps) {
                   })
                 }
                 disabled={isSaving(entry.workoutId)}
-                accessibilityLabel="Quitar de guardados"
+                accessibilityLabel="Quitar de favoritos"
                 style={({ pressed }) => [styles.starBtn, pressed && styles.pressed]}
               >
                 {isSaving(entry.workoutId) ? (
@@ -72,7 +72,7 @@ export function SavedMetconsCard({ style }: SavedMetconsCardProps) {
       )}
 
       <Button
-        title="Ver programación Metcon"
+        title="Ver programaciones"
         variant="outline"
         onPress={() => router.push('/tabs/programs')}
         style={styles.cta}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
@@ -10,6 +10,40 @@ import {
 } from '@/lib/trainingProfileService';
 import type { TrainingProfile } from '@/lib/types';
 
+type TrainingProfileSnapshot = {
+  userId: string;
+  preferences: TrainingProfileInput;
+  isLoading: boolean;
+  saving: boolean;
+  version: number;
+};
+
+const EMPTY_SNAPSHOT: TrainingProfileSnapshot = {
+  userId: '',
+  preferences: emptyTrainingProfile,
+  isLoading: false,
+  saving: false,
+  version: 0,
+};
+
+let snapshot: TrainingProfileSnapshot = EMPTY_SNAPSHOT;
+const listeners = new Set<() => void>();
+let loadSeq = 0;
+
+function emit(next: Partial<TrainingProfileSnapshot>) {
+  snapshot = { ...snapshot, ...next, version: snapshot.version + 1 };
+  listeners.forEach((listener) => listener());
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function getSnapshot() {
+  return snapshot;
+}
+
 /**
  * La experiencia y las limitaciones se leen y escriben en `"Perfil"` (nivel y lesiones),
  * el resto de preferencias viven en `user_training_profile`.
@@ -18,28 +52,41 @@ export function useTrainingProfile(targetUserId?: string) {
   const { user, updateProfile } = useAuth();
   const userId = targetUserId ?? user?.id ?? '';
   const isOwnProfile = !targetUserId || targetUserId === user?.id;
-
-  const [preferences, setPreferences] = useState<TrainingProfileInput>(emptyTrainingProfile);
-  const [isLoading, setIsLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
 
   const load = useCallback(async () => {
-    if (!userId) {
-      setPreferences(emptyTrainingProfile);
-      setIsLoading(false);
+    const activeUserId = userIdRef.current;
+    if (!activeUserId) {
+      emit({
+        userId: '',
+        preferences: emptyTrainingProfile,
+        isLoading: false,
+        saving: false,
+      });
       return;
     }
 
-    setIsLoading(true);
-    setPreferences(await fetchTrainingProfile(userId));
-    setIsLoading(false);
-  }, [userId]);
+    const seq = ++loadSeq;
+    emit({ userId: activeUserId, isLoading: true });
+
+    const preferences = await fetchTrainingProfile(activeUserId);
+    if (seq !== loadSeq) return;
+
+    emit({ userId: activeUserId, preferences, isLoading: false });
+  }, []);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, userId]);
 
   useFocusRefresh(() => load());
+
+  const isCurrentUser = state.userId === userId;
+  const preferences = isCurrentUser ? state.preferences : emptyTrainingProfile;
+  const isLoading = isCurrentUser ? state.isLoading : true;
+  const saving = isCurrentUser ? state.saving : false;
 
   const profile: TrainingProfile = useMemo(
     () => ({
@@ -52,28 +99,31 @@ export function useTrainingProfile(targetUserId?: string) {
 
   const save = useCallback(
     async (next: TrainingProfile) => {
-      if (!userId || !user) return { error: 'No hay sesión activa' };
+      const activeUserId = userIdRef.current;
+      if (!activeUserId || !user) return { error: 'No hay sesión activa' };
 
       const { trainingExperience, injuriesOrLimitations, ...rest } = next;
 
-      setSaving(true);
+      emit({ userId: activeUserId, saving: true });
       const [preferencesResult, profileResult] = await Promise.all([
-        saveTrainingProfile(userId, rest),
+        saveTrainingProfile(activeUserId, rest),
         updateProfile({
           name: user.name,
           fitnessLevel: trainingExperience,
           injuries: injuriesOrLimitations,
         }),
       ]);
-      setSaving(false);
+      emit({ saving: false });
 
       const error = preferencesResult.error ?? profileResult.error;
       if (error) return { error };
 
-      setPreferences(rest);
-      return {};
+      emit({ userId: activeUserId, preferences: rest });
+      await load();
+      const warning = preferencesResult.warning;
+      return { warning };
     },
-    [userId, user, updateProfile],
+    [user, updateProfile, load],
   );
 
   return { profile, isLoading, saving, save, refresh: load };

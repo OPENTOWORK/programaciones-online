@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useHomeTrainingSlots } from '@/hooks/useHomeTrainingSlots';
 import { isSameCalendarDay } from '@/lib/appointmentSchedule';
 import { HOME_TRAINING_SLOTS_MIGRATION_HINT } from '@/lib/homeTrainingSlotService';
 import { slotsForDate } from '@/lib/homeTrainingSchedule';
 import type { HomeTrainingSlotDraft } from '@/lib/homeTrainingSlotService';
+import { HOME_TRAINING_STAFF_JOIN } from '@/lib/trainerConstants';
 import {
   formatMonthLabel,
   getMonthGrid,
@@ -30,7 +31,36 @@ const DOT_COLORS: Record<HomeTrainingSlotStatus, string> = {
   cancelled: colors.textMuted,
 };
 
-export function HomeTrainingCalendarPanel() {
+function HomeTrainerJoinCard({ onRequest }: { onRequest: () => void }) {
+  return (
+    <Card style={styles.panel}>
+      <SectionHeader title={HOME_TRAINING_STAFF_JOIN.title} subtitle={HOME_TRAINING_STAFF_JOIN.text} />
+      <Button
+        title={HOME_TRAINING_STAFF_JOIN.button}
+        variant="success"
+        onPress={onRequest}
+        style={styles.joinButton}
+        textStyle={styles.joinButtonText}
+      />
+    </Card>
+  );
+}
+
+export function HomeTrainingCalendarPanel({
+  asAthlete = false,
+  onRequestHomeTrainerJoin,
+}: {
+  asAthlete?: boolean;
+  onRequestHomeTrainerJoin?: () => void;
+} = {}) {
+  if (onRequestHomeTrainerJoin) {
+    return <HomeTrainerJoinCard onRequest={onRequestHomeTrainerJoin} />;
+  }
+
+  return <HomeTrainingCalendarBoard asAthlete={asAthlete} />;
+}
+
+function HomeTrainingCalendarBoard({ asAthlete = false }: { asAthlete?: boolean }) {
   const {
     slots,
     isLoading,
@@ -42,7 +72,7 @@ export function HomeTrainingCalendarPanel() {
     book,
     cancel,
     refresh,
-  } = useHomeTrainingSlots();
+  } = useHomeTrainingSlots({ asAthlete });
 
   const [focusDate, setFocusDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -102,7 +132,7 @@ export function HomeTrainingCalendarPanel() {
         }
       />
 
-      {!persistent ? (
+      {isTrainer && !persistent ? (
         <View style={styles.banner}>
           <AppIcon name="info" size={14} color={colors.warning} />
           <Text style={styles.bannerText}>{HOME_TRAINING_SLOTS_MIGRATION_HINT}</Text>
@@ -331,7 +361,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   dayCellSelected: {
-    backgroundColor: `${colors.accent}22`,
+    backgroundColor: withAlpha(colors.accent, '22'),
   },
   dayCellOutside: {
     opacity: 0.35,
@@ -375,6 +405,17 @@ const styles = StyleSheet.create({
   },
   refreshBtn: {
     marginTop: spacing.md,
+  },
+  joinButton: {
+    width: '100%',
+    alignItems: 'stretch',
+    marginTop: spacing.md,
+    minHeight: 52,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  joinButtonText: {
+    textAlign: 'center',
   },
   pressed: {
     opacity: 0.8,

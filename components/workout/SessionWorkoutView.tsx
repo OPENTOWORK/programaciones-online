@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
+import { BlockCommentField } from '@/components/workout/BlockCommentField';
 import { ExerciseRow } from '@/components/workout/ExerciseRow';
 import { ExerciseVideoPanel } from '@/components/workout/ExerciseVideoPanel';
 import { SessionLogVideos } from '@/components/workout/SessionLogVideos';
+import { SessionVideoSendModal } from '@/components/workout/SessionVideoSendModal';
 import { WorkoutSection } from '@/components/workout/WorkoutSection';
 import { ActionSheetModal } from '@/components/ui/ActionSheetModal';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +14,7 @@ import { Input } from '@/components/ui/Input';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing, typography } from '@/constants/theme';
+import { useSessionBlockComments } from '@/hooks/useSessionBlockComments';
 import { useSessionVideos } from '@/hooks/useSessionVideos';
 import type { SessionWorkoutContent } from '@/hooks/useSessionRunner';
 import { normalizeExerciseName } from '@/lib/exerciseName';
@@ -54,6 +57,10 @@ interface SessionWorkoutViewProps {
   onLogEnsured?: (logId: string) => void;
   /** Vídeos para el entrenador: solo Personal · Coaching. */
   allowFeedbackVideos?: boolean;
+  /** Contenido extra sobre los bloques, p. ej. el PDF adjunto a la sesión. */
+  attachment?: ReactNode;
+  /** Misma pantalla que el atleta, sin guardar marcas ni comentarios. */
+  preview?: boolean;
 }
 
 export function SessionWorkoutView({
@@ -79,10 +86,13 @@ export function SessionWorkoutView({
   ensureLog,
   onLogEnsured,
   allowFeedbackVideos = false,
+  attachment,
+  preview = false,
 }: SessionWorkoutViewProps) {
   const [activeVideo, setActiveVideo] = useState<ActiveVideo | null>(null);
   const [sendTarget, setSendTarget] = useState<SendTarget | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const locked = readOnly || preview;
 
   const {
     videos,
@@ -90,9 +100,22 @@ export function SessionWorkoutView({
     isUploading,
     uploadingExerciseKey,
     error: videosError,
+    pendingUpload,
     uploadVideo,
+    confirmPendingUpload,
+    cancelPendingUpload,
+    editPendingUpload,
     removeVideo,
   } = useSessionVideos(logId, userId);
+
+  const {
+    commentsByKey,
+    savingBlockKey,
+    error: blockCommentsError,
+    saveText,
+    uploadAudio,
+    removeAudio,
+  } = useSessionBlockComments(logId, userId);
 
   const sentExerciseKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -134,30 +157,63 @@ export function SessionWorkoutView({
     }
   };
 
+  const handleBlockCommentLog = (result: { logId?: string; error?: string }) => {
+    if (result.logId && result.logId !== logId) {
+      onLogEnsured?.(result.logId);
+    }
+    if (result.error) {
+      setLocalError(result.error);
+    }
+  };
+
+  const renderBlockComment = (blockKey: string) => (
+    <BlockCommentField
+      key={blockKey}
+      blockKey={blockKey}
+      comment={commentsByKey.get(blockKey)}
+      readOnly={readOnly && !preview}
+      disabled={locked}
+      isSaving={savingBlockKey === blockKey}
+      onSaveText={(text) => {
+        if (locked) return;
+        void saveText(blockKey, text, ensureLog).then(handleBlockCommentLog);
+      }}
+      onAudioReady={(draft) => {
+        if (locked) return;
+        void uploadAudio(blockKey, draft, ensureLog).then(handleBlockCommentLog);
+      }}
+      onRemoveAudio={() => {
+        if (locked) return;
+        void removeAudio(blockKey).then(handleBlockCommentLog);
+      }}
+    />
+  );
+
   const sectionProps = (sectionKey: string) => ({
     sectionKey,
     completedItems: completed,
-    onToggleItem: readOnly ? undefined : onToggleItem,
+    onToggleItem: locked ? undefined : onToggleItem,
     onExercisePress: (name: string, aimharderEjerId?: number, youtubeVideoId?: string) =>
       openExerciseVideo(`block:${normalizeExerciseName(name)}`, name, aimharderEjerId, youtubeVideoId),
     hasExerciseVideo: (name: string, aimharderEjerId?: number, youtubeVideoId?: string) =>
       hasVideo(name, aimharderEjerId, youtubeVideoId),
     activeExerciseName: activeVideo?.name,
     onSendExerciseVideo:
-      readOnly || !allowFeedbackVideos
+      locked || !allowFeedbackVideos
         ? undefined
         : (exerciseKey: string, exerciseName: string) => {
             setSendTarget({ key: exerciseKey, name: exerciseName });
           },
-    uploadingExerciseKey: readOnly ? null : uploadingExerciseKey,
-    sentExerciseKeys: readOnly ? undefined : sentExerciseKeys,
+    uploadingExerciseKey: locked ? null : uploadingExerciseKey,
+    sentExerciseKeys: locked ? undefined : sentExerciseKeys,
+    renderAfterBlock: renderBlockComment,
   });
 
   if (loadingLog) {
     return <ActivityIndicator color={colors.accent} style={styles.loader} />;
   }
 
-  const displayError = localError || videosError || error;
+  const displayError = localError || videosError || blockCommentsError || error;
 
   return (
     <View>
@@ -165,7 +221,9 @@ export function SessionWorkoutView({
       <Text style={styles.meta}>{[scheduledDateLabel, meta].filter(Boolean).join(' · ')}</Text>
 
       <Card style={styles.progressCard}>
-        {readOnly ? (
+        {preview ? (
+          <Text style={styles.textOnlyHint}>Marca las partes del entreno conforme las vayas haciendo</Text>
+        ) : readOnly ? (
           total > 0 ? (
             <ProgressBar value={completedTotal} max={total} label="Partes completadas por el atleta" />
           ) : (
@@ -179,6 +237,8 @@ export function SessionWorkoutView({
           <Text style={styles.textOnlyHint}>Marca las partes del entreno conforme las vayas haciendo</Text>
         )}
       </Card>
+
+      {attachment}
 
       {activeVideo ? (
         <ExerciseVideoPanel
@@ -216,7 +276,7 @@ export function SessionWorkoutView({
                   completed={!!completed[key]}
                   hasVideo={hasVideo(exercise.name, exercise.aimharderEjerId, exercise.youtubeVideoId)}
                   isVideoActive={isVideoActive}
-                  onToggle={readOnly ? undefined : () => onToggleItem(key)}
+                  onToggle={locked ? undefined : () => onToggleItem(key)}
                   onOpenVideo={() =>
                     openExerciseVideo(
                       exercise.id,
@@ -226,12 +286,12 @@ export function SessionWorkoutView({
                     )
                   }
                   onSendVideo={
-                    readOnly || !allowFeedbackVideos
+                    locked || !allowFeedbackVideos
                       ? undefined
                       : () => setSendTarget({ key, name: exercise.name })
                   }
-                  isSendingVideo={!readOnly && uploadingExerciseKey === key}
-                  hasSentVideo={!readOnly && sentExerciseKeys.has(key)}
+                  isSendingVideo={!locked && uploadingExerciseKey === key}
+                  hasSentVideo={!locked && sentExerciseKeys.has(key)}
                 />
               </View>
             );
@@ -241,27 +301,28 @@ export function SessionWorkoutView({
 
       <WorkoutSection title="Vuelta a la calma" content={workout.cooldown} icon="cooldown" {...sectionProps('cooldown')} />
 
-      {readOnly && feelings.trim() ? (
+      {readOnly && !preview && feelings.trim() ? (
         <Card style={styles.feelingsCard}>
           <Text style={styles.feelingsLabel}>Sensaciones del atleta</Text>
           <Text style={styles.feelingsReadOnly}>{feelings}</Text>
         </Card>
       ) : null}
 
-      {!readOnly ? (
+      {!locked || preview ? (
         <>
           <Input
             label="¿Cómo te has sentido?"
-            value={feelings}
-            onChangeText={onFeelingsChange}
+            value={preview ? '' : feelings}
+            onChangeText={preview ? () => {} : onFeelingsChange}
             placeholder="Energía, fatiga, dolor, sensaciones…"
             multiline
             numberOfLines={4}
             textAlignVertical="top"
+            editable={!preview}
             style={styles.feelingsInput}
           />
 
-          {allowFeedbackVideos ? (
+          {allowFeedbackVideos && !preview ? (
             <SessionLogVideos
               videos={videos}
               isLoading={videosLoading}
@@ -274,7 +335,7 @@ export function SessionWorkoutView({
             />
           ) : null}
 
-          {saved ? (
+          {preview ? null : saved ? (
             <Card style={styles.successCard}>
               <Text style={styles.successTitle}>Sesión guardada</Text>
               <Text style={styles.successText}>
@@ -301,27 +362,19 @@ export function SessionWorkoutView({
       <ActionSheetModal
         visible={allowFeedbackVideos && Boolean(sendTarget)}
         title={sendTarget ? `Vídeo · ${sendTarget.name}` : 'Enviar vídeo'}
-        subtitle={
-          Platform.OS === 'web'
-            ? 'Elige un vídeo de tu dispositivo para enviárselo a tu entrenador.'
-            : 'Graba cómo haces el ejercicio o elige un vídeo de la galería.'
-        }
+        subtitle="Graba cómo haces el ejercicio o elige un vídeo de la galería."
         onClose={() => setSendTarget(null)}
         actions={[
-          ...(Platform.OS === 'web'
-            ? []
-            : [
-                {
-                  key: 'camera',
-                  label: isUploading ? 'Abriendo cámara…' : 'Grabar con la cámara',
-                  disabled: isUploading,
-                  onPress: () => {
-                    const target = sendTarget;
-                    setSendTarget(null);
-                    void handleUpload('camera', target);
-                  },
-                },
-              ]),
+          {
+            key: 'camera',
+            label: isUploading ? 'Abriendo cámara…' : 'Grabar con la cámara',
+            disabled: isUploading,
+            onPress: () => {
+              const target = sendTarget;
+              setSendTarget(null);
+              void handleUpload('camera', target);
+            },
+          },
           {
             key: 'library',
             label: isUploading ? 'Subiendo…' : Platform.OS === 'web' ? 'Elegir vídeo' : 'Elegir de la galería',
@@ -333,6 +386,30 @@ export function SessionWorkoutView({
             },
           },
         ]}
+      />
+
+      <SessionVideoSendModal
+        visible={Boolean(pendingUpload)}
+        exerciseName={pendingUpload?.exerciseName}
+        sending={isUploading}
+        onSend={() => {
+          void confirmPendingUpload().then((result) => {
+            if (result.logId && result.logId !== logId) {
+              onLogEnsured?.(result.logId);
+            }
+            if (result.error) {
+              setLocalError(result.error);
+            }
+          });
+        }}
+        onEdit={() => {
+          void editPendingUpload().then((result) => {
+            if (result?.error) {
+              setLocalError(result.error);
+            }
+          });
+        }}
+        onCancel={cancelPendingUpload}
       />
     </View>
   );

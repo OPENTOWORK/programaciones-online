@@ -1,12 +1,12 @@
 import { useRouter } from 'expo-router';
-import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { AppLogo } from '@/components/ui/AppLogo';
-import { borderRadius, colors, shadows, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, shadows, spacing, typography, withAlpha } from '@/constants/theme';
 
-const heroBackground = require('@/assets/home-hero.jpg');
+const heroBackground = require('@/assets/home-hero-banner.jpg');
 
 export function HomeBrandShowcase() {
   const router = useRouter();
@@ -18,36 +18,30 @@ export function HomeBrandShowcase() {
       accessibilityLabel="Explorar programaciones"
       style={({ pressed }) => [styles.heroCard, pressed && styles.pressed]}
     >
-      <ImageBackground
-        source={heroBackground}
-        style={styles.heroBackground}
-        imageStyle={styles.heroBackgroundImage}
-        resizeMode="cover"
-      >
+      <View style={styles.heroBackground}>
+        <Image source={heroBackground} style={styles.heroImage} resizeMode="cover" accessibilityIgnoresInvertColors />
         <LinearGradient
-          colors={['rgba(15,20,25,0.2)', 'rgba(15,20,25,0.78)', colors.background]}
+          colors={['rgba(8,12,16,0.78)', 'rgba(8,12,16,0.42)', 'rgba(8,12,16,0.12)']}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
           locations={[0, 0.5, 1]}
-          style={styles.heroOverlay}
-        >
+          style={styles.heroGradient}
+          pointerEvents="none"
+        />
+        <View style={styles.heroOverlay} pointerEvents="none">
           <View style={styles.heroBrandRow}>
-            <AppLogo size={40} />
-            <View style={styles.heroBrandCopy}>
-              <Text style={styles.heroEyebrow}>TrainingProgLine</Text>
-              <Text style={styles.heroBrandTagline}>Programaciones a tu medida</Text>
-            </View>
+            <AppLogo size={48} />
+            <Text style={styles.heroBrandTagline}>Programaciones a tu medida</Text>
           </View>
 
           <Text style={styles.heroTitle}>Tu entrenamiento,{'\n'}organizado</Text>
-          <Text style={styles.heroSubtitle}>
-            Explora el catálogo o continúa donde lo dejaste.
-          </Text>
 
           <View style={styles.heroCta}>
             <Text style={styles.heroCtaText}>Explorar catálogo</Text>
             <AppIcon name="programs" size={16} color={colors.white} />
           </View>
-        </LinearGradient>
-      </ImageBackground>
+        </View>
+      </View>
     </Pressable>
   );
 }
@@ -57,24 +51,35 @@ const styles = StyleSheet.create({
     opacity: 0.94,
   },
   heroCard: {
+    width: '100%',
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: `${colors.accent}40`,
+    borderColor: withAlpha(colors.accent, '40'),
     backgroundColor: colors.surface,
     ...shadows.card,
   },
   heroBackground: {
-    minHeight: 220,
+    position: 'relative',
+    width: '100%',
+    height: 240,
+    overflow: 'hidden',
   },
-  heroBackgroundImage: {
-    opacity: 0.88,
+  heroImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  heroGradient: {
+    ...StyleSheet.absoluteFillObject,
   },
   heroOverlay: {
+    position: 'relative',
+    zIndex: 1,
     flex: 1,
     justifyContent: 'flex-end',
     padding: spacing.lg,
-    minHeight: 220,
+    height: 240,
     gap: spacing.sm,
   },
   heroBrandRow: {
@@ -103,12 +108,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 24,
     lineHeight: 30,
-  },
-  heroSubtitle: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    maxWidth: 300,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
   heroCta: {
     alignSelf: 'flex-start',

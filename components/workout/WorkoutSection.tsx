@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
@@ -5,7 +6,10 @@ import { Card } from '@/components/ui/Card';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import {
-  getBlockAccent,
+  parseFreeTextBlockContent,
+  type FreeTextBlockVideo,
+} from '@/lib/freeTextBlockVideos';
+import {
   isFreeTextBlockLabel,
   isKnownBlockLabel,
   isStructuredWorkoutContent,
@@ -44,14 +48,15 @@ interface WorkoutSectionProps {
   onSendExerciseVideo?: (exerciseKey: string, exerciseName: string) => void;
   uploadingExerciseKey?: string | null;
   sentExerciseKeys?: Set<string> | string[];
+  renderAfterBlock?: (blockKey: string, blockIndex: number) => ReactNode;
 }
 
-function TimingPartPill({ part, accentText }: { part: TimingDisplayPart; accentText: string }) {
+function TimingPartPill({ part }: { part: TimingDisplayPart }) {
   const iconName = part.icon === 'time' ? 'time' : part.icon === 'rounds' ? 'frequency' : 'info';
 
   return (
     <View style={styles.timingPill}>
-      <AppIcon name={iconName} size={14} color={accentText} outlined />
+      <AppIcon name={iconName} size={13} color={colors.textMuted} outlined />
       <Text style={styles.timingValue}>{part.value}</Text>
       {part.unit ? <Text style={styles.timingUnit}>{part.unit}</Text> : null}
     </View>
@@ -61,7 +66,6 @@ function TimingPartPill({ part, accentText }: { part: TimingDisplayPart; accentT
 interface BlockItemsProps {
   items: string[];
   blockIndex: number;
-  accentText: string;
   sectionKey?: string;
   completedItems?: Record<string, boolean>;
   onToggleItem?: (key: string) => void;
@@ -90,7 +94,6 @@ function hasSentVideo(sentExerciseKeys: Set<string> | string[] | undefined, key:
 function BlockItems({
   items,
   blockIndex,
-  accentText,
   sectionKey,
   completedItems,
   onToggleItem,
@@ -124,6 +127,12 @@ function BlockItems({
           if (showVideo) onExercisePress?.(exerciseName, undefined, display.youtubeVideoId);
         };
 
+        const sendLabel = isUploadingThis
+          ? 'Subiendo vídeo…'
+          : alreadySent
+            ? 'Enviar otro vídeo'
+            : 'Enviar vídeo';
+
         return (
           <View
             key={`${item}-${index}`}
@@ -149,76 +158,59 @@ function BlockItems({
                 </View>
               )
             ) : (
-              <View style={[styles.itemBullet, { backgroundColor: accentText }]} />
+              <View style={styles.itemBullet} />
             )}
             <View style={styles.itemCopy}>
-              <Pressable
-                onPress={() => {
-                  if (onToggleItem && itemKey) {
-                    onToggleItem(itemKey);
-                  }
-                }}
-                disabled={!onToggleItem || !itemKey}
-              >
-                <Text style={styles.itemName}>{display.name}</Text>
-                {display.quantity || display.load ? (
-                  <View style={styles.itemMetrics}>
-                    {display.quantity ? (
-                      <View style={styles.itemMetricPill}>
-                        <Text style={styles.itemMetricLabel}>Cantidad</Text>
-                        <Text style={styles.itemMetricValue}>{display.quantity}</Text>
-                      </View>
+              <View style={styles.itemHeader}>
+                <Pressable
+                  onPress={() => {
+                    if (onToggleItem && itemKey) {
+                      onToggleItem(itemKey);
+                    }
+                  }}
+                  disabled={!onToggleItem || !itemKey}
+                  style={styles.itemNamePressable}
+                >
+                  <Text style={styles.itemName}>{display.name}</Text>
+                </Pressable>
+                {showVideo || canSendVideo ? (
+                  <View style={styles.itemIconRow}>
+                    {showVideo ? (
+                      <Pressable
+                        onPress={openVideo}
+                        style={[styles.itemIconBtn, isActive && styles.itemIconBtnActive]}
+                        accessibilityRole="button"
+                        accessibilityLabel={isActive ? 'Ocultar vídeo' : 'Ver vídeo'}
+                      >
+                        <AppIcon name="play" size={16} color={colors.textSecondary} outlined />
+                      </Pressable>
                     ) : null}
-                    {display.load ? (
-                      <View style={styles.itemMetricPill}>
-                        <Text style={styles.itemMetricLabel}>{display.loadLabel ?? 'Carga'}</Text>
-                        <Text style={styles.itemMetricValue}>{display.load}</Text>
-                      </View>
+                    {canSendVideo ? (
+                      <Pressable
+                        onPress={() => onSendExerciseVideo?.(itemKey, exerciseName)}
+                        disabled={isUploadingThis}
+                        style={[styles.itemIconBtn, isUploadingThis && styles.itemIconBtnMuted]}
+                        accessibilityRole="button"
+                        accessibilityLabel={sendLabel}
+                      >
+                        <AppIcon name="camera" size={16} color={colors.textSecondary} outlined />
+                      </Pressable>
                     ) : null}
                   </View>
                 ) : null}
-              </Pressable>
-              <View style={styles.itemActions}>
-                {showVideo ? (
-                  <Pressable onPress={openVideo} style={styles.itemVideoPressable}>
-                    <Text style={styles.itemVideoHint}>
-                      {isActive ? 'Reproduciendo arriba' : 'Ver vídeo'}
-                    </Text>
-                  </Pressable>
-                ) : null}
-                {canSendVideo ? (
-                  <Pressable
-                    onPress={() => onSendExerciseVideo?.(itemKey, exerciseName)}
-                    disabled={isUploadingThis}
-                    style={styles.itemVideoPressable}
-                    accessibilityLabel="Enviar vídeo del ejercicio"
-                  >
-                    <Text style={[styles.itemSendHint, isUploadingThis && styles.itemSendHintMuted]}>
-                      {isUploadingThis
-                        ? 'Subiendo…'
-                        : alreadySent
-                          ? 'Enviar otro vídeo'
-                          : 'Enviar vídeo'}
-                    </Text>
-                  </Pressable>
-                ) : null}
               </View>
-            </View>
-            <View style={styles.itemSideActions}>
-              {showVideo ? (
-                <Pressable onPress={openVideo} style={styles.itemPlayBtn} accessibilityLabel="Ver vídeo">
-                  <AppIcon name="play" size={18} color={accentText} outlined />
-                </Pressable>
-              ) : null}
-              {canSendVideo ? (
-                <Pressable
-                  onPress={() => onSendExerciseVideo?.(itemKey, exerciseName)}
-                  disabled={isUploadingThis}
-                  style={styles.itemPlayBtn}
-                  accessibilityLabel="Grabar y enviar vídeo"
-                >
-                  <AppIcon name="camera" size={18} color={accentText} outlined />
-                </Pressable>
+              {display.quantity || display.load ? (
+                <View style={styles.itemMetrics}>
+                  {display.quantity ? (
+                    <Text style={styles.itemMetricText}>{display.quantity}</Text>
+                  ) : null}
+                  {display.load ? (
+                    <Text style={styles.itemMetricText}>
+                      {display.loadLabel ? `${display.loadLabel}: ` : ''}
+                      {display.load}
+                    </Text>
+                  ) : null}
+                </View>
               ) : null}
             </View>
           </View>
@@ -228,8 +220,56 @@ function BlockItems({
   );
 }
 
-interface BlockCardProps extends Omit<BlockItemsProps, 'items' | 'accentText'> {
+interface BlockCardProps extends Omit<BlockItemsProps, 'items'> {
   block: WorkoutContentBlock;
+}
+
+/** Vídeos que el entrenador ha colgado de un bloque de texto, que no tiene lista de ejercicios. */
+function FreeTextVideoChips({
+  videos,
+  activeExerciseName,
+  onExercisePress,
+}: {
+  videos: FreeTextBlockVideo[];
+  activeExerciseName?: string;
+  onExercisePress?: (
+    exerciseName: string,
+    aimharderEjerId?: number,
+    youtubeVideoId?: string,
+  ) => void;
+}) {
+  if (videos.length === 0) return null;
+
+  return (
+    <View style={styles.textVideos}>
+      {videos.map((video, index) => {
+        const label = video.label.trim() || 'Ver vídeo';
+        const isActive =
+          Boolean(activeExerciseName) &&
+          activeExerciseName?.toLowerCase() === label.toLowerCase();
+
+        return (
+          <Pressable
+            key={`${video.youtubeVideoId}-${index}`}
+            onPress={() => onExercisePress?.(label, undefined, video.youtubeVideoId)}
+            disabled={!onExercisePress}
+            style={({ pressed }) => [
+              styles.textVideoChip,
+              isActive && styles.textVideoChipActive,
+              pressed && styles.itemRowPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Ver vídeo de ${label}`}
+          >
+            <AppIcon name="play" size={14} color={colors.textSecondary} outlined />
+            <Text style={styles.textVideoChipText} numberOfLines={1}>
+              {label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 }
 
 /** Texto libre: se muestra exactamente como lo escribió el entrenador. */
@@ -239,8 +279,10 @@ function WorkoutTextCard({
   sectionKey,
   completedItems,
   onToggleItem,
+  onExercisePress,
+  activeExerciseName,
 }: BlockCardProps) {
-  const text = block.text ?? '';
+  const { body: text, videos } = parseFreeTextBlockContent(block.text ?? '');
   const title = block.label.trim();
   const itemKey = sectionKey ? `${sectionKey}:b${blockIndex}:text` : '';
   const isChecked = itemKey ? !!completedItems?.[itemKey] : false;
@@ -269,6 +311,11 @@ function WorkoutTextCard({
       ) : (
         body
       )}
+      <FreeTextVideoChips
+        videos={videos}
+        activeExerciseName={activeExerciseName}
+        onExercisePress={onExercisePress}
+      />
     </View>
   );
 }
@@ -299,7 +346,7 @@ function WorkoutNoteCard({ block, ...itemProps }: BlockCardProps) {
           {detail}
         </Text>
       ))}
-      <BlockItems items={block.items} accentText={colors.accent} {...itemProps} />
+      <BlockItems items={block.items} {...itemProps} />
     </View>
   );
 }
@@ -313,7 +360,6 @@ function WorkoutBlockCard({ block, ...itemProps }: BlockCardProps) {
     return <WorkoutNoteCard block={block} {...itemProps} />;
   }
 
-  const accent = getBlockAccent(block.label);
   const { blockTitle, pillTiming } = splitBlockTimingMetadata(block.timing);
   const timingParts = parseTimingForDisplay(pillTiming, block.label);
   const pillParts = timingParts.filter((part) => part.icon !== 'info' || part.value.length <= 28);
@@ -323,18 +369,16 @@ function WorkoutBlockCard({ block, ...itemProps }: BlockCardProps) {
   const timingHint = getBlockTimingHint(block.label);
 
   return (
-    <View style={[styles.blockCard, { borderColor: accent.border, backgroundColor: accent.bg }]}>
+    <View style={styles.blockCard}>
       <View style={styles.blockHeader}>
         <View style={styles.blockHeaderTop}>
-          <View style={[styles.blockChip, { backgroundColor: `${accent.text}18` }]}>
-            <Text style={[styles.blockChipText, { color: accent.text }]}>{block.label}</Text>
-          </View>
+          <Text style={styles.blockLabel}>{block.label}</Text>
           {blockTitle ? <Text style={styles.blockTitleText}>{blockTitle}</Text> : null}
         </View>
         {pillParts.length > 0 ? (
           <View style={styles.timingRow}>
             {pillParts.map((part, index) => (
-              <TimingPartPill key={`${part.icon}-${part.value}-${index}`} part={part} accentText={accent.text} />
+              <TimingPartPill key={`${part.icon}-${part.value}-${index}`} part={part} />
             ))}
           </View>
         ) : null}
@@ -348,7 +392,7 @@ function WorkoutBlockCard({ block, ...itemProps }: BlockCardProps) {
 
       {timingHint ? <Text style={styles.timingHint}>{timingHint}</Text> : null}
 
-      <BlockItems items={block.items} accentText={accent.text} {...itemProps} />
+      <BlockItems items={block.items} {...itemProps} />
     </View>
   );
 }
@@ -367,11 +411,13 @@ export function WorkoutSection({
   onSendExerciseVideo,
   uploadingExerciseKey,
   sentExerciseKeys,
+  renderAfterBlock,
 }: WorkoutSectionProps) {
   if (!content?.trim()) return null;
 
   const structured = isStructuredWorkoutContent(content);
   const blocks = structured ? parseWorkoutContent(content) : [];
+  const plain = structured ? null : parseFreeTextBlockContent(content);
   const itemProps = {
     sectionKey,
     completedItems,
@@ -385,24 +431,24 @@ export function WorkoutSection({
   };
 
   return (
-    <Card style={[styles.card, variant === 'featured' ? styles.cardFeatured : undefined]}>
+    <Card style={styles.card}>
       <View style={styles.header}>
-        <View style={styles.iconBadge}>
-          <AppIcon name={icon} size={18} color={colors.accent} outlined />
-        </View>
+        <AppIcon name={icon} size={16} color={colors.textMuted} outlined />
         <Text style={styles.headerTitle}>{title}</Text>
       </View>
 
       {structured ? (
         <View style={styles.blocks}>
-          {blocks.map((block, index) => (
-            <WorkoutBlockCard
-              key={`${block.label}-${index}`}
-              block={block}
-              blockIndex={index}
-              {...itemProps}
-            />
-          ))}
+          {blocks.map((block, index) => {
+            const blockKey = sectionKey ? `${sectionKey}:b${index}` : `b${index}`;
+            return (
+              <Fragment key={`${block.label}-${index}`}>
+                {index > 0 ? <View style={styles.blockDivider} /> : null}
+                <WorkoutBlockCard block={block} blockIndex={index} {...itemProps} />
+                {renderAfterBlock ? renderAfterBlock(blockKey, index) : null}
+              </Fragment>
+            );
+          })}
         </View>
       ) : sectionKey && (onToggleItem || completedItems?.[`${sectionKey}:text`]) ? (
         <Pressable
@@ -413,11 +459,19 @@ export function WorkoutSection({
           <View style={[styles.checkbox, completedItems?.[`${sectionKey}:text`] && styles.checkboxChecked]}>
             {completedItems?.[`${sectionKey}:text`] ? <Text style={styles.checkmark}>✓</Text> : null}
           </View>
-          <Text style={styles.paragraph}>{content}</Text>
+          <Text style={styles.paragraph}>{plain?.body ?? content}</Text>
         </Pressable>
       ) : (
-        <Text style={styles.paragraph}>{content}</Text>
+        <Text style={styles.paragraph}>{plain?.body ?? content}</Text>
       )}
+
+      {plain ? (
+        <FreeTextVideoChips
+          videos={plain.videos}
+          activeExerciseName={activeExerciseName}
+          onExercisePress={onExercisePress}
+        />
+      ) : null}
     </Card>
   );
 }
@@ -427,30 +481,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     padding: spacing.md,
   },
-  cardFeatured: {
-    borderColor: `${colors.accent}44`,
-    backgroundColor: colors.surface,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     marginBottom: spacing.md,
-  },
-  iconBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.sm,
-    backgroundColor: `${colors.accent}14`,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingBottom: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   headerTitle: {
-    ...typography.bodySmall,
-    color: colors.accent,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
     flex: 1,
   },
   paragraph: {
@@ -461,37 +504,33 @@ const styles = StyleSheet.create({
   blocks: {
     gap: spacing.sm,
   },
+  blockDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: spacing.sm,
+  },
   blockCard: {
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    padding: spacing.md,
+    paddingTop: spacing.xs,
   },
   blockHeader: {
-    gap: spacing.sm,
+    gap: spacing.xs,
     marginBottom: spacing.sm,
   },
   blockHeaderTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: 2,
   },
-  blockChip: {
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs,
-  },
-  blockChipText: {
+  blockLabel: {
     ...typography.caption,
-    fontWeight: '700',
+    color: colors.textMuted,
+    fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
   },
   blockTitleText: {
-    ...typography.bodySmall,
+    ...typography.body,
     color: colors.text,
     fontWeight: '600',
-    flexShrink: 1,
+    lineHeight: 22,
   },
   blockInstruction: {
     ...typography.bodySmall,
@@ -502,11 +541,7 @@ const styles = StyleSheet.create({
   timingPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    gap: 4,
   },
   timingRow: {
     flexDirection: 'row',
@@ -516,13 +551,13 @@ const styles = StyleSheet.create({
   },
   timingValue: {
     ...typography.caption,
-    color: colors.text,
-    fontWeight: '700',
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
   timingUnit: {
     ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
+    color: colors.textMuted,
+    fontWeight: '500',
   },
   timingHint: {
     ...typography.caption,
@@ -543,7 +578,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   itemRowActive: {
-    backgroundColor: `${colors.accent}12`,
+    backgroundColor: colors.surfaceLight,
     borderRadius: borderRadius.sm,
     paddingHorizontal: spacing.xs,
     marginHorizontal: -spacing.xs,
@@ -579,96 +614,74 @@ const styles = StyleSheet.create({
   },
   itemCopy: {
     flex: 1,
+    minWidth: 0,
+    gap: spacing.xs,
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  itemNamePressable: {
+    flex: 1,
+    minWidth: 0,
   },
   itemName: {
     ...typography.body,
     color: colors.text,
-    fontWeight: '700',
+    fontWeight: '600',
     lineHeight: 22,
   },
-  itemMetrics: {
+  itemIconRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
   },
-  itemMetricPill: {
-    backgroundColor: colors.surface,
+  itemIconBtn: {
+    width: 30,
+    height: 30,
     borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  itemMetricLabel: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 1,
+  itemIconBtnActive: {
+    backgroundColor: colors.surface,
+    borderColor: colors.textMuted,
   },
-  itemMetricValue: {
-    ...typography.caption,
-    color: colors.text,
-    fontWeight: '600',
+  itemIconBtnMuted: {
+    opacity: 0.5,
+  },
+  itemMetrics: {
+    gap: 2,
+  },
+  itemMetricText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
   itemBullet: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 8,
-  },
-  itemVideoHint: {
-    ...typography.caption,
-    color: colors.accent,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  itemSendHint: {
-    ...typography.caption,
-    color: colors.accentBlue,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  itemSendHintMuted: {
-    color: colors.textMuted,
-  },
-  itemActions: {
-    gap: 2,
-    marginTop: 2,
-  },
-  itemSideActions: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  itemVideoPressable: {
-    alignSelf: 'flex-start',
-    marginTop: 2,
-  },
-  itemPlayBtn: {
-    marginTop: 2,
-    padding: spacing.xs,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 9,
+    backgroundColor: colors.textMuted,
   },
   noteCard: {
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderLeftWidth: 3,
-    borderLeftColor: `${colors.accent}66`,
-    backgroundColor: colors.surfaceLight,
-    padding: spacing.md,
+    paddingTop: spacing.xs,
     gap: spacing.xs,
   },
   noteTitle: {
     ...typography.body,
     color: colors.text,
-    fontWeight: '700',
+    fontWeight: '600',
     lineHeight: 22,
   },
   noteTitleWithBody: {
-    paddingBottom: spacing.sm,
     marginBottom: spacing.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
   },
   noteDetail: {
     ...typography.bodySmall,
@@ -679,5 +692,32 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     lineHeight: 24,
+  },
+  textVideos: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  textVideoChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: borderRadius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    maxWidth: '100%',
+  },
+  textVideoChipActive: {
+    backgroundColor: colors.surface,
+  },
+  textVideoChipText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    flexShrink: 1,
   },
 });

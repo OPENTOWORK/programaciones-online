@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { isAdminRole, isTrainerRole } from '@/lib/athleteService';
+import { fetchAdminGymsOverview, type AdminGymRow } from '@/lib/gymAdminService';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
@@ -8,7 +10,11 @@ import {
   createCrmStage,
   deleteCrmStage,
   fetchCrmBoard,
+  firstAssignableCrmStage,
   getLocalLeadRole,
+  isCededClientStage,
+  isGymsStage,
+  isReadOnlyCrmStage,
   renameCrmStage,
   reorderCrmStages,
   restoreCrmLead,
@@ -18,11 +24,17 @@ import {
 import { addCrmActivity } from '@/lib/trainerCrmActivity';
 import { createTrainerClient } from '@/lib/trainerClientService';
 import { createStaleRefresh } from '@/lib/staleRefresh';
+import {
+  EMPTY_ATHLETE_ALERTS,
+  markAthleteAlertSourcesRead,
+  pendingAlertSources,
+} from '@/lib/trainerAthleteAlerts';
 import type { AthleteSummary, CrmLeadPosition, CrmStage, UserRole } from '@/lib/types';
 
 export interface CrmColumn {
   stage: CrmStage;
   leads: AthleteSummary[];
+  gyms?: AdminGymRow[];
 }
 
 export interface CrmRoleNotice {
@@ -42,12 +54,15 @@ export function useTrainerCrmBoard() {
     isLoading: athletesLoading,
     error: athletesError,
     refresh: refreshAthletes,
+    patchAthlete,
   } = useAthletes();
 
   const [stages, setStages] = useState<CrmStage[]>([]);
   const [positions, setPositions] = useState<Map<string, CrmLeadPosition>>(new Map());
   const [promotedLeads, setPromotedLeads] = useState<AthleteSummary[]>([]);
+  const [cededLeads, setCededLeads] = useState<AthleteSummary[]>([]);
   const [archivedLeadIds, setArchivedLeadIds] = useState<Set<string>>(new Set());
+  const [adminGyms, setAdminGyms] = useState<AdminGymRow[]>([]);
   const [roleNotice, setRoleNotice] = useState<CrmRoleNotice | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [persistent, setPersistent] = useState(true);
@@ -65,18 +80,25 @@ export function useTrainerCrmBoard() {
       }
 
       try {
-        const board = await fetchCrmBoard(trainerId, isDemoMode);
+        const board = await fetchCrmBoard(trainerId, isDemoMode, user?.role);
         setStages(sortStages(board.stages));
         setPositions(board.positions);
         setPromotedLeads(board.promotedLeads);
+        setCededLeads(board.cededLeads);
         setArchivedLeadIds(new Set(board.archivedLeadIds));
         setPersistent(board.persistent);
+        if (isAdminRole(user?.role)) {
+          const gymsResult = await fetchAdminGymsOverview();
+          setAdminGyms(gymsResult.data?.rows ?? []);
+        } else {
+          setAdminGyms([]);
+        }
         refreshGate.current.markFetched();
       } finally {
         setIsLoading(false);
       }
     },
-    [trainerId, isDemoMode],
+    [trainerId, isDemoMode, user?.role],
   );
 
   useEffect(() => {
@@ -91,23 +113,57 @@ export function useTrainerCrmBoard() {
 
   /** Los promocionados dejan de ser atletas, así que ya no llegan por `useAthletes`. */
   const boardLeads = useMemo<AthleteSummary[]>(() => {
+    const cededById = new Map(cededLeads.map((lead) => [lead.id, lead]));
     const withLocalRole = athletes.map((athlete) => {
       const localRole = getLocalLeadRole(athlete.id);
-      return localRole ? { ...athlete, role: localRole } : athlete;
+      const ceded = cededById.get(athlete.id);
+      return {
+        ...athlete,
+        ...(localRole ? { role: localRole } : null),
+        ...(ceded
+          ? {
+              assignedTrainerId: ceded.assignedTrainerId,
+              assignedTrainerName: ceded.assignedTrainerName,
+            }
+          : null),
+      };
     });
     const knownIds = new Set(withLocalRole.map((athlete) => athlete.id));
-    return [...withLocalRole, ...promotedLeads.filter((lead) => !knownIds.has(lead.id))].filter(
-      (lead) => !archivedLeadIds.has(lead.id),
-    );
-  }, [athletes, promotedLeads, archivedLeadIds]);
+    return [
+      ...withLocalRole,
+      ...promotedLeads.filter((lead) => !knownIds.has(lead.id)),
+      ...cededLeads.filter((lead) => !knownIds.has(lead.id) && !promotedLeads.some((item) => item.id === lead.id)),
+    ].filter((lead) => {
+      if (archivedLeadIds.has(lead.id)) return false;
+      if (!isAdminRole(user?.role) && (lead.id === trainerId || isTrainerRole(lead.role))) return false;
+      return true;
+    });
+  }, [athletes, promotedLeads, cededLeads, archivedLeadIds, trainerId, user?.role]);
 
   const columns = useMemo<CrmColumn[]>(() => {
     const sorted = sortStages(stages);
-    const firstStageId = sorted[0]?.id;
+    const fallbackStageId = firstAssignableCrmStage(sorted)?.id;
+    const cededStage = sorted.find((stage) => isCededClientStage(stage));
+    const cededIds = new Set(cededLeads.map((lead) => lead.id));
+    if (cededStage) {
+      for (const [athleteId, pos] of positions) {
+        if (pos.stageId === cededStage.id) cededIds.add(athleteId);
+      }
+    }
 
     return sorted.map((stage) => {
+      if (isGymsStage(stage)) {
+        return { stage, leads: [], gyms: adminGyms };
+      }
+
       const leads = boardLeads
-        .filter((athlete) => (positions.get(athlete.id)?.stageId ?? firstStageId) === stage.id)
+        .filter((athlete) => {
+          if (cededStage && isCededClientStage(stage)) {
+            return cededIds.has(athlete.id);
+          }
+          if (cededIds.has(athlete.id)) return false;
+          return (positions.get(athlete.id)?.stageId ?? fallbackStageId) === stage.id;
+        })
         .sort((a, b) => {
           const posA = positions.get(a.id)?.position ?? Number.MAX_SAFE_INTEGER;
           const posB = positions.get(b.id)?.position ?? Number.MAX_SAFE_INTEGER;
@@ -117,11 +173,11 @@ export function useTrainerCrmBoard() {
 
       return { stage, leads };
     });
-  }, [stages, boardLeads, positions]);
+  }, [stages, boardLeads, positions, cededLeads, adminGyms]);
 
   const applyRoleChange = useCallback(
     async (athleteId: string, role: UserRole) => {
-      if (!trainerId) return;
+      if (!trainerId || !isAdminRole(user?.role)) return false;
 
       const lead = boardLeads.find((athlete) => athlete.id === athleteId);
       const name = lead?.name ?? 'El atleta';
@@ -130,29 +186,36 @@ export function useTrainerCrmBoard() {
 
       if (error) {
         setRoleNotice({ kind: 'error', message: `No se pudo cambiar el rol de ${name}: ${error}` });
-        return;
+        return false;
       }
 
       setRoleNotice({
         kind: 'success',
         message:
-          role === 'entrenador'
-            ? `${name} pasa a rol entrenador. Verá el panel de entrenador al volver a entrar en la app.`
-            : `${name} vuelve a rol atleta.`,
+          role === 'administrador'
+            ? `${name} pasa a rol administrador. Verá el panel de entrenador al volver a entrar en la app.`
+            : role === 'entrenador'
+              ? `${name} pasa a rol entrenador. Verá el panel de entrenador al volver a entrar en la app.`
+              : `${name} vuelve a rol atleta.`,
       });
 
       void addCrmActivity(
         trainerId,
         athleteId,
-        role === 'entrenador' ? 'Cambiado a rol entrenador' : 'Devuelto a rol atleta',
+        role === 'administrador'
+          ? 'Cambiado a rol administrador'
+          : role === 'entrenador'
+            ? 'Cambiado a rol entrenador'
+            : 'Devuelto a rol atleta',
         'stage_change',
         useLocalStore,
       );
 
       void refreshAthletes(true);
       void load({ force: true, silent: true });
+      return true;
     },
-    [boardLeads, trainerId, useLocalStore, refreshAthletes, load],
+    [boardLeads, trainerId, useLocalStore, refreshAthletes, load, user?.role],
   );
 
   const moveLeadToStage = useCallback(
@@ -163,6 +226,28 @@ export function useTrainerCrmBoard() {
       const previousStage = columns.find((column) => column.leads.some((lead) => lead.id === athleteId))?.stage;
       const sameStage = previousStage?.id === targetStageId;
       const targetColumn = columns.find((column) => column.stage.id === targetStageId);
+
+      if (isReadOnlyCrmStage(previousStage) || isReadOnlyCrmStage(targetColumn?.stage)) {
+        return;
+      }
+
+      const nextRole: UserRole | undefined = sameStage
+        ? undefined
+        : targetColumn?.stage.roleSlug ?? (previousStage?.roleSlug ? 'atleta' : undefined);
+
+      if (nextRole && !isAdminRole(user?.role)) {
+        setRoleNotice({ kind: 'error', message: 'Solo un administrador puede cambiar el rol de un usuario.' });
+        return;
+      }
+
+      if (nextRole && athleteId === trainerId) {
+        setRoleNotice({
+          kind: 'error',
+          message: 'No puedes cambiar tu propio rol. Pídeselo a otro administrador.',
+        });
+        return;
+      }
+
       const targetLeadIds = (targetColumn?.leads ?? []).map((athlete) => athlete.id).filter((id) => id !== athleteId);
       const insertIndex = targetIndex ?? targetLeadIds.length;
       const nextOrder = [
@@ -171,39 +256,41 @@ export function useTrainerCrmBoard() {
         ...targetLeadIds.slice(insertIndex),
       ];
 
+      const previousPositions = new Map(positions);
+
       setPositions((prev) => {
         const next = new Map(prev);
         nextOrder.forEach((id, index) => next.set(id, { stageId: targetStageId, position: index }));
         return next;
       });
 
+      // El rol manda sobre la columna: si el cambio falla, la ficha no puede quedarse ahí.
+      if (nextRole && !(await applyRoleChange(athleteId, nextRole))) {
+        setPositions(previousPositions);
+        return;
+      }
+
       await saveCrmColumnOrder(trainerId, targetStageId, nextOrder, useLocalStore);
 
-      // Reordenar dentro de la misma columna no cambia de etapa: no es un hito ni toca el rol.
       if (sameStage) return;
 
       const targetStageName = targetColumn?.stage.name;
       if (targetStageName) {
         void addCrmActivity(trainerId, athleteId, `Movido a "${targetStageName}"`, 'stage_change', useLocalStore);
       }
-
-      const targetRole = targetColumn?.stage.roleSlug;
-      const nextRole: UserRole | undefined = targetRole ?? (previousStage?.roleSlug ? 'atleta' : undefined);
-      if (nextRole) {
-        await applyRoleChange(athleteId, nextRole);
-      }
     },
-    [columns, trainerId, useLocalStore, applyRoleChange],
+    [columns, positions, trainerId, useLocalStore, applyRoleChange, user?.role],
   );
 
   const moveLeadToAdjacentStage = useCallback(
     (athleteId: string, direction: 'prev' | 'next') => {
       const sorted = sortStages(stages);
-      const currentStageId = positions.get(athleteId)?.stageId ?? sorted[0]?.id;
+      const currentStageId = positions.get(athleteId)?.stageId ?? firstAssignableCrmStage(sorted)?.id;
+      const currentStage = sorted.find((stage) => stage.id === currentStageId);
       const currentIndex = sorted.findIndex((stage) => stage.id === currentStageId);
       const targetIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
       const targetStage = sorted[targetIndex];
-      if (!targetStage) return;
+      if (!targetStage || isReadOnlyCrmStage(currentStage) || isReadOnlyCrmStage(targetStage)) return;
       void moveLeadToStage(athleteId, targetStage.id);
     },
     [stages, positions, moveLeadToStage],
@@ -213,7 +300,7 @@ export function useTrainerCrmBoard() {
     async (stageId: string, athleteId: string, direction: 'up' | 'down') => {
       if (!trainerId) return;
       const column = columns.find((item) => item.stage.id === stageId);
-      if (!column) return;
+      if (!column || isReadOnlyCrmStage(column.stage)) return;
 
       const ids = column.leads.map((athlete) => athlete.id);
       const index = ids.indexOf(athleteId);
@@ -240,10 +327,11 @@ export function useTrainerCrmBoard() {
   const removeLead = useCallback(
     async (athleteId: string) => {
       if (!trainerId) return;
+      if (isReadOnlyCrmStage(columns.find((column) => column.leads.some((lead) => lead.id === athleteId))?.stage)) {
+        return;
+      }
 
       const name = boardLeads.find((lead) => lead.id === athleteId)?.name ?? 'La ficha';
-
-      setArchivedLeadIds((prev) => new Set(prev).add(athleteId));
 
       const { error } = await archiveCrmLead(trainerId, athleteId, useLocalStore);
 
@@ -262,7 +350,7 @@ export function useTrainerCrmBoard() {
         message: `${name} ya no aparece en el tablero. Su cuenta y su historial se mantienen.`,
       });
     },
-    [boardLeads, trainerId, useLocalStore],
+    [boardLeads, columns, trainerId, useLocalStore],
   );
 
   const addStage = useCallback(
@@ -278,19 +366,25 @@ export function useTrainerCrmBoard() {
   const renameStage = useCallback(
     async (stageId: string, name: string) => {
       if (!trainerId) return;
+      if (isReadOnlyCrmStage(stages.find((stage) => stage.id === stageId))) return;
       const trimmed = name.trim();
       if (!trimmed) return;
       setStages((prev) => prev.map((stage) => (stage.id === stageId ? { ...stage, name: trimmed } : stage)));
       await renameCrmStage(trainerId, stageId, trimmed, useLocalStore);
     },
-    [trainerId, useLocalStore],
+    [trainerId, stages, useLocalStore],
   );
 
   const removeStage = useCallback(
     async (stageId: string) => {
       if (!trainerId || stages.length <= 1) return;
+      if (isReadOnlyCrmStage(stages.find((stage) => stage.id === stageId))) return;
+
       const sorted = sortStages(stages);
-      const fallbackStage = sorted.find((stage) => stage.id !== stageId) ?? sorted[0];
+      const fallbackStage =
+        firstAssignableCrmStage(sorted.filter((stage) => stage.id !== stageId)) ??
+        sorted.find((stage) => stage.id !== stageId) ??
+        sorted[0];
       if (!fallbackStage) return;
 
       setStages((prev) => prev.filter((stage) => stage.id !== stageId));
@@ -342,7 +436,7 @@ export function useTrainerCrmBoard() {
       if (result.error) return result.error;
       if (!result.athleteId) return 'No se pudo crear el cliente.';
 
-      const firstStage = columns[0]?.stage;
+      const firstStage = firstAssignableCrmStage(columns.map((column) => column.stage));
       if (!firstStage) return 'No hay columnas en el tablero.';
 
       if (archivedLeadIds.has(result.athleteId)) {
@@ -388,17 +482,27 @@ export function useTrainerCrmBoard() {
         return null;
       }
 
+      if (result.welcomeEmailSent) {
+        setRoleNotice({
+          kind: 'success',
+          message: result.needsEmailConfirmation
+            ? `${input.name.trim()} se ha creado y le hemos enviado un correo de bienvenida. Debe confirmar su email antes de poder entrar.`
+            : `${input.name.trim()} se ha creado y le hemos enviado un correo de bienvenida a su Gmail.`,
+        });
+        return null;
+      }
+
       if (result.needsEmailConfirmation) {
         setRoleNotice({
           kind: 'success',
-          message: `${input.name.trim()} se ha creado. Debe confirmar su email antes de poder entrar.`,
+          message: `${input.name.trim()} se ha creado, pero no se pudo enviar el correo de bienvenida. Debe confirmar su email antes de poder entrar.`,
         });
         return null;
       }
 
       setRoleNotice({
         kind: 'success',
-        message: `${input.name.trim()} ya está en la columna "${firstStage.name}".`,
+        message: `${input.name.trim()} ya está en la columna "${firstStage.name}", pero no se pudo enviar el correo de bienvenida.`,
       });
       return null;
     },
@@ -413,6 +517,21 @@ export function useTrainerCrmBoard() {
     ],
   );
 
+  const dismissLeadAlerts = useCallback(
+    async (athleteId: string) => {
+      const lead = boardLeads.find((athlete) => athlete.id === athleteId);
+      const sources = pendingAlertSources(lead?.alerts);
+      if (sources.length === 0) return;
+
+      patchAthlete(athleteId, {
+        alerts: { ...EMPTY_ATHLETE_ALERTS },
+        unansweredCount: 0,
+      });
+      await markAthleteAlertSourcesRead(athleteId, sources);
+    },
+    [boardLeads, patchAthlete],
+  );
+
   return {
     columns,
     isLoading: isLoading || athletesLoading,
@@ -422,6 +541,7 @@ export function useTrainerCrmBoard() {
     dismissRoleNotice,
     setRoleNotice,
     refresh,
+    dismissLeadAlerts,
     moveLeadToStage,
     moveLeadToAdjacentStage,
     reorderLeadWithinStage,

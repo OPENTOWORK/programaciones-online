@@ -14,17 +14,20 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useProgram, usePrograms } from '@/hooks/usePrograms';
-import { isTrainerRole } from '@/lib/athleteService';
 import { safeGoBack } from '@/lib/navigation';
 import { openTrainerPreviewDay, openTrainerPreviewSession } from '@/lib/sessionNavigation';
 import { createWorkoutCatalog, updateWorkoutCatalog } from '@/lib/programEditService';
+import {
+  resolveCatalogSessionSaveTarget,
+} from '@/lib/catalogProgramCalendar';
 import { syncExerciseVideosForNames } from '@/lib/exerciseVideoSyncService';
-import { isTrainerEditableCategory } from '@/lib/programService';
+import { canManageTrainerProgram } from '@/lib/programService';
 import { collectExerciseNamesFromSessionDraft } from '@/lib/exerciseTextParser';
 import { combineMainPartsForSave, extractExercisesFromSessionDraft, hasSessionBlockContent } from '@/lib/sessionBlockSections';
 import { parseSchedulePreviewItemKey, type SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import {
   formatScheduleSummary,
+  parseScheduleFromWorkout,
   toLocalDateString,
   toWeekdayIndex,
   type SessionSchedule,
@@ -75,7 +78,7 @@ export default function EditSessionScreen() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
-  const canEdit = isTrainerRole(user?.role) && isTrainerEditableCategory(program?.category);
+  const canEdit = canManageTrainerProgram(user?.role, program?.category, program);
 
   useEffect(() => {
     if (!program || !canEdit) return;
@@ -211,7 +214,27 @@ export default function EditSessionScreen() {
     setSuccessMessage(null);
 
     try {
-      const result = await persistSessionDraft(draft, isNewSession ? undefined : workoutId);
+      const dateParam = Array.isArray(date) ? date[0] : date;
+      let targetId = isNewSession ? undefined : workoutId;
+      let draftToSave = draft;
+
+      if (!isNewSession && dateParam && workoutId) {
+        const index = workouts.findIndex((entry) => entry.id === workoutId);
+        if (index >= 0) {
+          const schedule = parseScheduleFromWorkout(workouts[index], index);
+          if (schedule.recurrence !== 'once') {
+            const targetDate = new Date(`${dateParam}T12:00:00`);
+            if (!Number.isNaN(targetDate.getTime())) {
+              draftToSave = scheduleDraftForDate(draft, dateParam);
+              targetId = undefined;
+            }
+          } else {
+            draftToSave = scheduleDraftForDate(draft, dateParam);
+          }
+        }
+      }
+
+      const result = await persistSessionDraft(draftToSave, targetId);
       if (result.error) {
         setError(result.error);
         return;
@@ -270,12 +293,13 @@ export default function EditSessionScreen() {
   };
 
   const handleCalendarSave = async ({ draft: calendarDraft, date, item }: CalendarSessionSaveInput) => {
-    const targetWorkoutId = item ? resolveWorkoutId(item) : undefined;
-    const draftToSave = item
-      ? calendarDraft
-      : scheduleDraftForDate(calendarDraft, toLocalDateString(date));
+    const { draft: draftToSave, targetWorkoutId } = resolveCatalogSessionSaveTarget(
+      calendarDraft,
+      workouts,
+      { item, date },
+    );
 
-    if (item && !targetWorkoutId) {
+    if (item && !resolveWorkoutId(item) && !targetWorkoutId) {
       setDraft(draftToSave);
       setSuccessMessage('Sesión actualizada en el formulario. Pulsa «Crear sesión» para guardarla.');
       return null;

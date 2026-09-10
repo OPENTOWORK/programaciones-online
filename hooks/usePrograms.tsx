@@ -19,8 +19,9 @@ import {
 } from '@/lib/mockData';
 import { getDemoCatalog } from '@/lib/programEditService';
 import { sortHypePrograms } from '@/lib/hypeCatalog';
-import { fetchPlansAndPrograms, fetchProgramById, mergeAppServicePlans, type Plan } from '@/lib/programService';
+import { fetchPlansAndPrograms, fetchProgramById, filterVisiblePrograms, isRemovedPlanCategory, mergeAppServicePlans, type Plan } from '@/lib/programService';
 import { createStaleRefresh } from '@/lib/staleRefresh';
+import { mapAuthException } from '@/lib/authErrors';
 import { isServicePlanCategory } from '@/lib/trainerConstants';
 import type { Program, ProgramCategory, Workout } from '@/lib/types';
 import { fetchWorkoutById, fetchWorkoutsByProgram } from '@/lib/workoutService';
@@ -29,7 +30,6 @@ const catalogRefresh = createStaleRefresh(60_000);
 
 const PLAN_CATEGORY_ORDER: ProgramCategory[] = [
   'personalized',
-  'standard',
   'hype',
   'nutrition',
   'home_training',
@@ -38,8 +38,7 @@ const PLAN_CATEGORY_ORDER: ProgramCategory[] = [
 
 const demoPlans: Plan[] = [
   { id: 'personalized', label: 'Personal · Coaching', category: 'personalized' },
-  { id: 'standard', label: 'Base · Training', category: 'standard' },
-  { id: 'hype', label: 'HYPE · Performance', category: 'hype' },
+  { id: 'hype', label: 'Training · Performance', category: 'hype' },
 ];
 
 function sortPlans(plans: Plan[]) {
@@ -65,7 +64,7 @@ interface ProgramsContextValue {
   isLoading: boolean;
   error: string | null;
   workouts: Workout[];
-  refresh: () => Promise<void>;
+  refresh: (force?: boolean) => Promise<void>;
   getByPlanId: (planId: string) => Program[];
   getProgramsForPlan: (planId: string) => Program[];
   getByCategory: (category: ProgramCategory) => Program[];
@@ -88,7 +87,7 @@ export function ProgramsProvider({ children }: { children: ReactNode }) {
     if (isDemoMode) {
       const demoCatalog = getDemoCatalog();
       setPlans(sortPlans(mergeAppServicePlans(demoPlans)));
-      setPrograms(demoCatalog.programs);
+      setPrograms(filterVisiblePrograms(demoCatalog.programs));
       setWorkouts(demoCatalog.workouts);
       setError(null);
       setIsLoading(false);
@@ -110,7 +109,7 @@ export function ProgramsProvider({ children }: { children: ReactNode }) {
         setPrograms([]);
         setWorkouts([]);
       }
-      setError(loadError instanceof Error ? loadError.message : 'No se pudieron cargar las programaciones');
+      setError(loadError instanceof Error ? mapAuthException(loadError) : 'No se pudieron cargar las programaciones');
     } finally {
       setIsLoading((current) => (current ? false : current));
     }
@@ -144,7 +143,10 @@ export function ProgramsProvider({ children }: { children: ReactNode }) {
     [programs],
   );
   const getById = useCallback(
-    (id: string) => programs.find((program) => program.id === id) ?? getProgramById(id),
+    (id: string) => {
+      const program = programs.find((item) => item.id === id) ?? getProgramById(id);
+      return program && isRemovedPlanCategory(program.category) ? undefined : program;
+    },
     [programs],
   );
   const getWorkout = useCallback(

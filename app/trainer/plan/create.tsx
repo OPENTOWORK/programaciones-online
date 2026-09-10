@@ -10,15 +10,18 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useAthlete, useAthletes } from '@/hooks/useAthletes';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
 import { fetchAthletePlansForAthlete } from '@/lib/athletePlanService';
+import { isGymRole } from '@/lib/athleteService';
 import { createEmptyNutritionPlan } from '@/lib/nutritionPlanContent';
 import { moveCalendarSessionToDate } from '@/lib/moveCalendarSession';
 import { safeGoBack } from '@/lib/navigation';
+import { SUPPORT_ROUTE } from '@/constants/support';
 import { pickPlanPdf, type PickedPlanPdf } from '@/lib/planPdfPicker';
+import { importAthletePlanPdfToCalendar, previewPlanPdfSessions, resolvePlanPdfWeekStartDate } from '@/lib/planPdfImportService';
 import {
   findPlanGroup,
   getNextSessionNumber,
@@ -76,11 +79,13 @@ export default function CreateAthletePlanScreen() {
     athleteId?: string | string[];
     planGroupId?: string | string[];
     sessionNumber?: string | string[];
+    title?: string | string[];
   }>();
   const planType = parsePlanType(params.type);
   const presetAthleteId = parseOptionalParam(params.athleteId);
   const presetPlanGroupId = parseOptionalParam(params.planGroupId);
   const presetSessionNumber = parseSessionNumber(params.sessionNumber);
+  const presetTitle = parseOptionalParam(params.title);
 
   const { athletes, isLoading: athletesLoading } = useAthletes();
   const { athlete: presetAthlete, isLoading: presetAthleteLoading } = useAthlete(presetAthleteId ?? '');
@@ -88,9 +93,10 @@ export default function CreateAthletePlanScreen() {
   const { createPlan, updatePlan, removePlan } = useTrainerAthletePlans();
 
   const isNutrition = planType === 'nutrition';
+  const gymNutritionBlocked = isGymRole(user?.role) && isNutrition;
 
   const [selectedAthleteId, setSelectedAthleteId] = useState(presetAthleteId ?? '');
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(presetTitle ?? '');
   const [createMode, setCreateMode] = useState<'new' | 'existing'>(presetPlanGroupId ? 'existing' : 'new');
   const [selectedGroupId, setSelectedGroupId] = useState(presetPlanGroupId ?? '');
   const [sessionNumber, setSessionNumber] = useState(presetSessionNumber ?? 1);
@@ -331,7 +337,12 @@ export default function CreateAthletePlanScreen() {
   const saveCalendarSession = async ({ draft, date, item }: CalendarSessionSaveInput) => {
     const draftError = validatePersonalizedPlanDraft(draft);
     if (draftError) return draftError;
-    if (!hasSessionBlockContent(draft) && draft.kind !== 'rest' && draft.kind !== 'activation') {
+    if (
+      !hasSessionBlockContent(draft) &&
+      draft.kind !== 'rest' &&
+      draft.kind !== 'activation' &&
+      draft.kind !== 'pdf'
+    ) {
       return 'Añade al menos un bloque de entrenamiento.';
     }
 
@@ -401,12 +412,12 @@ export default function CreateAthletePlanScreen() {
     return 'No se pudo eliminar la sesión.';
   };
 
-  const handleCalendarCopy = async (item: SchedulePreviewItem) => {
+  const handleCalendarCopy = async (item: SchedulePreviewItem, targetDate: Date) => {
     const draft = loadCalendarSessionDraft(item);
     if (!draft) return 'No se pudo copiar la sesión.';
 
     const number = nextCalendarSessionNumber();
-    const copiedDraft = renameSessionCopy(draft, number);
+    const copiedDraft = applyDateToDraft(renameSessionCopy(draft, number), targetDate);
     queueSession({
       id: `queued-${number}-${Date.now()}`,
       sessionNumber: number,
@@ -522,19 +533,76 @@ export default function CreateAthletePlanScreen() {
         }),
       );
 
-      const currentDraftError = validatePersonalizedPlanDraft(sessionDraft);
-      const currentHasContent = hasSessionBlockContent(sessionDraft) || Boolean(attachedPdf);
-      if (!currentDraftError && currentHasContent) {
+      if (hasSessionBlockContent(sessionDraft)) {
         if (hasPendingBlocks) {
           setError('Completa o elimina el bloque que estás editando antes de guardar el plan.');
           return;
         }
+
+        const currentDraftError = validatePersonalizedPlanDraft(sessionDraft);
+        if (currentDraftError) {
+          setError(currentDraftError);
+          return;
+        }
+
         sessionsToSave.push({ sessionNumber, draft: sessionDraft });
       }
 
-      if (sessionsToSave.length === 0) {
-        setError(currentDraftError ?? 'Añade al menos una sesión al plan.');
+      if (sessionsToSave.length === 0 && attachedPdf) {
+        if (!user?.id) {
+          setError('Sesión no válida');
+          return;
+        }
+
+        setSubmitting(true);
+        setError(null);
+
+        try {
+          const result = await importAthletePlanPdfToCalendar({
+            athleteId: selectedAthleteId,
+            trainerId: user.id,
+            title: trimmedTitle,
+            pdf: attachedPdf,
+            athleteName: selectedAthlete?.name,
+            planGroupId: createMode === 'existing' ? selectedGroup?.planGroupId : undefined,
+            weekStartDate: resolvePlanPdfWeekStartDate(sessionDraft.schedule.startDate),
+            replacePlanIds:
+              createMode === 'existing'
+                ? selectedGroup?.sessions.map((session) => session.id)
+                : undefined,
+          });
+
+          if (result.error) {
+            setError(result.error);
+            return;
+          }
+
+          const firstPlan = result.plans[0];
+          if (firstPlan) {
+            router.replace({ pathname: '/trainer/plan/[id]', params: { id: firstPlan.id } });
+            return;
+          }
+
+          safeGoBack(router, '/tabs/programs');
+        } catch (submitError) {
+          setError(submitError instanceof Error ? submitError.message : 'No se pudo guardar el plan');
+        } finally {
+          setSubmitting(false);
+        }
         return;
+      }
+
+      if (sessionsToSave.length === 0) {
+        setError('Añade al menos una sesión al plan o adjunta un PDF con la semana.');
+        return;
+      }
+
+      for (const session of sessionsToSave) {
+        const draftError = validatePersonalizedPlanDraft(session.draft);
+        if (draftError) {
+          setError(draftError);
+          return;
+        }
       }
 
       setSubmitting(true);
@@ -547,7 +615,7 @@ export default function CreateAthletePlanScreen() {
         for (const [index, session] of sessionsToSave.entries()) {
           const result = await persistSession(session.draft, session.sessionNumber, {
             planGroupId: index === 0 && createMode === 'new' ? undefined : planGroupId,
-            attachPdf: index === 0,
+            attachPdf: index === 0 && Boolean(attachedPdf),
           });
 
           if (result.error) {
@@ -614,15 +682,40 @@ export default function CreateAthletePlanScreen() {
     setError(null);
 
     const picked = await pickPlanPdf();
-    setPickingPdf(false);
-
-    if ('cancelled' in picked) return;
+    if ('cancelled' in picked) {
+      setPickingPdf(false);
+      return;
+    }
     if ('error' in picked) {
+      setPickingPdf(false);
       setError(picked.error);
       return;
     }
 
     setAttachedPdf(picked);
+
+    const preview = await previewPlanPdfSessions({
+      pdf: picked,
+      weekStartDate: resolvePlanPdfWeekStartDate(sessionDraft.schedule.startDate),
+    });
+
+    setPickingPdf(false);
+
+    if (preview.error) {
+      setError(preview.error);
+      return;
+    }
+
+    const queued = preview.sessions.map((draft, index) => ({
+      id: `pdf-${index}-${Date.now()}`,
+      sessionNumber: index + 1,
+      draft,
+    }));
+    setQueuedSessions(queued);
+
+    const nextSessionNumber = queued.length + 1;
+    setSessionNumber(nextSessionNumber);
+    setSessionDraft(createEmptySessionDraft(nextSessionNumber - 1));
   };
 
   const athletePicker = (
@@ -662,11 +755,22 @@ export default function CreateAthletePlanScreen() {
           style={styles.pdfButton}
         />
         {attachedPdf ? (
-          <Text style={styles.pdfName} numberOfLines={2}>
-            {attachedPdf.fileName}
-          </Text>
+          <>
+            <Text style={styles.pdfName} numberOfLines={2}>
+              {attachedPdf.fileName}
+            </Text>
+            {queuedSessions.length > 0 ? (
+              <Text style={styles.pdfHint}>
+                {queuedSessions.length} sesión{queuedSessions.length === 1 ? '' : 'es'} cargada
+                {queuedSessions.length === 1 ? '' : 's'} en el calendario. Pulsa «Guardar y asignar plan» para
+                publicarlas.
+              </Text>
+            ) : null}
+          </>
         ) : (
-          <Text style={styles.pdfHint}>Opcional. El atleta podrá descargar el PDF desde su plan.</Text>
+          <Text style={styles.pdfHint}>
+            Si el PDF tiene los días de la semana (Lunes, Martes…), se cargarán como ejercicios en el calendario semanal.
+          </Text>
         )}
       </View>
 
@@ -675,6 +779,25 @@ export default function CreateAthletePlanScreen() {
       <Button title="Guardar y asignar plan" onPress={() => void handleSubmit()} loading={submitting} />
     </View>
   );
+
+  if (gymNutritionBlocked) {
+    return (
+      <ScreenWrapper>
+        <Text style={styles.title}>Plan nutricional</Text>
+        <Text style={styles.blockedText}>
+          Los gimnasios no pueden crear planes nutricionales. Solicita la información desde
+          Programaciones → Nutrición y nuestro equipo te indicará las condiciones y la comisión.
+        </Text>
+        <Button title="Ir a Contacto" onPress={() => router.replace(SUPPORT_ROUTE)} />
+        <Button
+          title="Volver"
+          variant="secondary"
+          onPress={() => safeGoBack(router, '/tabs/programs')}
+          style={styles.backButton}
+        />
+      </ScreenWrapper>
+    );
+  }
 
   return (
     <ScreenWrapper padded={false}>
@@ -848,6 +971,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   title: { ...typography.h1, color: colors.text, marginBottom: 4 },
+  blockedText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: spacing.lg,
+  },
+  backButton: {
+    marginTop: spacing.sm,
+  },
   loader: { marginTop: spacing.xl },
   emptyTitle: { ...typography.h3, color: colors.text, marginBottom: spacing.sm },
   emptyText: { ...typography.bodySmall, color: colors.textSecondary, lineHeight: 22 },
@@ -872,7 +1004,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   athleteOptionSelected: {
-    backgroundColor: `${colors.accent}11`,
+    backgroundColor: withAlpha(colors.accent, '11'),
     marginHorizontal: -spacing.md,
     paddingHorizontal: spacing.md,
     borderRadius: 8,
@@ -957,7 +1089,7 @@ const styles = StyleSheet.create({
   },
   modeBtnActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   modeBtnDisabled: {
     opacity: 0.45,
@@ -996,7 +1128,7 @@ const styles = StyleSheet.create({
   },
   groupBtnActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: withAlpha(colors.accent, '14'),
   },
   groupBtnText: {
     ...typography.bodySmall,
@@ -1021,8 +1153,8 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.xs,
     marginBottom: spacing.md,
-    backgroundColor: `${colors.accent}10`,
-    borderColor: `${colors.accent}33`,
+    backgroundColor: withAlpha(colors.accent, '10'),
+    borderColor: withAlpha(colors.accent, '33'),
   },
   queuedTitle: {
     ...typography.bodySmall,

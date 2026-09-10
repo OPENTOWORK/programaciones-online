@@ -16,6 +16,24 @@ En Google Play Console, en **Nombre del paquete**, escribe exactamente:
 com.trainingprogline.app
 ```
 
+## Gráficos de la ficha (logo actual)
+
+Si cambias `assets/logo-source.png`, regenera iconos y gráficos de Play Store:
+
+```bash
+npm run assets:playstore
+```
+
+Archivos generados:
+
+| Archivo | Uso en Play Console |
+| --- | --- |
+| `assets/playstore/store-icon-512.png` | Icono de la app (512×512) en **Ficha de Play Store** |
+| `assets/playstore/feature-graphic.png` | Gráfico destacado (1024×500) |
+| `assets/icon.png` | Icono empaquetado en el `.aab` (se actualiza al generar un build nuevo) |
+
+Las capturas de pantalla con mockup de teléfono se suben manualmente en **Ficha de Play Store → Capturas de pantalla**. Hazlas desde la app ya desplegada con el logo nuevo (web o build de prueba).
+
 ## Subir a Google Play (paso a paso)
 
 1. Genera el bundle actualizado:

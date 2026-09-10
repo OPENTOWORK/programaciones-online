@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { AppLogo } from '@/components/ui/AppLogo';
 import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { DEMO_TRAINER, DEMO_USER } from '@/lib/mockData';
 import { isWebPlatform } from '@/lib/platformAccess';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,7 +38,7 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      const { error, profile } = await signIn(email.trim(), password);
+      const { error, profile } = await signIn(email.trim().toLowerCase(), password);
       if (error) {
         setAuthError(error);
         Alert.alert('Error', error);
@@ -72,11 +72,10 @@ export default function LoginScreen() {
 
   return (
     <ScreenWrapper>
-      <LinearGradient colors={[`${colors.accent}22`, 'transparent']} style={styles.hero}>
+      <LinearGradient colors={[withAlpha(colors.accent, '22'), 'transparent']} style={styles.hero}>
         <View style={styles.logoWrap}>
-          <AppLogo size={72} />
+          <AppLogo size={96} />
         </View>
-        <Text style={styles.title}>Training ProgLine</Text>
         {!isWeb ? (
           <Text style={styles.subtitle}>Tus programaciones de entrenamiento online</Text>
         ) : null}

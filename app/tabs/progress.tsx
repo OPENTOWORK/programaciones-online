@@ -4,15 +4,19 @@ import { BodyMetricsChart } from '@/components/progress/BodyMetricsChart';
 import { MotivationBanner } from '@/components/progress/MotivationBanner';
 import { ProgressOverview } from '@/components/progress/ProgressOverview';
 import { ProgressPhotos } from '@/components/progress/ProgressPhotos';
+import { RepMaxCard } from '@/components/progress/RepMaxCard';
 import { TrainerFeedbackCard } from '@/components/progress/TrainerFeedbackCard';
 import { Card } from '@/components/ui/Card';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
+import { useAuth } from '@/hooks/useAuth';
 import { usePhysicalProfile } from '@/hooks/usePhysicalProfile';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useProgress } from '@/hooks/useProgress';
 
 export default function ProgressScreen() {
+  const { user } = useAuth();
   const { progress, refresh } = useProgress();
   const { history, refresh: refreshMetrics } = usePhysicalProfile();
   useFocusRefresh(() => {
@@ -62,12 +66,14 @@ export default function ProgressScreen() {
           ]}
         />
 
-        <View style={styles.block}>
-          <Text style={styles.sectionTitle}>Historial reciente</Text>
+        <CollapsibleSection title="Historial reciente" style={styles.sectionCard}>
+          <Text style={styles.sectionLead}>
+            {progress.history.length === 0
+              ? 'Todavía no hay entrenamientos registrados'
+              : `${progress.history.length} ${progress.history.length === 1 ? 'sesión' : 'sesiones'}`}
+          </Text>
           {progress.history.length === 0 ? (
-            <Card style={styles.denseCard}>
-              <Text style={styles.emptyText}>Cuando completes entrenamientos, aparecerán aquí.</Text>
-            </Card>
+            <Text style={styles.emptyText}>Cuando completes entrenamientos, aparecerán aquí.</Text>
           ) : (
             <View style={styles.historyGrid}>
               {progress.history.map((log) => (
@@ -82,12 +88,27 @@ export default function ProgressScreen() {
               ))}
             </View>
           )}
-        </View>
+        </CollapsibleSection>
 
-        <BodyMetricsChart entries={history} />
+        <CollapsibleSection title="Evolución corporal" style={styles.sectionCard}>
+          <Text style={styles.sectionLead}>
+            Se actualiza cada vez que registras tus datos físicos
+          </Text>
+          <BodyMetricsChart entries={history} embedded />
+        </CollapsibleSection>
 
-        <ProgressPhotos dense />
-        <TrainerFeedbackCard dense />
+        <CollapsibleSection title="RM" style={styles.sectionCard}>
+          <Text style={styles.sectionLead}>Máximos de fuerza para programar porcentajes</Text>
+          <RepMaxCard dense userId={user?.id} embedded />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Fotos de progreso" style={styles.sectionCard}>
+          <ProgressPhotos dense embedded />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Feedback del entrenador" style={styles.sectionCard}>
+          <TrainerFeedbackCard dense embedded />
+        </CollapsibleSection>
       </View>
     </ScreenWrapper>
   );
@@ -99,7 +120,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
   },
   layout: {
-    flex: 1,
     gap: spacing.sm,
   },
   title: {
@@ -107,17 +127,14 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 2,
   },
-  block: {
-    gap: spacing.xs,
-    flexShrink: 1,
+  sectionCard: {
+    marginBottom: 0,
   },
-  sectionTitle: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  denseCard: {
-    padding: spacing.sm + 2,
+  sectionLead: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
   },
   emptyText: {
     ...typography.bodySmall,

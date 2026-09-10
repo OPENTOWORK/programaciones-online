@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
-import { isTrainerRole } from '@/lib/athleteService';
+import { isAdminRole, isTrainerRole } from '@/lib/athleteService';
 import {
   createSessionTemplate,
   deleteSessionTemplate,
@@ -10,7 +10,7 @@ import {
   updateSessionTemplate,
   type SessionTemplate,
 } from '@/lib/sessionTemplateService';
-import type { SessionTemplateTag, SessionTemplateFormatTag } from '@/lib/sessionTemplateTags';
+import type { SessionTemplateTag, SessionTemplateFormatTag, SessionTemplateModalityTag } from '@/lib/sessionTemplateTags';
 
 type TemplatesSnapshot = {
   trainerId: string | null;
@@ -57,6 +57,7 @@ function sortTemplates(templates: SessionTemplate[]) {
 export function useSessionTemplates() {
   const { user, isDemoMode } = useAuth();
   const trainerId = isTrainerRole(user?.role) ? user?.id : undefined;
+  const isAdmin = isAdminRole(user?.role);
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const trainerIdRef = useRef(trainerId);
@@ -90,7 +91,7 @@ export function useSessionTemplates() {
     });
 
     try {
-      const result = await fetchSessionTemplates(activeTrainerId, isDemoMode);
+      const result = await fetchSessionTemplates(activeTrainerId, isDemoMode, isAdmin);
       if (seq !== loadSeq || trainerIdRef.current !== activeTrainerId) return;
 
       emit({
@@ -111,7 +112,7 @@ export function useSessionTemplates() {
       });
       setHasLoadedOnce(true);
     }
-  }, [isDemoMode]);
+  }, [isDemoMode, isAdmin]);
 
   useEffect(() => {
     void load();
@@ -125,6 +126,7 @@ export function useSessionTemplates() {
       content: string,
       tag: SessionTemplateTag,
       formatTag?: SessionTemplateFormatTag | null,
+      modalityTag?: SessionTemplateModalityTag | null,
     ) => {
       if (!trainerId) return { error: 'Solo el entrenador puede guardar plantillas.' };
 
@@ -135,7 +137,9 @@ export function useSessionTemplates() {
         content,
         tag,
         formatTag,
+        modalityTag,
         useLocalStore: isDemoMode,
+        isAdmin,
       });
 
       if (result.error) {
@@ -159,7 +163,7 @@ export function useSessionTemplates() {
       void load();
       return {};
     },
-    [trainerId, isDemoMode, load],
+    [trainerId, isDemoMode, isAdmin, load],
   );
 
   const update = useCallback(
@@ -170,6 +174,7 @@ export function useSessionTemplates() {
         content?: string;
         tag?: SessionTemplateTag | null;
         formatTag?: SessionTemplateFormatTag | null;
+        modalityTag?: SessionTemplateModalityTag | null;
       },
     ) => {
       emit({ saving: true, error: null });
@@ -230,6 +235,7 @@ export function useSessionTemplates() {
     persistent: state.persistent,
     error: state.error,
     isTrainer: Boolean(trainerId),
+    isAdmin,
     create,
     update,
     remove,

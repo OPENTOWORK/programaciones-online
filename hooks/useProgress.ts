@@ -8,9 +8,9 @@ import type { ProgressData } from '@/lib/types';
 
 const progressRefresh = createStaleRefresh(60_000);
 
-export function useProgress() {
+export function useProgress(targetUserId?: string) {
   const { user, isDemoMode, isLoading: authLoading } = useAuth();
-  const userId = user?.id;
+  const userId = targetUserId ?? user?.id;
   const [progress, setProgress] = useState<ProgressData>(isDemoMode ? mockProgress : emptyProgress);
   const [isLoading, setIsLoading] = useState(!isDemoMode);
   const loadingRef = useRef(false);
@@ -18,7 +18,7 @@ export function useProgress() {
   const load = useCallback(
     async ({ silent = false, force = false }: { silent?: boolean; force?: boolean } = {}) => {
       if (authLoading) return;
-      if (!force && silent && !progressRefresh.shouldRefresh(false)) return;
+      if (!targetUserId && !force && silent && !progressRefresh.shouldRefresh(false)) return;
       if (loadingRef.current) return;
 
       if (isDemoMode) {
@@ -41,13 +41,13 @@ export function useProgress() {
       try {
         const data = await fetchProgressData(userId);
         setProgress(data);
-        progressRefresh.markFetched();
+        if (!targetUserId) progressRefresh.markFetched();
       } finally {
         loadingRef.current = false;
         setIsLoading(false);
       }
     },
-    [authLoading, isDemoMode, userId],
+    [authLoading, isDemoMode, targetUserId, userId],
   );
 
   useEffect(() => {

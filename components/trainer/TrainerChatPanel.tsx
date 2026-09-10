@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
   ChatComposerToolbar,
@@ -9,7 +9,7 @@ import {
 import { FeedbackAttachmentList } from '@/components/feedback/FeedbackAttachmentList';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { useChatComposer } from '@/hooks/useChatComposer';
 import type { TrainerMessage } from '@/lib/types';
 
@@ -26,8 +26,12 @@ interface TrainerChatPanelProps {
   disabledMessage?: string;
   /** Quién está viendo el chat: sus mensajes van a la derecha y en color de acento. */
   viewerRole?: TrainerMessage['sender'];
+  /** Si se indica, se usa para marcar mensajes propios en chats de grupo. */
+  currentUserId?: string;
   /** Versión compacta para el widget flotante del calendario. */
   compact?: boolean;
+  /** Abre el feedback enviado desde la ficha del atleta. */
+  onOpenFeedback?: (message: TrainerMessage) => void;
   /** Compositor con adjuntos, emojis y arrastrar archivos. */
   composer: ChatComposerState;
 }
@@ -49,7 +53,9 @@ export function TrainerChatPanel({
   disabled = false,
   disabledMessage,
   viewerRole = 'user',
+  currentUserId,
   compact = false,
+  onOpenFeedback,
   composer,
 }: TrainerChatPanelProps) {
   const {
@@ -75,6 +81,7 @@ export function TrainerChatPanel({
     recordingMillis,
     recordingError,
   } = composer;
+  const attachmentsEnabled = composer.attachmentsEnabled ?? true;
 
   return (
     <View style={[styles.container, compact && styles.containerCompact]}>
@@ -106,7 +113,9 @@ export function TrainerChatPanel({
             ) : (
               messages.map((msg) => {
                 const isFeedback = msg.origin === 'feedback';
-                const isOwn = msg.sender === viewerRole;
+                const isOwn = currentUserId
+                  ? msg.authorId === currentUserId
+                  : msg.sender === viewerRole;
 
                 return (
                   <View
@@ -121,8 +130,14 @@ export function TrainerChatPanel({
                     {isFeedback ? (
                       <View style={styles.feedbackTag}>
                         <AppIcon name="stats" size={13} color={colors.accent} />
-                        <Text style={styles.feedbackTagText}>Feedback del entrenador</Text>
+                        <Text style={styles.feedbackTagText}>
+                          {msg.sessionLogId ? 'Feedback de sesión' : 'Feedback del entrenador'}
+                        </Text>
                       </View>
+                    ) : null}
+
+                    {!isOwn && msg.authorLabel ? (
+                      <Text style={styles.authorLabel}>{msg.authorLabel}</Text>
                     ) : null}
 
                     {msg.text ? (
@@ -133,6 +148,18 @@ export function TrainerChatPanel({
 
                     {msg.attachments?.length ? (
                       <FeedbackAttachmentList attachments={msg.attachments} />
+                    ) : null}
+
+                    {isFeedback && onOpenFeedback ? (
+                      <Pressable
+                        onPress={() => onOpenFeedback(msg)}
+                        accessibilityRole="link"
+                        accessibilityLabel="Ver feedback"
+                        style={({ pressed }) => [styles.feedbackLink, pressed && styles.feedbackLinkPressed]}
+                      >
+                        <Text style={styles.feedbackLinkText}>Ver feedback</Text>
+                        <AppIcon name="chevronRight" size={14} color={colors.accent} />
+                      </Pressable>
                     ) : null}
                   </View>
                 );
@@ -150,25 +177,29 @@ export function TrainerChatPanel({
         </View>
       ) : (
         <>
-          <ChatComposerToolbar
-            disabled={disabled}
-            compact={compact}
-            isRecording={isRecording}
-            onToggleRecording={onToggleRecording}
-            onAttachCamera={onAttachCamera}
-            onAttachGif={onAttachGif}
-            onAttachFile={onAttachFile}
-            emojiOpen={emojiOpen}
-            onToggleEmoji={() => setEmojiOpen((current) => !current)}
-            allowVideoAttachments={composer.allowVideoAttachments}
-          />
+          {attachmentsEnabled ? (
+            <>
+              <ChatComposerToolbar
+                disabled={disabled}
+                compact={compact}
+                isRecording={isRecording}
+                onToggleRecording={onToggleRecording}
+                onAttachCamera={onAttachCamera}
+                onAttachGif={onAttachGif}
+                onAttachFile={onAttachFile}
+                emojiOpen={emojiOpen}
+                onToggleEmoji={() => setEmojiOpen((current) => !current)}
+                allowVideoAttachments={composer.allowVideoAttachments}
+              />
 
-          {emojiOpen ? <ChatEmojiPicker emojis={quickEmojis} onSelect={onEmojiSelect} /> : null}
+              {emojiOpen ? <ChatEmojiPicker emojis={quickEmojis} onSelect={onEmojiSelect} /> : null}
 
-          <ChatDraftPreview drafts={drafts} onRemove={removeDraft} />
+              <ChatDraftPreview drafts={drafts} onRemove={removeDraft} />
 
-          {attachError ? <Text style={styles.attachError}>{attachError}</Text> : null}
-          {recordingError ? <Text style={styles.attachError}>{recordingError}</Text> : null}
+              {attachError ? <Text style={styles.attachError}>{attachError}</Text> : null}
+              {recordingError ? <Text style={styles.attachError}>{recordingError}</Text> : null}
+            </>
+          ) : null}
 
           <View style={[styles.inputRow, compact && styles.inputRowCompact]}>
             <TextInput
@@ -211,7 +242,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    backgroundColor: `${colors.accent}22`,
+    backgroundColor: withAlpha(colors.accent, '22'),
     borderWidth: 2,
     borderColor: colors.accent,
     borderStyle: 'dashed',
@@ -251,8 +282,8 @@ const styles = StyleSheet.create({
   },
   bubbleFeedback: {
     borderWidth: 1,
-    borderColor: `${colors.accent}55`,
-    backgroundColor: `${colors.accent}12`,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '12'),
   },
   bubbleWide: { maxWidth: '92%' },
   feedbackTag: {
@@ -267,6 +298,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
+  },
+  feedbackLink: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: spacing.sm,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: withAlpha(colors.accent, '18'),
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, '55'),
+  },
+  feedbackLinkPressed: {
+    opacity: 0.85,
+  },
+  feedbackLinkText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  authorLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
   },
   bubbleText: { ...typography.body, color: colors.text },
   bubbleTextOwn: { color: colors.black },

@@ -1,0 +1,118 @@
+✓ 14 productos migrados a rutas por tema
+Generando 77 imágenes para Hype (tema: slate)…
+→ 1 Agua · slate… ok
+→ 2 Barebells chocolatina · slate… ok
+→ 3 Barrita Staff · slate… ok
+→ 4 Batido · slate… ok
+→ 5 Batido Staff · slate… ok
+→ 6 Belevels - Clean gut · slate… ok
+→ 7 Belevels - Gutday · slate… ok
+→ 8 Belevels - Omega 3 · slate… ok
+→ 9 Belevels - Triple magnesium · slate… ok
+→ 10 Belevels be calm · slate… ok
+→ 11 Belevels Chill mood · slate… ok
+→ 12 Belevels Colageno · slate… ok
+→ 13 Belevels Fem Balance · slate… ok
+→ 14 Belevels Vitamina D3 + K2 · slate… ok
+→ 15 Belevels Wake up · slate… ok
+→ 16 Bono Personal 10 · slate… ok
+→ 17 calcetines · slate… ok
+→ 18 Calleras - Quad Pro · slate… ok
+→ 19 Calleras Quad Competition · slate… ok
+→ 20 COLETERO VELITES · slate… ok
+→ 21 Comba earth · slate… ok
+→ 22 Creatina 500 creapure · slate… ok
+→ 23 Crema Magma · slate… ok
+→ 24 Crema Polar · slate… ok
+→ 25 Crop Top Holo Coral · slate… ok
+→ 26 Crop Top Holo Negro by HY-PE · slate… ok
+→ 27 Drop in · slate… ok
+→ 28 EAAS · slate… ok
+→ 29 Foam roller · slate… ok
+→ 30 Gafas Sol Horizon · slate… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 31 Gafas Sol Raptor · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 32 Gafas Sol Urban · slate… ok
+→ 33 Gorra · slate… ok
+→ 34 Hy-pe - Parche · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 35 Hybrid 1.0 - Bubblegum · slate… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 36 Hybrid 1.0 - Caribbean Blue · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 37 Hybrid 1.0 - Deep forest · slate… ok
+→ 38 Hybrid 1.0 - Deep ocean · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 39 L-Carnitina · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 40 Leggin largo burdeos · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 41 Leggin largo negro · slate… ok
+→ 42 Legging Coral Corto · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 43 Leggins Largo Morado · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 44 Leggins Largos Verdes · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 45 Lija manos · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 46 Magnesio liquido · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 47 Minimal 1.0 · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 48 Mochila Storm · slate… ok
+→ 49 Mochila Urban · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 50 QNS - Glucogen · slate… ok
+→ 51 QNS - ISO - PROTEIN 1KG · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 52 QNS Magnesio 4 · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 53 QNS Super omega 3 · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 54 Red Bull · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 55 Riñonera Urban · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 56 Shirt 1.0 - Black · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 57 Shirt 1.0 - Coral · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 58 Shirt 1.0 - Gris · slate… ok
+→ 59 Short Holo · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 60 Sudadera Holo - Black · slate… ok
+→ 61 T-shirt Holo Black · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 62 T-Shirt Holo Coral · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 63 T-Shirt Holo Gris · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 64 Taza - Drop 1.0 · slate… ok
+→ 65 Totebag urban · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 66 Velites - Calleras Quad ultra · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 67 Velites - Cinturon · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 68 Velites - gorro · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 69 Velites - Head Band · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 70 Velites - mochila · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 71 Velites - Muñequeras nylon · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 72 Velites - Muñequeras tela · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 73 Velites Calleras All terrain · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 74 Velites Comba Cyclone · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 75 Velites Comba Fire 2.0 · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 76 Vitamin well · slate… ok
+→ 77 Vitamina D3 · slate… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+✓ 39 imágenes generadas, 38 fallos.
+  · Gafas Sol Horizon (slate): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Gafas Sol Raptor (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hy-pe - Parche (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hybrid 1.0 - Bubblegum (slate): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Hybrid 1.0 - Caribbean Blue (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hybrid 1.0 - Deep ocean (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · L-Carnitina (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Leggin largo burdeos (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Legging Coral Corto (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Leggins Largo Morado (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Leggins Largos Verdes (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Lija manos (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Magnesio liquido (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Minimal 1.0 (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Mochila Urban (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS - ISO - PROTEIN 1KG (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS Magnesio 4 (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS Super omega 3 (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Red Bull (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Riñonera Urban (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Black (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Coral (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Short Holo (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-shirt Holo Black (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-Shirt Holo Coral (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-Shirt Holo Gris (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Totebag urban (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Calleras Quad ultra (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Cinturon (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - gorro (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Head Band (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - mochila (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Muñequeras nylon (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Muñequeras tela (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Calleras All terrain (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Comba Cyclone (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Comba Fire 2.0 (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Vitamina D3 (slate): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { ChatAttachmentDraft } from '@/lib/chatAttachments';
 import { formatAttachmentDuration } from '@/lib/feedbackAttachments';
 
@@ -205,11 +205,11 @@ const styles = StyleSheet.create({
   },
   toolBtnPressed: {
     opacity: 0.85,
-    backgroundColor: `${colors.accent}12`,
+    backgroundColor: withAlpha(colors.accent, '12'),
   },
   toolBtnActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   toolBtnRecording: {
     borderColor: `${colors.danger}88`,
@@ -235,9 +235,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
     borderRadius: borderRadius.md,
-    backgroundColor: `${colors.accent}10`,
+    backgroundColor: withAlpha(colors.accent, '10'),
     borderWidth: 1,
-    borderColor: `${colors.accent}33`,
+    borderColor: withAlpha(colors.accent, '33'),
   },
   draftLabel: {
     ...typography.caption,

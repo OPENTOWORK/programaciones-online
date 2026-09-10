@@ -1,9 +1,15 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, IconBadge } from '@/components/ui/AppIcon';
+import {
+  PlanBrandSilverIcon,
+  planBrandActionButtonStyle,
+  planBrandActionButtonTextStyle,
+  planBrandStyles,
+  splitPlanBrandTitle,
+} from '@/components/program/planBrandUi';
+import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { colors, spacing, typography } from '@/constants/theme';
+import { brandColors, spacing, withAlpha } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import type { ServicePlanCategory } from '@/lib/trainerConstants';
 
@@ -26,8 +32,8 @@ interface ServicePlanEmptyCardProps {
 function MetaItem({ icon, text }: { icon: AppIconName; text: string }) {
   return (
     <View style={styles.metaRow}>
-      <AppIcon name={icon} size={16} color={colors.textMuted} />
-      <Text style={styles.metaText}>{text}</Text>
+      <AppIcon name={icon} size={16} color={withAlpha(brandColors.orangeSecondary, 'CC')} />
+      <Text style={planBrandStyles.metaText}>{text}</Text>
     </View>
   );
 }
@@ -41,22 +47,32 @@ export function ServicePlanEmptyCard({
   icon,
 }: ServicePlanEmptyCardProps) {
   const badgeIcon = icon ?? SERVICE_PLAN_ICONS[category];
+  const { lead, tag } = splitPlanBrandTitle(title);
 
   return (
-    <Card style={styles.card}>
-      <View style={styles.header}>
-        <IconBadge name={badgeIcon} containerSize={48} size={24} />
-        <View style={styles.headerText}>
-          <Text style={styles.name}>{title}</Text>
+    <View style={[planBrandStyles.card, styles.card]}>
+      <View style={planBrandStyles.inner}>
+        <View style={styles.header}>
+          <PlanBrandSilverIcon name={badgeIcon} iconSize={24} />
+          <View style={styles.headerText}>
+            <Text style={planBrandStyles.lead}>{lead}</Text>
+            {tag ? <Text style={planBrandStyles.tag}>{tag}</Text> : null}
+          </View>
         </View>
-      </View>
 
-      <View style={styles.meta}>
-        <MetaItem icon="goal" text={text} />
-      </View>
+        <View style={styles.meta}>
+          <MetaItem icon="goal" text={text} />
+        </View>
 
-      <Button title={button} onPress={onRequest} style={styles.button} />
-    </Card>
+        <Button
+          title={button}
+          variant="outline"
+          onPress={onRequest}
+          style={{ ...styles.button, ...planBrandActionButtonStyle }}
+          textStyle={planBrandActionButtonTextStyle}
+        />
+      </View>
+    </View>
   );
 }
 
@@ -72,10 +88,7 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
-  },
-  name: {
-    ...typography.h3,
-    color: colors.text,
+    minWidth: 0,
   },
   meta: {
     gap: spacing.sm,
@@ -85,12 +98,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-  },
-  metaText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    flex: 1,
-    lineHeight: 22,
   },
   button: {
     marginTop: spacing.xs,

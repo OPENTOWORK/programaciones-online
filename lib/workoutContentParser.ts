@@ -129,8 +129,12 @@ export function parseWorkoutContent(content: string): WorkoutContentBlock[] {
 export function isStructuredWorkoutContent(content: string) {
   const trimmed = content.trim();
   if (!trimmed) return false;
+  if (trimmed.includes('•') || /\n\n/.test(trimmed)) return true;
 
-  return trimmed.includes('•') || /\n\n/.test(trimmed);
+  // Un bloque suelto con cabecera de tipo («Texto libre · A) Activación») también hay que
+  // interpretarlo: pintado en crudo se vería la propia cabecera.
+  const firstLine = trimmed.split('\n')[0] ?? '';
+  return firstLine.includes('·') && isKnownBlockLabel(parseBlockTitle(firstLine).label);
 }
 
 const KNOWN_BLOCK_LABELS = [
@@ -145,6 +149,7 @@ const KNOWN_BLOCK_LABELS = [
   'movilidad',
   'activacion',
   'fuerza',
+  'tecnica',
   'entrenamiento de tecnica',
   'entrenamiento libre',
   'estaciones de tiempo',
@@ -189,7 +194,7 @@ export function getBlockAccent(label: string) {
     normalized.includes('rounds for time') ||
     normalized.includes('rondas')
   ) {
-    return { bg: `${'#FF7373'}22`, text: '#FF7373', border: `${'#FF7373'}55` };
+    return { bg: `${'#FF6A00'}22`, text: '#FF6A00', border: `${'#FF6A00'}55` };
   }
 
   if (normalized.includes('tabata')) {

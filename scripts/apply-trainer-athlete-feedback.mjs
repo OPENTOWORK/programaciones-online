@@ -4,12 +4,15 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import pg from 'pg';
 
+import { resolveDatabaseUrl } from './lib/annualWorkoutImport.mjs';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATABASE_URL = process.env.DATABASE_URL;
+const PROJECT_REF = 'nsdurlikkuoxqobabixr';
 
 async function main() {
-  if (!DATABASE_URL) {
-    throw new Error('Falta DATABASE_URL en .env');
+  const databaseUrl = resolveDatabaseUrl(PROJECT_REF);
+  if (!databaseUrl) {
+    throw new Error('Falta DATABASE_URL o SUPABASE_DB_PASSWORD en .env');
   }
 
   const sql = readFileSync(
@@ -17,7 +20,7 @@ async function main() {
     'utf8',
   );
   const client = new pg.Client({
-    connectionString: DATABASE_URL,
+    connectionString: databaseUrl,
     ssl: { rejectUnauthorized: false },
   });
 

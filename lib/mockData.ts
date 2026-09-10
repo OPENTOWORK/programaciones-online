@@ -36,7 +36,7 @@ export const mockTrainerUser: UserProfile = {
   id: 'trainer-demo-1',
   name: 'Laura Vega',
   email: DEMO_TRAINER.email,
-  role: 'entrenador',
+  role: 'administrador',
   avatarInitials: 'LV',
 };
 

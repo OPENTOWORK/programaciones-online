@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { SessionVideoPlayer } from '@/components/workout/SessionVideoPlayer';
 import { AppIcon } from '@/components/ui/AppIcon';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { formatAttachmentDuration } from '@/lib/feedbackAttachments';
 import type { ChatAttachmentKind } from '@/lib/types';
 
@@ -69,19 +70,7 @@ function FileAttachment({ attachment }: { attachment: DisplayAttachment }) {
 function VideoAttachment({ attachment }: { attachment: DisplayAttachment }) {
   if (Platform.OS === 'web') {
     return (
-      <video
-        src={attachment.url}
-        controls
-        playsInline
-        style={{
-          width: '100%',
-          maxHeight: 240,
-          borderRadius: 12,
-          backgroundColor: colors.black,
-        }}
-      >
-        <track kind="captions" />
-      </video>
+      <SessionVideoPlayer url={attachment.url} mimeType={attachment.mimeType} compact />
     );
   }
 
@@ -170,7 +159,9 @@ export function FeedbackAttachmentList({ attachments, onRemove }: FeedbackAttach
                       ? 'Imagen'
                       : attachment.kind === 'file'
                         ? attachment.fileName
-                        : attachment.fileName}
+                        : attachment.fileName.toLowerCase().startsWith('correccion-')
+                          ? 'Corrección en vídeo'
+                          : 'Vídeo'}
                 {attachment.kind === 'audio' && duration ? ` · ${duration}` : ''}
               </Text>
               {onRemove ? (
@@ -230,9 +221,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.md,
     borderRadius: 12,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
     borderWidth: 1,
-    borderColor: `${colors.accent}44`,
+    borderColor: withAlpha(colors.accent, '44'),
   },
   mediaBtnText: {
     ...typography.bodySmall,

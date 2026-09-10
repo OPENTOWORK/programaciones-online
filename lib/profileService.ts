@@ -35,7 +35,14 @@ function parseOptionalNumber(value: unknown): number | undefined {
 }
 
 function mapRole(value: unknown): UserRole | undefined {
-  if (value === 'atleta' || value === 'entrenador') return value;
+  if (
+    value === 'atleta' ||
+    value === 'entrenador' ||
+    value === 'administrador' ||
+    value === 'gimnasio'
+  ) {
+    return value;
+  }
   return undefined;
 }
 

@@ -4,7 +4,7 @@ export const AIMHARDER_TRACKS = [
   { key: 'hype', color: '250,148,80', programName: 'Hype' },
   { key: 'crosstraining', color: '180,184,183', programName: 'Crosstraining' },
   { key: 'calistenia', color: '62,209,65', programName: 'Calistenia' },
-  { key: 'styrkur', color: '36,228,242', programName: 'Styrkur' },
+  { key: 'basico', color: '36,228,242', programName: 'Básico' },
 ];
 
 const TRACK_BY_COLOR = new Map(AIMHARDER_TRACKS.map((track) => [track.color, track]));

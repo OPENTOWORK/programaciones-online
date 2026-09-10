@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { AppIcon } from '@/components/ui/AppIcon';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 
 interface MotivationBannerProps {
   message: string;
@@ -12,7 +12,7 @@ interface MotivationBannerProps {
 export function MotivationBanner({ message, dense = false }: MotivationBannerProps) {
   return (
     <LinearGradient
-      colors={[`${colors.accent}33`, `${colors.accentBlue}22`]}
+      colors={[withAlpha(colors.accent, '33'), `${colors.accentBlue}22`]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[styles.banner, dense && styles.bannerDense]}
@@ -31,7 +31,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: `${colors.accent}44`,
+    borderColor: withAlpha(colors.accent, '44'),
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: `${colors.accent}22`,
+    backgroundColor: withAlpha(colors.accent, '22'),
     alignItems: 'center',
     justifyContent: 'center',
   },

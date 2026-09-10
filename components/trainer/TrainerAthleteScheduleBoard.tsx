@@ -9,12 +9,13 @@ import {
 } from '@/components/trainer/ScheduleCalendarModal';
 import { TrainerAthleteChatWidget } from '@/components/trainer/TrainerAthleteChatWidget';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
 import { useAthlete } from '@/hooks/useAthletes';
+import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { loadTrainerAthleteScheduleSources } from '@/lib/athleteSchedule';
-import { copyCalendarDaySessions } from '@/lib/copyCalendarDaySessions';
+import { copyCalendarDaySessions, copyCalendarSession } from '@/lib/copyCalendarDaySessions';
 import { collectExerciseNamesFromSessionDraft } from '@/lib/exerciseTextParser';
 import { syncExerciseVideosForNames } from '@/lib/exerciseVideoSyncService';
 import { moveCalendarSessionToDate } from '@/lib/moveCalendarSession';
@@ -30,6 +31,8 @@ import {
   groupPersonalizedPlans,
   type PersonalizedPlanGroup,
 } from '@/lib/personalizedPlanGroups';
+import type { PickedPlanPdf } from '@/lib/planPdfPicker';
+import { importAthletePlanPdfToCalendar } from '@/lib/planPdfImportService';
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
 import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
@@ -39,7 +42,9 @@ import { formatScheduleSummary, toLocalDateString, toWeekdayIndex } from '@/lib/
 import {
   createEmptySessionDraft,
   createRestDayDraft,
+  defaultDayOrder,
   isActivationSessionDraft,
+  isPdfSessionDraft,
   isRestDaySessionDraft,
   renameSessionCopy,
   type SessionDraft,
@@ -63,6 +68,11 @@ function planIdFromCalendarItem(item: SchedulePreviewItem) {
   return rest.replace(/:\d{4}-\d{2}-\d{2}$/, '') || undefined;
 }
 
+function nextDayOrder(dayItems: SchedulePreviewItem[]) {
+  if (dayItems.length === 0) return 0;
+  return Math.max(...dayItems.map((item) => item.dayOrder ?? defaultDayOrder(item))) + 1;
+}
+
 interface TrainerAthleteScheduleBoardProps {
   athleteId: string;
   embedded?: boolean;
@@ -73,6 +83,7 @@ export function TrainerAthleteScheduleBoard({
   embedded = false,
 }: TrainerAthleteScheduleBoardProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const { athlete, isLoading: athleteLoading } = useAthlete(athleteId);
   const { createPlan, updatePlan, removePlan } = useTrainerAthletePlans();
   const [personalizedPlans, setPersonalizedPlans] = useState<AthletePlan[]>([]);
@@ -182,6 +193,7 @@ export function TrainerAthleteScheduleBoard({
       if (
         !isActivationSessionDraft(draft) &&
         !isRestDaySessionDraft(draft) &&
+        !isPdfSessionDraft(draft) &&
         !hasSessionBlockContent(draft)
       ) {
         return 'Añade al menos un bloque de entrenamiento.';
@@ -249,6 +261,34 @@ export function TrainerAthleteScheduleBoard({
     ],
   );
 
+  const attachPdfToDate = useCallback(
+    async (date: Date, pdf: PickedPlanPdf) => {
+      if (!user?.id) return 'Sesión no válida';
+
+      const monday = new Date(date);
+      const day = monday.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      monday.setDate(monday.getDate() + diff);
+      monday.setHours(12, 0, 0, 0);
+
+      const result = await importAthletePlanPdfToCalendar({
+        athleteId,
+        trainerId: user.id,
+        title: defaultPlanGroup?.title ?? DEFAULT_PLAN_TITLE,
+        pdf,
+        athleteName: athlete?.name,
+        planGroupId: defaultPlanGroup?.planGroupId,
+        weekStartDate: monday,
+        replacePlanIds: defaultPlanGroup?.sessions.map((session) => session.id) ?? [],
+      });
+
+      if (result.error) return result.error;
+      await loadSchedule();
+      return null;
+    },
+    [athlete?.name, athleteId, defaultPlanGroup, loadSchedule, user?.id],
+  );
+
   const handleDayAction = useCallback(
     (action: CalendarDayActionId) => {
       if (action !== 'nutrition') return;
@@ -288,25 +328,22 @@ export function TrainerAthleteScheduleBoard({
     return null;
   };
 
-  const handleCalendarCopy = async (item: SchedulePreviewItem) => {
-    const planId = planIdFromCalendarItem(item);
-    const source = findPlan(planId);
-    const group = findPlanGroup(planId);
-    if (!source || !group) return 'No se pudo copiar la sesión.';
-
-    const nextNumber = getNextSessionNumber(group.sessions);
-    const draft = parsePersonalizedPlanContent(source.content, (source.sessionNumber ?? 1) - 1);
-    const copiedDraft = renameSessionCopy(draft, nextNumber);
-    const result = await createPlan({
-      athleteId: source.athleteId,
-      planType: 'personalized',
-      title: group.title,
-      content: serializePersonalizedPlanContent(copiedDraft, nextNumber),
-      planGroupId: group.planGroupId,
-      sessionNumber: nextNumber,
+  const handleCalendarCopy = async (item: SchedulePreviewItem, targetDate: Date) => {
+    const error = await copyCalendarSession({
+      item,
+      targetDate,
+      planIdFromItem: planIdFromCalendarItem,
+      findPlan,
+      findPlanGroup,
+      loadDraft: loadCalendarSessionDraft,
+      applyDateToDraft,
+      createPlan: async (input) => {
+        const result = await createPlan(input);
+        return { error: result.error };
+      },
       athleteName: athlete?.name,
     });
-    if (result.error) return result.error;
+    if (error) return error;
     await loadSchedule();
     return null;
   };
@@ -435,6 +472,7 @@ export function TrainerAthleteScheduleBoard({
       buildRestDayDraft={buildRestDayDraftForDate}
       saveSession={saveCalendarSession}
       onDayAction={handleDayAction}
+      onAttachPdf={attachPdfToDate}
       onSessionPreview={(item) => openTrainerPreviewSession(router, item, calendarSource)}
       onSessionEdit={openCalendarSession}
       onSessionCopy={handleCalendarCopy}
@@ -482,7 +520,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: 8,
-    backgroundColor: `${colors.accent}12`,
+    backgroundColor: withAlpha(colors.accent, '12'),
   },
   profileLinkPressed: {
     opacity: 0.85,

@@ -17,9 +17,10 @@ import {
 import { ProgramSchedulePreview } from '@/components/trainer/ProgramSchedulePreview';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import {
+  attachCatalogPdfToDate,
   buildCatalogRestDayDraftForDate,
   buildCatalogSessionDraftForDate,
   copyCatalogDaySessions,
@@ -29,19 +30,23 @@ import {
   moveCatalogSessionToDate,
   persistCatalogSessionDraft,
   reorderCatalogWorkoutsDay,
-  applyDateToSessionDraft,
+  resolveCatalogSessionSaveTarget,
   workoutIdFromCalendarItem,
 } from '@/lib/catalogProgramCalendar';
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
+import { getWeekDays } from '@/lib/programSchedulePreview';
+import type { PickedPlanPdf } from '@/lib/planPdfPicker';
 import {
   formatDateParam,
   openCalendarDay,
   openScheduledSession,
   openTrainerPreviewSession,
 } from '@/lib/sessionNavigation';
-import { createEmptySessionDraft } from '@/lib/trainerSessionDraft';
+import { toLocalDateString } from '@/lib/sessionSchedule';
+import { createEmptySessionDraft, createMetconDraftFor } from '@/lib/trainerSessionDraft';
 import { isProgramActiveForUser, startUserProgram } from '@/lib/userProgramService';
 import type { Program, Workout } from '@/lib/types';
+import { isHypeWeeklyChallengeProgram } from '@/lib/hypeCatalog';
 
 interface ProgramSessionsCalendarProps {
   program: Program;
@@ -85,6 +90,7 @@ export function ProgramSessionsCalendar({
     user?.currentProgramId,
   );
   const canJoin = !canManage && !isLocked && !isUserActive && workouts.length > 0;
+  const isWeeklyChallenge = isHypeWeeklyChallengeProgram(program);
 
   const handleJoin = useCallback(async () => {
     if (!canJoin) return;
@@ -133,8 +139,25 @@ export function ProgramSessionsCalendar({
   );
 
   const buildSessionDraft = useCallback(
-    (date: Date) => buildCatalogSessionDraftForDate(workouts, date),
-    [workouts],
+    (date: Date) => {
+      const monday = getWeekDays(date)[0];
+      const base = buildCatalogSessionDraftForDate(workouts, monday);
+      if (!isWeeklyChallenge) return base;
+
+      return {
+        ...createMetconDraftFor(base),
+        name: '',
+        estimatedDuration: '30-45 min',
+        schedule: {
+          weekdays: [0],
+          recurrence: 'once' as const,
+          startDate: toLocalDateString(monday),
+          kind: 'metcon' as const,
+        },
+        dayLabel: 'Hero WOD · Una sola vez',
+      };
+    },
+    [isWeeklyChallenge, workouts],
   );
 
   const buildRestDayDraft = useCallback(
@@ -144,10 +167,27 @@ export function ProgramSessionsCalendar({
 
   const saveSession = useCallback(
     async ({ draft, date, item }: CalendarSessionSaveInput) => {
-      const targetWorkoutId = item ? workoutIdFromCalendarItem(item) : undefined;
-      // Nueva sesión desde un día del calendario: ancla siempre a esa fecha.
-      const draftToSave = item ? draft : applyDateToSessionDraft(draft, date);
-      const error = await persistCatalogSessionDraft(program, workouts, draftToSave, targetWorkoutId);
+      const { draft: draftToSave, targetWorkoutId } = resolveCatalogSessionSaveTarget(
+        draft,
+        workouts,
+        { item, date },
+      );
+      const error = await persistCatalogSessionDraft(
+        program,
+        workouts,
+        draftToSave,
+        targetWorkoutId,
+      );
+      if (error) return error;
+      await refreshWorkouts();
+      return null;
+    },
+    [program, refreshWorkouts, workouts],
+  );
+
+  const handleAttachPdf = useCallback(
+    async (date: Date, pdf: PickedPlanPdf, dayItems: SchedulePreviewItem[]) => {
+      const error = await attachCatalogPdfToDate(program, workouts, date, pdf, dayItems);
       if (error) return error;
       await refreshWorkouts();
       return null;
@@ -156,8 +196,8 @@ export function ProgramSessionsCalendar({
   );
 
   const handleSessionCopy = useCallback(
-    async (item: SchedulePreviewItem) => {
-      const error = await copyCatalogSession(program, workouts, item);
+    async (item: SchedulePreviewItem, targetDate: Date) => {
+      const error = await copyCatalogSession(program, workouts, item, targetDate);
       if (error) return error;
       await refreshWorkouts();
       return null;
@@ -233,25 +273,45 @@ export function ProgramSessionsCalendar({
       >
         <View style={styles.athleteHeader}>
           <View style={styles.athleteHeaderCopy}>
-            <Text style={styles.athleteTitle}>{program.name}</Text>
+            <Text style={[styles.athleteTitle, isWeeklyChallenge && styles.athleteTitleWeeklyChallenge]}>
+              {program.name}
+            </Text>
             <Text style={styles.athleteSubtitle}>
-              {isUserActive
-                ? 'Ya estás apuntado. Pulsa un día o una sesión para ver tu entreno.'
-                : 'Consulta el calendario y apúntate si quieres seguir esta programación.'}
+              {isWeeklyChallenge
+                ? 'Reto semanal para toda la semana. Pulsa el desafío para verlo o completarlo.'
+                : isUserActive
+                  ? 'Ya estás apuntado. Pulsa un día o una sesión para ver tu entreno.'
+                  : 'Consulta el calendario y apúntate si quieres seguir esta programación.'}
             </Text>
           </View>
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: '/program/[id]/info',
-                params: { id: program.id },
-              })
-            }
-            style={({ pressed }) => [styles.headerLink, pressed && styles.headerLinkPressed]}
-            accessibilityRole="link"
-          >
-            <Text style={styles.headerLinkText}>Ver ficha</Text>
-          </Pressable>
+          <View style={styles.athleteHeaderActions}>
+            {isUserActive ? (
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: '/program/[id]/chat',
+                    params: { id: program.id },
+                  })
+                }
+                style={({ pressed }) => [styles.headerLink, pressed && styles.headerLinkPressed]}
+                accessibilityRole="link"
+              >
+                <Text style={styles.headerLinkText}>Chat grupal</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/program/[id]/info',
+                  params: { id: program.id },
+                })
+              }
+              style={({ pressed }) => [styles.headerLink, pressed && styles.headerLinkPressed]}
+              accessibilityRole="link"
+            >
+              <Text style={styles.headerLinkText}>Ver ficha</Text>
+            </Pressable>
+          </View>
         </View>
 
         {canJoin ? (
@@ -296,11 +356,27 @@ export function ProgramSessionsCalendar({
         visible
         presentation="inline"
         title={program.name}
-        subtitle="Pulsa el marcador de un día para crear, copiar o añadir desde plantilla. Las sesiones salen desplegadas; pulsa la flecha para ocultarlas."
+        subtitle={
+          isWeeklyChallenge
+            ? 'Crea un reto semanal único para toda la comunidad. No va ligado a un día concreto: ocupa la semana entera.'
+            : 'Pulsa el marcador de un día para crear, copiar o añadir desde plantilla. Las sesiones salen desplegadas; pulsa la flecha para ocultarlas.'
+        }
         source={previewState}
         expandSessionsByDefault
         headerAction={
           <View style={styles.headerActions}>
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/program/[id]/chat',
+                  params: { id: program.id },
+                })
+              }
+              style={({ pressed }) => [styles.headerLink, pressed && styles.headerLinkPressed]}
+              accessibilityRole="link"
+            >
+              <Text style={styles.headerLinkText}>Chat grupal</Text>
+            </Pressable>
             <Pressable
               onPress={() => router.push('/trainer/template')}
               style={({ pressed }) => [styles.headerLink, pressed && styles.headerLinkPressed]}
@@ -331,6 +407,7 @@ export function ProgramSessionsCalendar({
           openTrainerPreviewSession(router, item, previewState);
         }}
         onSessionCopy={handleSessionCopy}
+        onAttachPdf={handleAttachPdf}
         onCopyDayToDate={handleCopyDayToDate}
         onSessionDelete={handleSessionDelete}
         onSessionMoveToDate={handleSessionMoveToDate}
@@ -365,9 +442,22 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xs,
   },
+  athleteHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
   athleteTitle: {
     ...typography.h2,
     color: colors.text,
+  },
+  athleteTitleWeeklyChallenge: {
+    ...typography.h1,
+    color: colors.metcon,
+    fontSize: 32,
+    lineHeight: 38,
   },
   athleteSubtitle: {
     ...typography.bodySmall,
@@ -382,9 +472,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: 999,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
     borderWidth: 1,
-    borderColor: `${colors.accent}55`,
+    borderColor: withAlpha(colors.accent, '55'),
   },
   activeBadgeText: {
     ...typography.caption,
@@ -418,7 +508,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: withAlpha(colors.accent, '14'),
   },
   headerLinkPressed: {
     opacity: 0.85,

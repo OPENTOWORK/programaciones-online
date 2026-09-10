@@ -8,6 +8,9 @@
       "android": {
         "buildType": "app-bundle"
       },
+      "ios": {
+        "buildConfiguration": "Release"
+      },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://nsdurlikkuoxqobabixr.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_GZfJfr6RdAgbu9W9fy1O1Q_8DAgtf0k"
@@ -20,6 +23,35 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://nsdurlikkuoxqobabixr.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_GZfJfr6RdAgbu9W9fy1O1Q_8DAgtf0k"
+      }
+    },
+    "ios-simulator": {
+      "ios": {
+        "simulator": true,
+        "buildConfiguration": "Release"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://nsdurlikkuoxqobabixr.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_GZfJfr6RdAgbu9W9fy1O1Q_8DAgtf0k"
+      }
+    },
+    "ios-device": {
+      "distribution": "internal",
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://nsdurlikkuoxqobabixr.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_GZfJfr6RdAgbu9W9fy1O1Q_8DAgtf0k"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "language": "es-ES",
+        "appName": "Training ProgLine",
+        "bundleIdentifier": "com.trainingprogline.app"
       }
     }
   }

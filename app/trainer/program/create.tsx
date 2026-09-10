@@ -8,17 +8,16 @@ import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
-import { isTrainerRole } from '@/lib/athleteService';
 import { safeGoBack } from '@/lib/navigation';
 import { createProgramCatalog } from '@/lib/programEditService';
-import { isTrainerEditableCategory, PLAN_DISPLAY_LABELS } from '@/lib/programService';
+import { canManageTrainerProgram, PLAN_DISPLAY_LABELS } from '@/lib/programService';
 import { formatStandardVenueDescription } from '@/lib/standardVenueCatalog';
 import type { StandardVenueId } from '@/lib/standardVenues';
 import type { ProgramCategory } from '@/lib/types';
 
 function parseCategory(value?: string | string[]): ProgramCategory | null {
   const raw = Array.isArray(value) ? value[0] : value;
-  if (raw === 'standard' || raw === 'hype') return raw;
+  if (raw === 'hype') return raw;
   return null;
 }
 
@@ -45,7 +44,7 @@ export default function CreateProgramScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canCreate = isTrainerRole(user?.role) && category && isTrainerEditableCategory(category) && planId;
+  const canCreate = Boolean(planId && canManageTrainerProgram(user?.role, category ?? undefined));
 
   const handleSubmit = async () => {
     if (!canCreate || !planId || !category) return;

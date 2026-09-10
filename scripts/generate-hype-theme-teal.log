@@ -1,0 +1,119 @@
+✓ 14 productos migrados a rutas por tema
+Generando 77 imágenes para Hype (tema: teal)…
+→ 1 Agua · teal… ok
+→ 2 Barebells chocolatina · teal… ok
+→ 3 Barrita Staff · teal… ok
+→ 4 Batido · teal… ok
+→ 5 Batido Staff · teal… ok
+→ 6 Belevels - Clean gut · teal… ok
+→ 7 Belevels - Gutday · teal… ok
+→ 8 Belevels - Omega 3 · teal… ok
+→ 9 Belevels - Triple magnesium · teal… ok
+→ 10 Belevels be calm · teal… ok
+→ 11 Belevels Chill mood · teal… ok
+→ 12 Belevels Colageno · teal… ok
+→ 13 Belevels Fem Balance · teal… ok
+→ 14 Belevels Vitamina D3 + K2 · teal… ok
+→ 15 Belevels Wake up · teal… ok
+→ 16 Bono Personal 10 · teal… ok
+→ 17 calcetines · teal… ok
+→ 18 Calleras - Quad Pro · teal… ok
+→ 19 Calleras Quad Competition · teal… ok
+→ 20 COLETERO VELITES · teal… ok
+→ 21 Comba earth · teal… ok
+→ 22 Creatina 500 creapure · teal… ok
+→ 23 Crema Magma · teal… ok
+→ 24 Crema Polar · teal… ok
+→ 25 Crop Top Holo Coral · teal… ok
+→ 26 Crop Top Holo Negro by HY-PE · teal… ok
+→ 27 Drop in · teal… ok
+→ 28 EAAS · teal… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 29 Foam roller · teal… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 30 Gafas Sol Horizon · teal… ok
+→ 31 Gafas Sol Raptor · teal… ok
+→ 32 Gafas Sol Urban · teal… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 33 Gorra · teal… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 34 Hy-pe - Parche · teal… ok
+→ 35 Hybrid 1.0 - Bubblegum · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 36 Hybrid 1.0 - Caribbean Blue · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 37 Hybrid 1.0 - Deep forest · teal… ok
+→ 38 Hybrid 1.0 - Deep ocean · teal… ok
+→ 39 L-Carnitina · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 40 Leggin largo burdeos · teal… ok
+→ 41 Leggin largo negro · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 42 Legging Coral Corto · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 43 Leggins Largo Morado · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 44 Leggins Largos Verdes · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 45 Lija manos · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 46 Magnesio liquido · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 47 Minimal 1.0 · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 48 Mochila Storm · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 49 Mochila Urban · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 50 QNS - Glucogen · teal… ok
+→ 51 QNS - ISO - PROTEIN 1KG · teal… ok
+→ 52 QNS Magnesio 4 · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 53 QNS Super omega 3 · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 54 Red Bull · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 55 Riñonera Urban · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 56 Shirt 1.0 - Black · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 57 Shirt 1.0 - Coral · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 58 Shirt 1.0 - Gris · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 59 Short Holo · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 60 Sudadera Holo - Black · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 61 T-shirt Holo Black · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 62 T-Shirt Holo Coral · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 63 T-Shirt Holo Gris · teal… ok
+→ 64 Taza - Drop 1.0 · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 65 Totebag urban · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 66 Velites - Calleras Quad ultra · teal… ok
+→ 67 Velites - Cinturon · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 68 Velites - gorro · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 69 Velites - Head Band · teal… ok
+→ 70 Velites - mochila · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 71 Velites - Muñequeras nylon · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 72 Velites - Muñequeras tela · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 73 Velites Calleras All terrain · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 74 Velites Comba Cyclone · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 75 Velites Comba Fire 2.0 · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 76 Vitamin well · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 77 Vitamina D3 · teal… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+✓ 38 imágenes generadas, 39 fallos.
+  · EAAS (teal): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Foam roller (teal): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Gafas Sol Urban (teal): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Gorra (teal): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Hybrid 1.0 - Bubblegum (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hybrid 1.0 - Caribbean Blue (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · L-Carnitina (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Leggin largo negro (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Legging Coral Corto (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Leggins Largo Morado (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Leggins Largos Verdes (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Lija manos (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Magnesio liquido (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Minimal 1.0 (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Mochila Storm (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Mochila Urban (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS Magnesio 4 (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS Super omega 3 (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Red Bull (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Riñonera Urban (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Black (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Coral (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Gris (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Short Holo (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Sudadera Holo - Black (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-shirt Holo Black (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-Shirt Holo Coral (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Taza - Drop 1.0 (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Totebag urban (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Cinturon (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - gorro (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - mochila (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Muñequeras nylon (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Muñequeras tela (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Calleras All terrain (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Comba Cyclone (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Comba Fire 2.0 (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Vitamin well (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Vitamina D3 (teal): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.

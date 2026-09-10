@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { goalLabels, levelColors, colors, spacing, typography } from '@/constants/theme';
+import { goalLabels, levelColors, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { usePhysicalProfile } from '@/hooks/usePhysicalProfile';
 import {
@@ -39,7 +39,7 @@ const programGoals: ProgramGoal[] = ['fuerza', 'hipertrofia', 'pérdida de grasa
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, refreshUser } = useAuth();
   const { basics, measured, isLoading, saving, save } = usePhysicalProfile();
 
   const [name, setName] = useState(user?.name ?? '');
@@ -53,7 +53,6 @@ export default function EditProfileScreen() {
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
   const [targetWeight, setTargetWeight] = useState('');
-  const [waist, setWaist] = useState('');
   const [restingHr, setRestingHr] = useState('');
   const [bodyFat, setBodyFat] = useState('');
   const [muscleMass, setMuscleMass] = useState('');
@@ -76,7 +75,6 @@ export default function EditProfileScreen() {
     setHeight(basics.heightCm !== undefined ? String(basics.heightCm) : '');
     setTargetWeight(basics.targetWeightKg !== undefined ? String(basics.targetWeightKg) : '');
     setWeight(measured.weightKg !== undefined ? String(measured.weightKg) : '');
-    setWaist(measured.waistCm !== undefined ? String(measured.waistCm) : '');
     setRestingHr(measured.restingHeartRate !== undefined ? String(measured.restingHeartRate) : '');
     setBodyFat(measured.bodyFatPercentage !== undefined ? String(measured.bodyFatPercentage) : '');
     setMuscleMass(measured.muscleMassKg !== undefined ? String(measured.muscleMassKg) : '');
@@ -94,10 +92,9 @@ export default function EditProfileScreen() {
       bodyWaterPercentage: parseMetricInput(bodyWater),
       visceralFat: parseMetricInput(visceralFat),
       boneMassKg: parseMetricInput(boneMass),
-      waistCm: parseMetricInput(waist),
       restingHeartRate: parseIntegerInput(restingHr),
     }),
-    [weight, bodyFat, muscleMass, bodyWater, visceralFat, boneMass, waist, restingHr],
+    [weight, bodyFat, muscleMass, bodyWater, visceralFat, boneMass, restingHr],
   );
 
   /** Vista previa: los valores derivados se recalculan mientras se escribe. */
@@ -136,7 +133,6 @@ export default function EditProfileScreen() {
       [height, 'altura', 100, 250, 'cm'],
       [weight, 'peso', 30, 300, 'kg'],
       [targetWeight, 'peso objetivo', 30, 300, 'kg'],
-      [waist, 'medida de cintura', 40, 200, 'cm'],
       [restingHr, 'frecuencia cardiaca en reposo', 30, 140, 'lpm'],
       [bodyFat, 'grasa corporal', 3, 70, '%'],
       [muscleMass, 'masa muscular', 10, 120, 'kg'],
@@ -179,7 +175,7 @@ export default function EditProfileScreen() {
       return;
     }
 
-    const { error: physicalError } = await save({
+    const { error: physicalError, warning } = await save({
       basics: {
         birthDate: validated.birthDate,
         biologicalSex,
@@ -197,7 +193,11 @@ export default function EditProfileScreen() {
       return;
     }
 
-    setSuccessMessage('Perfil actualizado correctamente.');
+    await refreshUser(true);
+
+    setSuccessMessage(
+      warning ?? 'Perfil actualizado correctamente.',
+    );
     setTimeout(() => safeGoBack(router, '/tabs/profile'), 800);
   };
 
@@ -354,13 +354,6 @@ export default function EditProfileScreen() {
           keyboardType="decimal-pad"
         />
         <Input
-          label="Cintura (cm)"
-          placeholder="Opcional"
-          value={waist}
-          onChangeText={setWaist}
-          keyboardType="decimal-pad"
-        />
-        <Input
           label="FC en reposo (lpm)"
           placeholder="Opcional"
           value={restingHr}
@@ -472,7 +465,7 @@ const styles = StyleSheet.create({
   },
   optionChipSelected: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}22`,
+    backgroundColor: withAlpha(colors.accent, '22'),
   },
   optionText: { ...typography.bodySmall, color: colors.textSecondary },
   optionTextSelected: { color: colors.accent, fontWeight: '600' },

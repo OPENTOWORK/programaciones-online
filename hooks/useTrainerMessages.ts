@@ -3,13 +3,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import type { ChatAttachmentDraft } from '@/lib/chatAttachments';
 import { mockTrainerMessages } from '@/lib/mockData';
+import { fetchSessionLogsByIds } from '@/lib/sessionLogService';
 import { fetchTrainerAthleteFeedback } from '@/lib/trainerAthleteFeedbackService';
 import { fetchTrainerMessages, sendAthleteMessage, sendTrainerReply } from '@/lib/trainerService';
 import { addCrmActivity, buildMessageSentActivity } from '@/lib/trainerCrmActivity';
 import { getDemoTrainerMessages } from '@/lib/trainerWelcomeMessage';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import type { TrainerAthleteFeedback, TrainerChatAttachment, TrainerMessage } from '@/lib/types';
 
-function feedbackToMessage(entry: TrainerAthleteFeedback): TrainerMessage {
+function feedbackToMessage(
+  entry: TrainerAthleteFeedback,
+  scheduledDate?: string,
+): TrainerMessage {
   const messageId = `feedback-${entry.id}`;
   const attachments: TrainerChatAttachment[] = entry.attachments.map((attachment) => ({
     id: attachment.id,
@@ -28,6 +33,9 @@ function feedbackToMessage(entry: TrainerAthleteFeedback): TrainerMessage {
     text: entry.message,
     timestamp: entry.createdAt,
     origin: 'feedback',
+    feedbackId: entry.id,
+    sessionLogId: entry.sessionLogId,
+    scheduledDate,
     attachments,
   };
 }
@@ -62,9 +70,21 @@ export function useTrainerMessages(options: UseTrainerMessagesOptions = {}) {
     let cancelled = false;
 
     async function loadFeedback() {
-      const { entries } = await fetchTrainerAthleteFeedback(conversationUserId!, isDemoMode);
+      const { entries } = await fetchTrainerAthleteFeedback(
+        conversationUserId!,
+        !isSupabaseConfigured,
+      );
       if (!cancelled) {
-        setFeedbackMessages(entries.map(feedbackToMessage));
+        const sessionIds = entries
+          .map((entry) => entry.sessionLogId)
+          .filter((value): value is string => Boolean(value));
+        const logs = await fetchSessionLogsByIds(sessionIds);
+        const dateByLogId = Object.fromEntries(logs.map((log) => [log.id, log.scheduledDate]));
+        setFeedbackMessages(
+          entries.map((entry) =>
+            feedbackToMessage(entry, entry.sessionLogId ? dateByLogId[entry.sessionLogId] : undefined),
+          ),
+        );
       }
     }
 

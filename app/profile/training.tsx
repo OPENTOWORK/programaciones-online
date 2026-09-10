@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { colors, levelColors, spacing, typography } from '@/constants/theme';
+import { colors, levelColors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useTrainingProfile } from '@/hooks/useTrainingProfile';
 import { parseIntegerInput } from '@/lib/bodyMetrics';
@@ -89,7 +89,7 @@ export default function TrainingProfileScreen() {
       return;
     }
 
-    setSuccessMessage('Datos de entrenamiento guardados.');
+    setSuccessMessage(result.warning ?? 'Datos de entrenamiento guardados.');
     setTimeout(() => safeGoBack(router, '/tabs/profile'), 800);
   };
 
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   },
   optionChipSelected: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}22`,
+    backgroundColor: withAlpha(colors.accent, '22'),
   },
   optionText: { ...typography.bodySmall, color: colors.textSecondary },
   optionTextSelected: { color: colors.accent, fontWeight: '600' },

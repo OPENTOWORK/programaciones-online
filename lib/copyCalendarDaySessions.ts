@@ -105,3 +105,22 @@ export async function copyCalendarDaySessions({
 
   return null;
 }
+
+type CopyCalendarDayParams = {
+  items: SchedulePreviewItem[];
+  targetDate: Date;
+  planIdFromItem: (item: SchedulePreviewItem) => string | undefined;
+  findPlan: (planId?: string) => AthletePlan | undefined;
+  findPlanGroup: (planId?: string) => PersonalizedPlanGroup | undefined;
+  loadDraft: (item: SchedulePreviewItem) => SessionDraft | null;
+  applyDateToDraft: (draft: SessionDraft, date: Date) => SessionDraft;
+  createPlan: (input: CreatePlanInput) => Promise<{ error?: string | null }>;
+  athleteName?: string;
+};
+
+/** Copia una sola sesión de plan personalizado a la fecha elegida. */
+export async function copyCalendarSession(
+  params: Omit<CopyCalendarDayParams, 'items'> & { item: SchedulePreviewItem },
+): Promise<string | null> {
+  return copyCalendarDaySessions({ ...params, items: [params.item] });
+}

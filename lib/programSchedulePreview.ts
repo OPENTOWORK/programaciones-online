@@ -1,7 +1,9 @@
 import { parseWorkoutBlocksFromText } from '@/lib/workoutBlockBuilder';
 import { extractExercisesFromSessionDraft } from '@/lib/sessionBlockSections';
+import { isHypeWeeklyChallengeProgram } from '@/lib/hypeCatalog';
 import {
   defaultScheduleForSession,
+  parseScheduleFromWorkout,
   sessionOccursOnDate,
   type SessionSchedule,
 } from '@/lib/sessionSchedule';
@@ -24,6 +26,8 @@ export interface SchedulePreviewItem {
   kind?: SessionKind;
   /** Posición elegida dentro del día. Sin valor, la activación encabeza el día. */
   dayOrder?: number;
+  /** Modalidad del desafío semanal, si aplica. */
+  modality?: string;
 }
 
 const WEEKDAY_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -104,6 +108,7 @@ function draftPreviewItem(
     isDraft: options.isDraft,
     kind: draft.kind,
     dayOrder: draft.dayOrder,
+    modality: draft.schedule.modality,
   };
 }
 
@@ -124,6 +129,7 @@ function workoutPreviewItem(
     isDraft: options.isDraft,
     kind: workout.schedule?.kind ?? sessionKindFromWorkoutName(workout.name),
     dayOrder: workout.schedule?.dayOrder,
+    modality: workout.schedule?.modality,
   };
 }
 
@@ -144,7 +150,11 @@ function eachDayInRange(start: Date, end: Date) {
   return days;
 }
 
-export function getPreviewDateRange(viewMode: ScheduleViewMode, focusDate: Date) {
+export function getPreviewDateRange(
+  viewMode: ScheduleViewMode,
+  focusDate: Date,
+  program?: Program,
+) {
   const anchor = startOfDay(focusDate);
   if (viewMode === 'day') {
     return { start: anchor, end: anchor };
@@ -152,6 +162,10 @@ export function getPreviewDateRange(viewMode: ScheduleViewMode, focusDate: Date)
   if (viewMode === 'week') {
     const monday = getMonday(anchor);
     return { start: monday, end: addDays(monday, 6) };
+  }
+  if (program && isHypeWeeklyChallengeProgram(program)) {
+    const year = anchor.getFullYear();
+    return { start: new Date(year, 0, 1), end: new Date(year, 11, 31) };
   }
 
   const firstOfMonth = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
@@ -179,6 +193,7 @@ export function parseSchedulePreviewItemKey(itemId: string) {
 }
 
 export function buildSchedulePreviewItems({
+  program,
   workouts,
   draft,
   editingWorkoutId,
@@ -194,14 +209,14 @@ export function buildSchedulePreviewItems({
   focusDate?: Date;
   viewMode?: ScheduleViewMode;
 }): SchedulePreviewItem[] {
-  const range = getPreviewDateRange(viewMode, focusDate);
+  const range = getPreviewDateRange(viewMode, focusDate, program);
   const sources: ScheduleSource[] = [];
 
   workouts.forEach((workout, index) => {
     const isEditing = !isNewSession && editingWorkoutId === workout.id;
     sources.push({
       id: workout.id,
-      schedule: isEditing ? draft.schedule : workout.schedule ?? defaultScheduleForSession(index),
+      schedule: isEditing ? draft.schedule : parseScheduleFromWorkout(workout, index),
       draft: isEditing ? draft : undefined,
       workout: isEditing ? undefined : workout,
       isCurrent: isEditing,
@@ -264,6 +279,12 @@ export function formatDayLabel(date: Date) {
   return `${weekday} ${date.getDate()} ${MONTH_LABELS[date.getMonth()]}`;
 }
 
+/** Rango legible de una semana (lunes a domingo), p. ej. «Lunes 31 Agosto – Domingo 6 Septiembre». */
+export function formatWeekRangeLabel(referenceDate: Date) {
+  const days = getWeekDays(referenceDate);
+  return `${formatDayLabel(days[0])} – ${formatDayLabel(days[6])}`;
+}
+
 export function getWeekdayShortLabels() {
   return WEEKDAY_SHORT;
 }
@@ -288,6 +309,109 @@ export function getWeekDays(referenceDate: Date) {
 
 export function itemsForDate(items: SchedulePreviewItem[], date: Date) {
   return items.filter((item) => isSameDay(item.date, date));
+}
+
+/** Agrupa las sesiones visibles de una semana sin duplicar el mismo entreno en varios días. */
+export function uniqueItemsForWeek(items: SchedulePreviewItem[], focusDate: Date) {
+  const days = getWeekDays(focusDate);
+  const seen = new Set<string>();
+  const unique: SchedulePreviewItem[] = [];
+
+  for (const day of days) {
+    for (const item of itemsForDate(items, day)) {
+      const { sourceId } = parseSchedulePreviewItemKey(item.id);
+      if (seen.has(sourceId)) continue;
+      seen.add(sourceId);
+      unique.push(item);
+    }
+  }
+
+  return unique.sort((left, right) => defaultDayOrder(left) - defaultDayOrder(right));
+}
+
+/** Solo heroes del desafío semanal: metcon con modalidad, uno por semana. */
+export function isWeeklyChallengeHeroItem(item: SchedulePreviewItem) {
+  return item.kind === 'metcon' && Boolean(item.modality);
+}
+
+export function weeklyChallengeItemsForWeek(items: SchedulePreviewItem[], focusDate: Date) {
+  const weekStart = getWeekDays(focusDate)[0];
+  const heroes = uniqueItemsForWeek(items, focusDate).filter(isWeeklyChallengeHeroItem);
+  if (heroes.length === 0) return [];
+
+  const mondayHero = heroes.find((item) => isSameDay(item.date, weekStart));
+  return [mondayHero ?? heroes[0]];
+}
+
+export function weeklyChallengeHeroForMonday(items: SchedulePreviewItem[], monday: Date) {
+  const heroes = weeklyChallengeItemsForWeek(items, monday);
+  return heroes[0] ?? null;
+}
+
+export function firstMondayOnOrAfter(date: Date) {
+  const anchor = startOfDay(date);
+  const monday = getMonday(anchor);
+  if (monday < anchor) return addDays(monday, 7);
+  return monday;
+}
+
+export function lastMondayOnOrBefore(date: Date) {
+  const anchor = startOfDay(date);
+  const monday = getMonday(anchor);
+  if (monday > anchor) return addDays(monday, -7);
+  return monday;
+}
+
+export function listMondaysInYear(year: number) {
+  const mondays: Date[] = [];
+  let cursor = firstMondayOnOrAfter(new Date(year, 0, 1));
+  const last = lastMondayOnOrBefore(new Date(year, 11, 31));
+  while (cursor <= last) {
+    mondays.push(cursor);
+    cursor = addDays(cursor, 7);
+  }
+  return mondays;
+}
+
+export interface WeeklyChallengeYearWeek {
+  weekIndex: number;
+  monday: Date;
+  hero: SchedulePreviewItem | null;
+}
+
+export function buildWeeklyChallengeYearWeeks(items: SchedulePreviewItem[], year: number) {
+  return listMondaysInYear(year).map((monday, index) => ({
+    weekIndex: index + 1,
+    monday,
+    hero: weeklyChallengeHeroForMonday(items, monday),
+  }));
+}
+
+export function formatYearLabel(date: Date) {
+  return String(date.getFullYear());
+}
+
+export function formatShortWeekRange(monday: Date) {
+  const sunday = addDays(monday, 6);
+  const formatPart = (value: Date) =>
+    `${value.getDate()} ${MONTH_LABELS[value.getMonth()].slice(0, 3)}`;
+  return `${formatPart(monday)} – ${formatPart(sunday)}`;
+}
+
+/** Mes principal de la semana (lunes); si cruza dos meses, ambos. */
+export function formatWeekMonthLabel(monday: Date) {
+  const sunday = addDays(monday, 6);
+  const startMonth = MONTH_LABELS[monday.getMonth()];
+  const endMonth = MONTH_LABELS[sunday.getMonth()];
+  return startMonth === endMonth ? startMonth : `${startMonth} – ${endMonth}`;
+}
+
+export function shiftYear(date: Date, delta: number) {
+  return new Date(date.getFullYear() + delta, date.getMonth(), date.getDate());
+}
+
+export function isWeeklyChallengeYearView(program: Program | undefined, viewMode: ScheduleViewMode) {
+  return Boolean(program && isHypeWeeklyChallengeProgram(program) && viewMode === 'month');
 }
 
 export function shiftMonth(date: Date, delta: number) {

@@ -26,7 +26,7 @@ import { type ActionSheetAction } from '@/components/ui/ActionSheetModal';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { PopoverMenu, type PopoverAnchor } from '@/components/ui/PopoverMenu';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useSessionTemplates } from '@/hooks/useSessionTemplates';
 import { isTrainerRole } from '@/lib/athleteService';
@@ -38,7 +38,11 @@ import {
   type ScheduleViewMode,
 } from '@/lib/programSchedulePreview';
 import { buildScheduleCalendarItems, type ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
+import { isHypeWeeklyChallengeProgram } from '@/lib/hypeCatalog';
 import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
+import { signedUrlForCatalogWorkoutPdf } from '@/lib/catalogWorkoutPdfService';
+import { openPlanPdf } from '@/lib/openPlanPdf';
+import { pickPlanPdf, type PickedPlanPdf } from '@/lib/planPdfPicker';
 import {
   canSaveSessionAsTemplate,
   mergeTemplatesIntoDraft,
@@ -48,7 +52,7 @@ import {
   applyInlineTextToSessionDraft,
   sessionDraftToInlineText,
 } from '@/lib/sessionInlineText';
-import { createActivationDraftFor, createMetconDraftFor, workoutToSessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
+import { createActivationDraftFor, createMetconDraftFor, isPdfSessionDraft, workoutToSessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
 
 import { CalendarSessionTypePickerModal, type CalendarSessionType } from '@/components/trainer/CalendarSessionTypePickerModal';
 
@@ -94,12 +98,21 @@ interface ScheduleCalendarModalProps {
     action: CalendarDayActionId,
     context: { date: Date; dayItems: SchedulePreviewItem[] },
   ) => void;
+  /** Adjunta un PDF al día seleccionado del calendario. */
+  onAttachPdf?: (
+    date: Date,
+    pdf: PickedPlanPdf,
+    dayItems: SchedulePreviewItem[],
+  ) => Promise<string | null> | string | null;
   /** Borrador de una sesión existente para editarla sin salir del calendario. */
   loadSessionDraft?: (item: SchedulePreviewItem) => SessionDraft | null;
   /** Guarda el entreno creado o editado. Devuelve un mensaje de error o null. */
   saveSession?: (input: CalendarSessionSaveInput) => Promise<string | null> | string | null;
-  /** Duplica la sesión del calendario. Devuelve un mensaje de error o null. */
-  onSessionCopy?: (item: SchedulePreviewItem) => Promise<string | null> | string | null;
+  /** Duplica la sesión del calendario en la fecha elegida. Devuelve un mensaje de error o null. */
+  onSessionCopy?: (
+    item: SchedulePreviewItem,
+    targetDate: Date,
+  ) => Promise<string | null> | string | null;
   /** Copia todas las sesiones de un día a otra fecha. */
   onCopyDayToDate?: (
     sourceDate: Date,
@@ -140,6 +153,7 @@ export function ScheduleCalendarModal({
   buildSessionDraft,
   buildRestDayDraft,
   onDayAction,
+  onAttachPdf,
   loadSessionDraft,
   saveSession,
   onSessionCopy,
@@ -147,7 +161,7 @@ export function ScheduleCalendarModal({
   onSessionDelete,
   onSessionMoveToDate,
   onSessionReorderDay,
-  expandSessionsByDefault = false,
+  expandSessionsByDefault = true,
   embedded = false,
 }: ScheduleCalendarModalProps) {
   const router = useRouter();
@@ -155,11 +169,20 @@ export function ScheduleCalendarModal({
   const isTrainer = isTrainerRole(user?.role);
   const { width, height } = useWindowDimensions();
   const isWideCalendar = width >= 960;
+  const isWeeklyChallenge = isHypeWeeklyChallengeProgram(source.program);
   const editorMaxWidth = Math.min(720, width - spacing.lg * 2);
   const editorMaxHeight = Math.min(height * 0.88, 860);
   const editorScrollMaxHeight = editorMaxHeight - 88;
 
   const [viewMode, setViewMode] = useState<ScheduleViewMode>('week');
+  const handleViewModeChange = useCallback(
+    (mode: ScheduleViewMode) => {
+      if (isWeeklyChallenge && mode !== 'week' && mode !== 'month') return;
+      setViewMode(mode);
+      setVisiblePeriods(1);
+    },
+    [isWeeklyChallenge],
+  );
   const [focusDate, setFocusDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [visiblePeriods, setVisiblePeriods] = useState(1);
@@ -185,6 +208,7 @@ export function ScheduleCalendarModal({
     date: Date;
     dayItems: SchedulePreviewItem[];
   } | null>(null);
+  const [copySessionPicker, setCopySessionPicker] = useState<SchedulePreviewItem | null>(null);
   const [copyDaySaving, setCopyDaySaving] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [templatePickerDate, setTemplatePickerDate] = useState<Date | null>(null);
@@ -205,7 +229,12 @@ export function ScheduleCalendarModal({
 
   const canCreateInline = Boolean(buildSessionDraft && saveSession);
   const showDayActions = Boolean(
-    buildSessionDraft || buildRestDayDraft || onDayAction || onSessionCopy || onCopyDayToDate,
+    buildSessionDraft ||
+      buildRestDayDraft ||
+      onDayAction ||
+      onAttachPdf ||
+      onSessionCopy ||
+      onCopyDayToDate,
   );
 
   const planItemsFromDay = (dayItems: SchedulePreviewItem[]) =>
@@ -242,6 +271,10 @@ export function ScheduleCalendarModal({
   const requestCreateSession = (date: Date) => {
     if (!buildSessionDraft || !saveSession) {
       onCreateSession?.(date);
+      return;
+    }
+    if (isWeeklyChallenge) {
+      openCreateEditor(date);
       return;
     }
     setSessionTypePickerDate(date);
@@ -299,10 +332,12 @@ export function ScheduleCalendarModal({
   }, [visible]);
 
   const items = useMemo(() => {
+    const weeklyChallengeYear = isWeeklyChallenge && viewMode === 'month';
+    const periodCount = weeklyChallengeYear ? 1 : visiblePeriods;
     const seen = new Set<string>();
     const merged: SchedulePreviewItem[] = [];
-    for (let index = 0; index < visiblePeriods; index += 1) {
-      const periodDate = shiftSchedulePeriod(focusDate, viewMode, index);
+    for (let index = 0; index < periodCount; index += 1) {
+      const periodDate = shiftSchedulePeriod(focusDate, viewMode, index, { weeklyChallengeYear });
       for (const item of buildScheduleCalendarItems(source, periodDate, viewMode)) {
         // Una misma sesión se repite en varias fechas, así que la clave incluye el día.
         const key = `${item.id}@${item.date.toDateString()}`;
@@ -312,7 +347,14 @@ export function ScheduleCalendarModal({
       }
     }
     return merged;
-  }, [source, focusDate, viewMode, visiblePeriods]);
+  }, [source, focusDate, viewMode, visiblePeriods, isWeeklyChallenge]);
+
+  const handleWeeklyChallengeWeekSelect = useCallback((monday: Date) => {
+    setFocusDate(monday);
+    setSelectedDate(monday);
+    setViewMode('week');
+    setVisiblePeriods(1);
+  }, []);
 
   useEffect(() => {
     if (!expandSessionsByDefault || !visible) return;
@@ -362,11 +404,6 @@ export function ScheduleCalendarModal({
     if (visiblePeriods === 1) setFocusDate(date);
   };
 
-  const handleViewModeChange = (mode: ScheduleViewMode) => {
-    setViewMode(mode);
-    setVisiblePeriods(1);
-  };
-
   /** Sin panel lateral de día: en un día vacío se puede crear el entreno al tocarlo. */
   const handleDayPress = (date: Date) => {
     selectDate(date);
@@ -386,6 +423,23 @@ export function ScheduleCalendarModal({
     setDayMenu({ date, dayItems, anchor });
   };
 
+  const handleAttachPdf = async (date: Date, dayItems: SchedulePreviewItem[]) => {
+    const picked = await pickPlanPdf();
+    if ('cancelled' in picked && picked.cancelled) return;
+    if ('error' in picked) {
+      Alert.alert('PDF no válido', picked.error);
+      return;
+    }
+
+    if (onAttachPdf) {
+      const error = await onAttachPdf(date, picked, dayItems);
+      if (error) Alert.alert('No se pudo importar el PDF', error);
+      return;
+    }
+
+    onDayAction?.('pdf', { date, dayItems });
+  };
+
   const handleDayAction = (action: CalendarDayActionId) => {
     if (!dayMenu) return;
     const { date, dayItems } = dayMenu;
@@ -398,6 +452,11 @@ export function ScheduleCalendarModal({
 
     if (action === 'rest') {
       void saveRestDay(date);
+      return;
+    }
+
+    if (action === 'pdf') {
+      void handleAttachPdf(date, dayItems);
       return;
     }
 
@@ -635,12 +694,6 @@ export function ScheduleCalendarModal({
     if (result) setFormError(result);
   };
 
-  const handleSessionCopy = async (item: SchedulePreviewItem) => {
-    if (!onSessionCopy) return;
-    const result = await onSessionCopy(item);
-    if (result) setFormError(result);
-  };
-
   const handleSessionDelete = async (item: SchedulePreviewItem) => {
     if (!onSessionDelete) return;
     const result = await onSessionDelete(item);
@@ -778,7 +831,7 @@ export function ScheduleCalendarModal({
         label: 'Copiar',
         onPress: () => {
           setMenu(null);
-          void handleSessionCopy(menuItem);
+          setCopySessionPicker(menuItem);
         },
       });
     }
@@ -795,6 +848,16 @@ export function ScheduleCalendarModal({
       });
     }
   }
+
+  const handleSessionPress = useCallback(
+    (item: SchedulePreviewItem) => {
+      setSelectedDate(item.date);
+      openEditEditor(item);
+    },
+    // openEditEditor closes over modal state setters; stable enough for calendar taps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [loadSessionDraft, saveSession, onSessionEdit],
+  );
 
   const renderSessionDetail = (item: SchedulePreviewItem) => {
     const draft = resolveDetailDraft(item);
@@ -836,7 +899,11 @@ export function ScheduleCalendarModal({
 
     return (
       <View style={styles.detail}>
-        <SessionDraftSummary draft={draft} />
+        {isPdfSessionDraft(draft) ? (
+          <CatalogPdfDetail draft={draft} />
+        ) : (
+          <SessionDraftSummary draft={draft} />
+        )}
         {!editable && onSessionEdit ? (
           <Pressable
             onPress={() => onSessionEdit(item)}
@@ -846,7 +913,7 @@ export function ScheduleCalendarModal({
             <Text style={styles.detailEditText}>Abrir sesión</Text>
           </Pressable>
         ) : null}
-        {editable ? (
+        {editable && !isPdfSessionDraft(draft) ? (
           <Pressable
             onPress={() => openInlineEditor(item)}
             style={({ pressed }) => [styles.detailEditBtn, pressed && styles.detailEditBtnPressed]}
@@ -941,10 +1008,11 @@ export function ScheduleCalendarModal({
         focusDate={focusDate}
         onFocusDateChange={setFocusDate}
         size="large"
+        layout={isWeeklyChallenge ? 'weeklyChallenge' : 'default'}
         selectedDate={selectedDate}
         onDayPress={handleDayPress}
         onDayActionsPress={showDayActions ? handleDayActionsPress : undefined}
-        onSessionPress={(item) => selectDate(item.date)}
+        onSessionPress={handleSessionPress}
         visiblePeriods={visiblePeriods}
         onVisiblePeriodsChange={(value) => setVisiblePeriods(Math.max(1, value))}
         fill={stretchCalendar}
@@ -955,6 +1023,7 @@ export function ScheduleCalendarModal({
         onSessionMenuPress={hasSessionMenu ? (item, anchor) => setMenu({ item, anchor }) : undefined}
         sessionSelection={sessionSelection}
         inlineEditingKey={inlineEditor ? scheduleItemKey(inlineEditor.item) : undefined}
+        onWeeklyChallengeWeekSelect={isWeeklyChallenge ? handleWeeklyChallengeWeekSelect : undefined}
       />
     </View>
   );
@@ -964,8 +1033,10 @@ export function ScheduleCalendarModal({
       {embedded ? null : (
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={styles.title}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          <Text style={[styles.title, isWeeklyChallenge && styles.titleWeeklyChallenge]}>{title}</Text>
+          {subtitle ? (
+            <Text style={[styles.subtitle, isWeeklyChallenge && styles.subtitleWeeklyChallenge]}>{subtitle}</Text>
+          ) : null}
         </View>
         {headerAction ? (
           headerAction
@@ -1043,6 +1114,23 @@ export function ScheduleCalendarModal({
     }
   };
 
+  const handleCopySessionConfirm = async (targetDate: Date) => {
+    if (!copySessionPicker || !onSessionCopy) return;
+
+    setCopyDaySaving(true);
+    setFormError(null);
+    try {
+      const result = await onSessionCopy(copySessionPicker, targetDate);
+      if (result) {
+        setFormError(result);
+        return;
+      }
+      setCopySessionPicker(null);
+    } finally {
+      setCopyDaySaving(false);
+    }
+  };
+
   const overlayModals = (
     <>
       <PopoverMenu
@@ -1061,6 +1149,7 @@ export function ScheduleCalendarModal({
           dayMenu && planItemsFromDay(dayMenu.dayItems).length > 0 && onCopyDayToDate,
         )}
         hasRestDay={Boolean(dayMenu?.dayItems.some((item) => item.kind === 'rest'))}
+        weeklyChallenge={isWeeklyChallenge}
       />
       <CopyDayToDateModal
         visible={copyDayPicker !== null}
@@ -1069,6 +1158,16 @@ export function ScheduleCalendarModal({
         saving={copyDaySaving}
         onCancel={() => setCopyDayPicker(null)}
         onConfirm={(targetDate) => void handleCopyDayConfirm(targetDate)}
+      />
+      <CopyDayToDateModal
+        visible={copySessionPicker !== null}
+        variant="session"
+        sourceDate={copySessionPicker?.date ?? null}
+        sessionCount={1}
+        sessionName={copySessionPicker?.name}
+        saving={copyDaySaving}
+        onCancel={() => setCopySessionPicker(null)}
+        onConfirm={(targetDate) => void handleCopySessionConfirm(targetDate)}
       />
       <SessionTemplatePickerModal
         visible={isTrainer && templatePickerOpen}
@@ -1100,6 +1199,7 @@ export function ScheduleCalendarModal({
               input.content,
               input.tag,
               input.formatTag,
+              input.modalityTag,
             );
             setCreateTemplateSaving(false);
             if (result.error) {
@@ -1189,11 +1289,22 @@ const styles = StyleSheet.create({
     ...typography.h2,
     color: colors.text,
   },
+  titleWeeklyChallenge: {
+    ...typography.h1,
+    color: colors.metcon,
+    fontSize: 34,
+    lineHeight: 40,
+  },
   subtitle: {
     ...typography.bodySmall,
     color: colors.textSecondary,
     marginTop: 4,
     lineHeight: 20,
+  },
+  subtitleWeeklyChallenge: {
+    ...typography.body,
+    lineHeight: 24,
+    maxWidth: 760,
   },
   headerError: {
     ...typography.bodySmall,
@@ -1212,8 +1323,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: `${colors.accent}55`,
-    backgroundColor: `${colors.accent}10`,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '10'),
   },
   selectionBarText: {
     ...typography.bodySmall,
@@ -1363,7 +1474,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     borderWidth: 1,
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: withAlpha(colors.accent, '14'),
   },
   detailEditBtnPressed: {
     opacity: 0.8,
@@ -1395,4 +1506,56 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.danger,
   },
+  pdfDetail: {
+    gap: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  pdfDetailName: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  pdfDetailBtn: {
+    alignSelf: 'stretch',
+  },
 });
+
+function CatalogPdfDetail({ draft }: { draft: SessionDraft }) {
+  const [opening, setOpening] = useState(false);
+  const storagePath = draft.schedule.pdfStoragePath;
+  const fileName = draft.schedule.pdfFileName ?? `${draft.name}.pdf`;
+
+  if (!storagePath) {
+    return <Text style={styles.detailEmpty}>PDF no disponible.</Text>;
+  }
+
+  return (
+    <View style={styles.pdfDetail}>
+      <Ionicons name="document-text-outline" size={20} color={colors.accent} />
+      <Text style={styles.pdfDetailName} numberOfLines={2}>
+        {fileName}
+      </Text>
+      <Button
+        title="Ver PDF"
+        variant="outline"
+        loading={opening}
+        onPress={() => {
+          void (async () => {
+            setOpening(true);
+            try {
+              const url = await signedUrlForCatalogWorkoutPdf(storagePath);
+              if (!url) {
+                Alert.alert('Error', 'No se pudo abrir el PDF.');
+                return;
+              }
+              await openPlanPdf(url);
+            } finally {
+              setOpening(false);
+            }
+          })();
+        }}
+        style={styles.pdfDetailBtn}
+      />
+    </View>
+  );
+}

@@ -7,7 +7,9 @@ import { TrainerChatPanel } from '@/components/trainer/TrainerChatPanel';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { borderRadius, colors, shadows, spacing, typography } from '@/constants/theme';
 import { useChatComposer } from '@/hooks/useChatComposer';
+import { useCanManageAthleteChat } from '@/hooks/useCanManageAthleteChat';
 import { useTrainerMessages } from '@/hooks/useTrainerMessages';
+import { getFeedbackChatHref } from '@/lib/navigation';
 import { markAthleteAlertRead } from '@/lib/trainerAthleteAlerts';
 
 interface TrainerAthleteChatWidgetProps {
@@ -23,6 +25,7 @@ export function TrainerAthleteChatWidget({
 }: TrainerAthleteChatWidgetProps) {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
+  const canChat = useCanManageAthleteChat(athleteId);
   const { messages, isEmpty, sendMessage } = useTrainerMessages({ athleteId, asTrainer: true });
 
   const composer = useChatComposer({
@@ -34,15 +37,17 @@ export function TrainerAthleteChatWidget({
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (open && athleteId) {
+    if (open && athleteId && canChat) {
       void markAthleteAlertRead(athleteId, 'chat');
     }
-  }, [athleteId, open]);
+  }, [athleteId, canChat, open]);
 
   const openFullChat = () => {
     setOpen(false);
     router.push({ pathname: '/trainer/chat/[id]', params: { id: athleteId } });
   };
+
+  if (canChat !== true) return null;
 
   return (
     <View style={styles.root} pointerEvents="box-none">
@@ -81,6 +86,17 @@ export function TrainerAthleteChatWidget({
               viewerRole="trainer"
               compact
               composer={composer}
+              onOpenFeedback={(message) => {
+                setOpen(false);
+                router.push(
+                  getFeedbackChatHref({
+                    asTrainer: true,
+                    athleteId,
+                    sessionLogId: message.sessionLogId,
+                    scheduledDate: message.scheduledDate,
+                  }),
+                );
+              }}
             />
           </View>
         </View>

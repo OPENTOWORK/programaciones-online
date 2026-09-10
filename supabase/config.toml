@@ -2,3 +2,9 @@ project_id = "nsdurlikkuoxqobabixr"
 
 [functions.privacy-policy]
 verify_jwt = false
+
+[functions.generate-gym-product-image]
+verify_jwt = true
+
+[functions.invite-gym-coach]
+verify_jwt = true

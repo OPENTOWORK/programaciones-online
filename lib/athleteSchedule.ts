@@ -1,14 +1,25 @@
 import { fetchAthletePlansForAthlete, fetchAthletePlansForUser } from '@/lib/athletePlanService';
-import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
+import { isPdfOnlyPlanSession, parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
+import {
+  buildPlanGroupValidityMap,
+  isDateWithinPlanValidity,
+} from '@/lib/planValidity';
 import { buildSchedulePreviewItems, itemsForDate, type SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import { createPersonalizedPlanPreviewProgram } from '@/lib/personalizedPlanContent';
 import { fetchProgramsByIds } from '@/lib/programService';
 import { fetchActiveProgramsForUser } from '@/lib/userProgramService';
 import { fetchWorkoutsByProgram } from '@/lib/workoutService';
-import { ACTIVATION_SESSION_NAME, METCON_SESSION_NAME, REST_DAY_SESSION_NAME, defaultDayOrder } from '@/lib/trainerSessionDraft';
+import {
+  ACTIVATION_SESSION_NAME,
+  METCON_SESSION_NAME,
+  PDF_SESSION_DURATION,
+  REST_DAY_SESSION_NAME,
+  defaultDayOrder,
+  pdfSessionTitle,
+} from '@/lib/trainerSessionDraft';
 import { isSessionBasedAthletePlanType } from '@/lib/trainerConstants';
 import type { AthletePlan, Program, Workout } from '@/lib/types';
-import type { SessionDraft } from '@/lib/trainerSessionDraft';
+import type { SessionDraft, SessionKind } from '@/lib/trainerSessionDraft';
 
 export interface AthleteCalendarSession {
   id: string;
@@ -22,6 +33,7 @@ export interface AthleteCalendarSession {
   programId?: string;
   blockCount: number;
   exerciseCount: number;
+  kind?: SessionKind;
   hasLog?: boolean;
 }
 
@@ -151,8 +163,11 @@ export function buildAthleteCalendarItems({
     items.push(...buildCatalogWorkoutItems(entry.program, entry.workouts, focusDate, viewMode));
   }
 
+  const validityByGroup = buildPlanGroupValidityMap(plans);
+
   for (const plan of plans) {
     const draft = planToDraft(plan);
+    const isPdfSession = isPdfOnlyPlanSession(plan, draft);
     const sessionLabel =
       draft.kind === 'activation'
         ? ACTIVATION_SESSION_NAME
@@ -160,8 +175,12 @@ export function buildAthleteCalendarItems({
           ? METCON_SESSION_NAME
           : draft.kind === 'rest'
             ? REST_DAY_SESSION_NAME
-            : draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
+            : isPdfSession && plan.pdfFileName
+              ? pdfSessionTitle(plan.pdfFileName)
+              : draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
     const previewProgram = createPersonalizedPlanPreviewProgram(plan.title);
+    const groupId = plan.planGroupId ?? plan.id;
+    const validity = validityByGroup.get(groupId) ?? {};
     items.push(
       ...buildSchedulePreviewItems({
         program: previewProgram,
@@ -171,11 +190,15 @@ export function buildAthleteCalendarItems({
         isNewSession: true,
         focusDate,
         viewMode,
-      }).map((item) => ({
+      })
+        .filter((item) => isDateWithinPlanValidity(item.date, validity))
+        .map((item) => ({
         ...item,
         id: `plan:${plan.id}:${dateKey(item.date)}`,
         name: sessionLabel,
         isDraft: false,
+        kind: isPdfSession ? ('pdf' as const) : item.kind,
+        estimatedDuration: isPdfSession ? PDF_SESSION_DURATION : item.estimatedDuration,
       })),
     );
   }
@@ -204,6 +227,7 @@ export function calendarItemToAthleteSession(item: SchedulePreviewItem): Athlete
     athletePlanId,
     blockCount: item.blockCount,
     exerciseCount: item.exerciseCount,
+    kind: item.kind,
   };
 }
 

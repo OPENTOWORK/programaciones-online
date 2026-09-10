@@ -4,7 +4,7 @@ import * as Linking from 'expo-linking';
 
 import { ExerciseVideoEmbed } from '@/components/workout/ExerciseVideoEmbed';
 import { Card } from '@/components/ui/Card';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { getYoutubeWatchUrl } from '@/lib/exerciseVideoService';
 
 interface ExerciseVideoPanelProps {
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: spacing.md,
     padding: spacing.md,
-    borderColor: `${colors.accent}55`,
+    borderColor: withAlpha(colors.accent, '55'),
     backgroundColor: colors.surface,
     minHeight: 280,
   },

@@ -33,6 +33,7 @@ import {
   deleteCatalogSession,
   persistCatalogSessionDraft,
 } from '@/lib/catalogProgramCalendar';
+import { resolveSessionTemplateModalityForProgram } from '@/lib/sessionTemplateModality';
 import { hasSessionBlockContent } from '@/lib/sessionBlockSections';
 import {
   canSaveSessionAsTemplate,
@@ -161,6 +162,10 @@ export function ProgramSessionsGrid({
   const { width, height } = useWindowDimensions();
   const { user, refreshUser } = useAuth();
   const { create: createTemplate } = useSessionTemplates();
+  const preferredModality = useMemo(
+    () => resolveSessionTemplateModalityForProgram(program),
+    [program],
+  );
   const [starting, setStarting] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
@@ -637,6 +642,18 @@ export function ProgramSessionsGrid({
         {canManage ? (
           <View style={styles.headerActions}>
             <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/program/[id]/chat',
+                  params: { id: program.id },
+                })
+              }
+              style={({ pressed }) => [styles.headerLink, pressed && styles.headerLinkPressed]}
+              accessibilityRole="link"
+            >
+              <Text style={styles.headerLinkText}>Chat grupal</Text>
+            </Pressable>
+            <Pressable
               onPress={() => router.push('/trainer/template')}
               style={({ pressed }) => [styles.headerLink, pressed && styles.headerLinkPressed]}
               accessibilityRole="link"
@@ -644,6 +661,19 @@ export function ProgramSessionsGrid({
               <Text style={styles.headerLinkText}>Plantillas</Text>
             </Pressable>
           </View>
+        ) : isUserActive ? (
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: '/program/[id]/chat',
+                params: { id: program.id },
+              })
+            }
+            style={({ pressed }) => [styles.headerLink, pressed && styles.headerLinkPressed]}
+            accessibilityRole="link"
+          >
+            <Text style={styles.headerLinkText}>Chat grupal</Text>
+          </Pressable>
         ) : null}
       </View>
 
@@ -787,6 +817,8 @@ export function ProgramSessionsGrid({
         onClose={closeTemplatePicker}
         onConfirm={(templates) => void handleTemplateSelect(templates)}
         saving={templateApplying}
+        zoneTag="Metcon"
+        defaultModality={preferredModality}
         confirmLabel={templatePickerWorkout ? 'Añadir a la sesión' : 'Crear sesión'}
         subtitle={
           templatePickerWorkout
@@ -798,6 +830,7 @@ export function ProgramSessionsGrid({
       <CreateSessionTemplateModal
         visible={canManage && createTemplateWorkout !== null}
         draft={createTemplateWorkout ? workoutToSessionDraft(createTemplateWorkout, 0) : null}
+        defaultModality={preferredModality}
         saving={createTemplateSaving}
         onClose={() => {
           if (createTemplateSaving) return;
@@ -811,6 +844,7 @@ export function ProgramSessionsGrid({
               input.content,
               input.tag,
               input.formatTag,
+              input.modalityTag,
             );
             setCreateTemplateSaving(false);
             if (result.error) {

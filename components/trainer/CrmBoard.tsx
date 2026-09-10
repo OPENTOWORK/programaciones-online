@@ -25,6 +25,9 @@ import { CreateClientModal } from '@/components/trainer/CreateClientModal';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useTrainerCrmBoard } from '@/hooks/useTrainerCrmBoard';
 import { dropIndexForPosition, dropLineOffsetForIndex } from '@/lib/dragDropList';
+import { isCededClientStage, isGymsStage, isReadOnlyCrmStage } from '@/lib/trainerCrm';
+import { getTrainerAthleteProfileHref, getTrainerLeadProfileHref } from '@/lib/navigation';
+import type { AthleteSummary } from '@/lib/types';
 
 type LeadActionsState = { athleteId: string; stageId: string } | null;
 type ColumnActionsState = { stageId: string } | null;
@@ -57,6 +60,7 @@ export function CrmBoard() {
     removeStage,
     moveStage,
     createClient,
+    dismissLeadAlerts,
   } = useTrainerCrmBoard();
 
   const [leadActions, setLeadActions] = useState<LeadActionsState>(null);
@@ -214,6 +218,7 @@ export function CrmBoard() {
     (athleteId: string, pageX: number, pageY: number): DropHint | null => {
       const stageId = findStageAtPageX(pageX);
       if (!stageId) return null;
+      if (isReadOnlyCrmStage(columns.find((column) => column.stage.id === stageId)?.stage)) return null;
 
       const others = cardBoundsRef.current.filter(
         (card) => card.stageId === stageId && card.athleteId !== athleteId,
@@ -224,7 +229,7 @@ export function CrmBoard() {
 
       return { stageId, index, lineTop: lineY === null || !column ? null : lineY - column.y };
     },
-    [findStageAtPageX],
+    [findStageAtPageX, columns],
   );
 
   const EDGE_ZONE = 56;
@@ -414,6 +419,25 @@ export function CrmBoard() {
   useEffect(() => stopAutoScroll, [stopAutoScroll]);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  const findLead = useCallback(
+    (athleteId: string): AthleteSummary | undefined => {
+      for (const column of columns) {
+        const lead = column.leads.find((entry) => entry.id === athleteId);
+        if (lead) return lead;
+      }
+      return undefined;
+    },
+    [columns],
+  );
+
+  const openLeadProfile = useCallback(
+    (athleteId: string) => {
+      const lead = findLead(athleteId);
+      router.push(lead ? getTrainerLeadProfileHref(lead) : getTrainerAthleteProfileHref(athleteId));
+    },
+    [findLead, router],
+  );
+
   const visibleColumns = useMemo(() => {
     if (!normalizedQuery) return columns;
     return columns.map((column) => ({
@@ -422,6 +446,12 @@ export function CrmBoard() {
         (athlete) =>
           athlete.name.toLowerCase().includes(normalizedQuery) ||
           athlete.email.toLowerCase().includes(normalizedQuery),
+      ),
+      gyms: column.gyms?.filter(
+        (row) =>
+          row.gym.name.toLowerCase().includes(normalizedQuery) ||
+          (row.gym.city ?? '').toLowerCase().includes(normalizedQuery) ||
+          (row.gym.email ?? '').toLowerCase().includes(normalizedQuery),
       ),
     }));
   }, [columns, normalizedQuery]);
@@ -448,9 +478,20 @@ export function CrmBoard() {
 
   const leadModalActions: ActionSheetAction[] = [];
   if (leadActions && activeLead) {
+    const leadColumn = columns[activeColumnIndex];
+    if (isCededClientStage(leadColumn?.stage)) {
+      leadModalActions.push({
+        key: 'open',
+        label: 'Ver ficha del atleta',
+        onPress: () => {
+          setLeadActions(null);
+          openLeadProfile(leadActions.athleteId);
+        },
+      });
+    } else {
     leadModalActions.push(
       ...columns
-        .filter((column) => column.stage.id !== leadActions.stageId)
+        .filter((column) => column.stage.id !== leadActions.stageId && !isReadOnlyCrmStage(column.stage))
         .map((column) => ({
           key: `move-${column.stage.id}`,
           label: `Mover a "${column.stage.name}"`,
@@ -477,10 +518,12 @@ export function CrmBoard() {
       },
       {
         key: 'open',
-        label: 'Ver ficha del atleta',
+        label: activeLead?.role === 'entrenador' || activeLead?.role === 'administrador'
+          ? 'Ver ficha del equipo'
+          : 'Ver ficha del atleta',
         onPress: () => {
           setLeadActions(null);
-          router.push({ pathname: '/trainer/athlete/[id]', params: { id: leadActions.athleteId } });
+          openLeadProfile(leadActions.athleteId);
         },
       },
       {
@@ -493,16 +536,19 @@ export function CrmBoard() {
         },
       },
     );
+    }
   }
 
   const activeColumn = columnActions ? columns.find((column) => column.stage.id === columnActions.stageId) : undefined;
   const columnModalActions: ActionSheetAction[] = [];
   if (columnActions && activeColumn) {
     const index = columns.findIndex((column) => column.stage.id === columnActions.stageId);
+    const lockedColumn = isReadOnlyCrmStage(activeColumn.stage);
     columnModalActions.push(
       {
         key: 'rename',
         label: 'Renombrar columna',
+        disabled: lockedColumn,
         onPress: () => {
           setColumnActions(null);
           setPrompt({ mode: 'rename', stageId: columnActions.stageId });
@@ -530,7 +576,7 @@ export function CrmBoard() {
         key: 'delete',
         label: 'Eliminar columna',
         destructive: true,
-        disabled: columns.length <= 1,
+        disabled: columns.length <= 1 || lockedColumn,
         onPress: () => {
           void removeStage(columnActions.stageId);
           setColumnActions(null);
@@ -610,31 +656,48 @@ export function CrmBoard() {
             style={styles.boardScroll}
             contentContainerStyle={styles.board}
           >
-            {visibleColumns.map((column, index) => (
+            {visibleColumns.map((column, index) => {
+              const isReadOnly = isReadOnlyCrmStage(column.stage);
+              const isCeded = isCededClientStage(column.stage);
+              const isGyms = isGymsStage(column.stage);
+              return (
               <CrmColumn
                 key={column.stage.id}
                 stage={column.stage}
                 leads={column.leads}
-                emptyText={normalizedQuery ? 'Sin resultados' : 'Sin atletas en esta columna'}
-                canMoveLeft={index > 0}
-                canMoveRight={index < columns.length - 1}
-                isDropTarget={dropHint?.stageId === column.stage.id}
-                isDragSource={dragSourceStageId === column.stage.id}
-                dropLineTop={dropHint?.stageId === column.stage.id ? dropHint.lineTop : null}
+                gyms={column.gyms}
+                emptyText={
+                  normalizedQuery
+                    ? 'Sin resultados'
+                    : isCeded
+                      ? 'Sin clientes cedidos'
+                      : isGyms
+                        ? 'Sin gimnasios todavía'
+                      : 'Sin atletas en esta columna'
+                }
+                canMoveLeft={!isReadOnly && index > 0}
+                canMoveRight={!isReadOnly && index < columns.length - 1}
+                isDropTarget={!isReadOnly && dropHint?.stageId === column.stage.id}
+                isDragSource={!isReadOnly && dragSourceStageId === column.stage.id}
+                dropLineTop={
+                  !isReadOnly && dropHint?.stageId === column.stage.id ? dropHint.lineTop : null
+                }
                 columnRef={registerColumnRef(column.stage.id)}
                 cardRef={registerCardRef}
+                readOnly={isReadOnly}
                 onOpenColumnActions={() => setColumnActions({ stageId: column.stage.id })}
-                onOpenLead={(athleteId) =>
-                  router.push({ pathname: '/trainer/athlete/[id]/calendar', params: { id: athleteId } })
-                }
+                onOpenLead={openLeadProfile}
+                onOpenGym={(gymId) => router.push({ pathname: '/trainer/gyms/[id]', params: { id: gymId } })}
                 onOpenLeadActions={(athleteId) => setLeadActions({ athleteId, stageId: column.stage.id })}
                 onMoveLeadPrev={(athleteId) => moveLeadToAdjacentStage(athleteId, 'prev')}
                 onMoveLeadNext={(athleteId) => moveLeadToAdjacentStage(athleteId, 'next')}
+                onDismissLeadAlerts={(athleteId) => void dismissLeadAlerts(athleteId)}
                 onDragStart={handleDragStart}
                 onDragMove={handleDragMove}
                 onDragEnd={handleDragEnd}
               />
-            ))}
+              );
+            })}
 
             <Pressable
               onPress={() => setPrompt({ mode: 'create' })}

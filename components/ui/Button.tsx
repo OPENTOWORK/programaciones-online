@@ -8,7 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { borderRadius, colors, typography } from '@/constants/theme';
+import { borderRadius, brandColors, colors, typography, withAlpha } from '@/constants/theme';
 
 interface ButtonProps {
   title: string;
@@ -84,11 +84,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   primary: {
-    backgroundColor: colors.accentDark,
-    borderColor: 'rgba(255,255,255,0.16)',
-    shadowColor: colors.accentDark,
+    backgroundColor: brandColors.orangeDark,
+    borderColor: withAlpha(brandColors.orangeGlow, '44'),
+    shadowColor: brandColors.orangeDark,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28,
+    shadowOpacity: 0.32,
     shadowRadius: 12,
     elevation: 5,
   },
@@ -97,8 +97,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   outline: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderColor: `${colors.accent}66`,
+    backgroundColor: withAlpha(brandColors.orangeDark, '12'),
+    borderColor: withAlpha(brandColors.orange, '72'),
   },
   ghost: {
     backgroundColor: 'transparent',
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   outlineText: {
-    color: colors.accent,
+    color: brandColors.orangeGlow,
   },
   ghostText: {
     color: colors.textSecondary,

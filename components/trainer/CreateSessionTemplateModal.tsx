@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import {
   draftToTaggedBlocks,
   getSessionSectionLabel,
@@ -18,10 +18,13 @@ import {
 import {
   buildSessionTemplateName,
   SESSION_TEMPLATE_FORMAT_TAGS,
+  SESSION_TEMPLATE_MODALITY_TAGS,
   SESSION_TEMPLATE_ZONE_TAGS,
   type SessionTemplateFormatTag,
+  type SessionTemplateModalityTag,
   type SessionTemplateTag,
 } from '@/lib/sessionTemplateTags';
+import { inferSessionTemplateModality } from '@/lib/sessionTemplateModality';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
 import {
   formatBlockItemLineForDisplay,
@@ -33,12 +36,14 @@ interface CreateSessionTemplateModalProps {
   visible: boolean;
   draft: SessionDraft | null;
   saving?: boolean;
+  defaultModality?: SessionTemplateModalityTag | null;
   onClose: () => void;
   onConfirm: (input: {
     name: string;
     content: string;
     tag: SessionTemplateTag;
     formatTag: SessionTemplateFormatTag | null;
+    modalityTag: SessionTemplateModalityTag | null;
   }) => void;
 }
 
@@ -91,12 +96,14 @@ export function CreateSessionTemplateModal({
   visible,
   draft,
   saving = false,
+  defaultModality = null,
   onClose,
   onConfirm,
 }: CreateSessionTemplateModalProps) {
   const blocks = useMemo(() => (draft ? draftToTaggedBlocks(draft) : []), [draft]);
   const [tag, setTag] = useState<SessionTemplateTag | null>(null);
   const [formatTag, setFormatTag] = useState<SessionTemplateFormatTag | null>(null);
+  const [modalityTag, setModalityTag] = useState<SessionTemplateModalityTag | null>(null);
   const [selectedBlockIds, setSelectedBlockIds] = useState<Set<string>>(() => new Set());
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(() => new Set());
 
@@ -104,9 +111,10 @@ export function CreateSessionTemplateModal({
     if (!visible || !draft) return;
     setTag(draft.kind === 'metcon' ? 'Metcon' : draft.kind === 'activation' ? 'All' : null);
     setFormatTag(null);
+    setModalityTag(defaultModality);
     setSelectedBlockIds(new Set());
     setSelectedItemIds(new Set());
-  }, [draft, visible]);
+  }, [draft, visible, defaultModality]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, TaggedWorkoutBlock[]>();
@@ -198,8 +206,11 @@ export function CreateSessionTemplateModal({
       }),
     );
     const exerciseHint = describeSessionTemplate(content).exerciseLines[0] ?? null;
-    const name = buildSessionTemplateName({ tag, formatTag, exerciseHint });
-    onConfirm({ name, content, tag, formatTag });
+    const resolvedModality =
+      modalityTag ??
+      (tag === 'Metcon' ? inferSessionTemplateModality({ name: tag, content, tag }) : null);
+    const name = buildSessionTemplateName({ tag, formatTag, modalityTag: resolvedModality, exerciseHint });
+    onConfirm({ name, content, tag, formatTag, modalityTag: resolvedModality });
   };
 
   const selectionLabel = [
@@ -219,7 +230,7 @@ export function CreateSessionTemplateModal({
         <Pressable style={styles.sheet} onPress={(event) => event.stopPropagation()}>
           <Text style={styles.title}>Crear plantilla</Text>
           <Text style={styles.subtitle}>
-            Elige zona, formato (opcional) y los ejercicios o bloques a guardar.
+            Elige zona, formato, modalidad (opcional) y los ejercicios o bloques a guardar.
           </Text>
 
           <Text style={styles.tagLabel}>Zona</Text>
@@ -252,6 +263,28 @@ export function CreateSessionTemplateModal({
                 <Pressable
                   key={option}
                   onPress={() => setFormatTag(selected ? null : option)}
+                  style={({ pressed }) => [
+                    styles.tagChip,
+                    selected && styles.tagChipSelected,
+                    pressed && styles.rowPressed,
+                  ]}
+                >
+                  <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.tagLabel}>Modalidad</Text>
+          <View style={styles.tagRow}>
+            {SESSION_TEMPLATE_MODALITY_TAGS.map((option) => {
+              const selected = modalityTag === option;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => setModalityTag(selected ? null : option)}
                   style={({ pressed }) => [
                     styles.tagChip,
                     selected && styles.tagChipSelected,
@@ -432,7 +465,7 @@ const styles = StyleSheet.create({
   },
   tagChipSelected: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   tagChipText: {
     ...typography.caption,
@@ -492,8 +525,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   blockCardChecked: {
-    borderColor: `${colors.accent}88`,
-    backgroundColor: `${colors.accent}08`,
+    borderColor: withAlpha(colors.accent, '88'),
+    backgroundColor: withAlpha(colors.accent, '08'),
   },
   blockRow: {
     flexDirection: 'row',
@@ -528,7 +561,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   itemRowChecked: {
-    backgroundColor: `${colors.accent}12`,
+    backgroundColor: withAlpha(colors.accent, '12'),
   },
   itemText: {
     ...typography.caption,

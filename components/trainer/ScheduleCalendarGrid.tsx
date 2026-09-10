@@ -16,9 +16,10 @@ import { AthleteWeekListView } from '@/components/schedule/AthleteWeekListView';
 
 import { DayActionsButton } from '@/components/trainer/CalendarDayActionsMenu';
 import type { PopoverAnchor } from '@/components/ui/PopoverMenu';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import {
   formatDayLabel,
+  formatWeekRangeLabel,
   formatMonthLabel,
   getMonthGrid,
   getWeekDays,
@@ -28,6 +29,13 @@ import {
   shiftDay,
   shiftMonth,
   shiftWeek,
+  uniqueItemsForWeek,
+  weeklyChallengeItemsForWeek,
+  buildWeeklyChallengeYearWeeks,
+  formatShortWeekRange,
+  formatWeekMonthLabel,
+  formatYearLabel,
+  shiftYear,
   type SchedulePreviewItem,
   type ScheduleViewMode,
 } from '@/lib/programSchedulePreview';
@@ -83,6 +91,8 @@ export interface CalendarSessionActions {
   onReorderDay?: (date: Date, orderedItems: SchedulePreviewItem[]) => void;
 }
 
+export type ScheduleCalendarLayout = 'default' | 'weeklyChallenge';
+
 interface ScheduleCalendarGridProps {
   items: SchedulePreviewItem[];
   viewMode: ScheduleViewMode;
@@ -90,6 +100,7 @@ interface ScheduleCalendarGridProps {
   focusDate: Date;
   onFocusDateChange: (date: Date) => void;
   size?: ScheduleCalendarSize;
+  layout?: ScheduleCalendarLayout;
   selectedDate?: Date;
   onDayPress?: (date: Date, dayItems: SchedulePreviewItem[]) => void;
   /** Abre el menú de acciones rápidas (crear, copiar, plantilla…) del día. */
@@ -118,12 +129,19 @@ interface ScheduleCalendarGridProps {
   };
   /** Sesión con editor de texto abierto en el calendario. */
   inlineEditingKey?: string;
+  /** Al elegir una semana en la cuadrícula anual del desafío. */
+  onWeeklyChallengeWeekSelect?: (monday: Date) => void;
 }
 
 const VIEW_MODES: Array<{ id: ScheduleViewMode; label: string }> = [
   { id: 'month', label: 'Mes' },
   { id: 'week', label: 'Semana' },
   { id: 'day', label: 'Día' },
+];
+
+const WEEKLY_CHALLENGE_VIEW_MODES: Array<{ id: ScheduleViewMode; label: string }> = [
+  { id: 'month', label: 'Meses' },
+  { id: 'week', label: 'Semana' },
 ];
 
 const WEEKDAY_SHORT_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -139,8 +157,16 @@ export function scheduleItemKey(item: SchedulePreviewItem) {
   return `${item.id}@${item.date.toDateString()}`;
 }
 
-export function shiftSchedulePeriod(date: Date, viewMode: ScheduleViewMode, delta: number) {
+export function shiftSchedulePeriod(
+  date: Date,
+  viewMode: ScheduleViewMode,
+  delta: number,
+  options?: { weeklyChallengeYear?: boolean },
+) {
   if (delta === 0) return date;
+  if (options?.weeklyChallengeYear && viewMode === 'month') {
+    return shiftYear(date, delta);
+  }
   if (viewMode === 'month') return shiftMonth(date, delta);
   if (viewMode === 'week') return shiftWeek(date, delta);
   return shiftDay(date, delta);
@@ -148,18 +174,18 @@ export function shiftSchedulePeriod(date: Date, viewMode: ScheduleViewMode, delt
 
 const WEEKDAY_TINY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
-function periodLabelFor(date: Date, viewMode: ScheduleViewMode, size: ScheduleCalendarSize = 'compact') {
+function periodLabelFor(
+  date: Date,
+  viewMode: ScheduleViewMode,
+  size: ScheduleCalendarSize = 'compact',
+  weeklyChallengeYear = false,
+) {
+  if (viewMode === 'month' && weeklyChallengeYear) {
+    return `${formatYearLabel(date)} · 52 semanas`;
+  }
   if (viewMode === 'month') return formatMonthLabel(date);
   if (viewMode === 'week') {
-    if (size === 'athlete') {
-      const days = getWeekDays(date);
-      const start = days[0];
-      const end = days[6];
-      const startLabel = start.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-      const endLabel = end.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-      return `${startLabel} – ${endLabel}`;
-    }
-    return `Semana del ${formatDayLabel(getWeekDays(date)[0])}`;
+    return formatWeekRangeLabel(date);
   }
   return formatDayLabel(date);
 }
@@ -279,6 +305,7 @@ function SessionChip({
   detail,
   isDragging = false,
   size = 'compact',
+  emphasis,
 }: {
   item: SchedulePreviewItem;
   onPress?: (item: SchedulePreviewItem) => void;
@@ -294,25 +321,37 @@ function SessionChip({
   detail?: ReactNode;
   isDragging?: boolean;
   size?: ScheduleCalendarSize;
+  emphasis?: 'weeklyChallenge';
 }) {
   const isActivation = item.kind === 'activation';
   const isMetcon = item.kind === 'metcon';
   const isRestDay = item.kind === 'rest';
+  const isPdf = item.kind === 'pdf';
+  const isWeeklyChallenge = emphasis === 'weeklyChallenge';
   const isAthlete = size === 'athlete';
 
   const title = (
-    <Text
-      style={[
-        styles.sessionChipName,
-        isAthlete && styles.sessionChipNameAthlete,
-        isActivation && styles.sessionChipNameActivation,
-        isMetcon && styles.sessionChipNameMetcon,
-        isRestDay && styles.sessionChipNameRestDay,
-      ]}
-      numberOfLines={expanded ? 2 : 1}
-    >
-      {item.name}
-    </Text>
+    <View style={styles.sessionChipTitleRow}>
+      <Text
+        style={[
+          styles.sessionChipName,
+          isAthlete && styles.sessionChipNameAthlete,
+          isWeeklyChallenge && styles.sessionChipNameWeeklyChallenge,
+          isActivation && styles.sessionChipNameActivation,
+          isMetcon && styles.sessionChipNameMetcon,
+          isRestDay && styles.sessionChipNameRestDay,
+          isPdf && styles.sessionChipNamePdf,
+        ]}
+        numberOfLines={expanded ? 2 : 1}
+      >
+        {item.name}
+      </Text>
+      {isWeeklyChallenge && item.modality ? (
+        <View style={styles.sessionChipModalityBadge}>
+          <Text style={styles.sessionChipModalityText}>{item.modality}</Text>
+        </View>
+      ) : null}
+    </View>
   );
 
   const chipStyle = [
@@ -323,22 +362,25 @@ function SessionChip({
     isActivation && styles.sessionChipActivation,
     isMetcon && styles.sessionChipMetcon,
     isRestDay && styles.sessionChipRestDay,
+    isPdf && styles.sessionChipPdf,
     selectionChecked && styles.sessionChipSelected,
     inlineEditing && styles.sessionChipInlineEditing,
     expanded && styles.sessionChipExpanded,
+    isWeeklyChallenge && styles.sessionChipWeeklyChallenge,
     isDragging && styles.sessionChipDragging,
     draggable && styles.sessionChipDraggable,
   ];
 
   const showDragHandle = draggable || Boolean(dragHandlers);
+  const handlePress = onPress && !inlineEditing ? () => onPress(item) : undefined;
 
   return (
     <View style={chipStyle}>
       <View style={styles.sessionChipHeader}>
         {showDragHandle ? <ChipDragHandle dragHandlers={dragHandlers} /> : null}
-        {onPress ? (
+        {handlePress ? (
           <Pressable
-            onPress={() => onPress(item)}
+            onPress={handlePress}
             style={({ pressed }) => [styles.sessionChipTitleBtn, pressed && styles.sessionChipPressed]}
           >
             {title}
@@ -355,30 +397,128 @@ function SessionChip({
         </View>
       </View>
 
-      {!inlineEditing ? (
-        <Text
-          style={[styles.sessionChipMeta, isAthlete && styles.sessionChipMetaAthlete]}
-          numberOfLines={expanded ? 3 : 1}
+      {handlePress ? (
+        <Pressable
+          onPress={handlePress}
+          disabled={inlineEditing}
+          style={({ pressed }) => [styles.sessionChipBody, pressed && styles.sessionChipPressed]}
         >
-          {isRestDay
-            ? 'Descanso'
-            : isAthlete
-              ? item.estimatedDuration
-              : `${item.estimatedDuration}${item.blockCount > 0 ? ` · ${item.blockCount} bloque${item.blockCount === 1 ? '' : 's'}` : ''}${
-                  item.exerciseCount > 0
-                    ? ` · ${item.exerciseCount} ejercicio${item.exerciseCount === 1 ? '' : 's'}`
-                    : ''
-                }`}
-        </Text>
-      ) : null}
-      {item.isDraft ? <Text style={styles.sessionChipDraftLabel}>Borrador</Text> : null}
+          {!inlineEditing ? (
+            <Text
+              style={[styles.sessionChipMeta, isAthlete && styles.sessionChipMetaAthlete]}
+              numberOfLines={expanded ? 3 : 1}
+            >
+              {isRestDay
+                ? 'Descanso'
+                : isPdf
+                  ? 'PDF adjunto'
+                  : isAthlete
+                  ? item.estimatedDuration
+                  : `${item.estimatedDuration}${item.blockCount > 0 ? ` · ${item.blockCount} bloque${item.blockCount === 1 ? '' : 's'}` : ''}${
+                      item.exerciseCount > 0
+                        ? ` · ${item.exerciseCount} ejercicio${item.exerciseCount === 1 ? '' : 's'}`
+                        : ''
+                    }`}
+            </Text>
+          ) : null}
+          {item.isDraft ? <Text style={styles.sessionChipDraftLabel}>Borrador</Text> : null}
 
-      {expanded && detail ? (
-        <View style={[styles.sessionChipDetail, inlineEditing && styles.sessionChipDetailInline]}>
-          {detail}
-        </View>
-      ) : null}
+          {expanded && detail ? (
+            <View style={[styles.sessionChipDetail, inlineEditing && styles.sessionChipDetailInline]}>
+              {detail}
+            </View>
+          ) : null}
+        </Pressable>
+      ) : (
+        <>
+          {!inlineEditing ? (
+            <Text
+              style={[styles.sessionChipMeta, isAthlete && styles.sessionChipMetaAthlete]}
+              numberOfLines={expanded ? 3 : 1}
+            >
+              {isRestDay
+                ? 'Descanso'
+                : isPdf
+                  ? 'PDF adjunto'
+                  : isAthlete
+                  ? item.estimatedDuration
+                  : `${item.estimatedDuration}${item.blockCount > 0 ? ` · ${item.blockCount} bloque${item.blockCount === 1 ? '' : 's'}` : ''}${
+                      item.exerciseCount > 0
+                        ? ` · ${item.exerciseCount} ejercicio${item.exerciseCount === 1 ? '' : 's'}`
+                        : ''
+                    }`}
+            </Text>
+          ) : null}
+          {item.isDraft ? <Text style={styles.sessionChipDraftLabel}>Borrador</Text> : null}
+
+          {expanded && detail ? (
+            <View style={[styles.sessionChipDetail, inlineEditing && styles.sessionChipDetailInline]}>
+              {detail}
+            </View>
+          ) : null}
+        </>
+      )}
     </View>
+  );
+}
+
+function EmptyDayBlock({
+  day,
+  dayItems,
+  hint,
+  size,
+  onDayActionsPress,
+  onDayPress,
+}: {
+  day: Date;
+  dayItems: SchedulePreviewItem[];
+  hint?: boolean;
+  size: ScheduleCalendarSize;
+  onDayActionsPress?: (
+    date: Date,
+    dayItems: SchedulePreviewItem[],
+    anchor: PopoverAnchor,
+  ) => void;
+  onDayPress?: (date: Date, dayItems: SchedulePreviewItem[]) => void;
+}) {
+  const ref = useRef<View>(null);
+  const showLabel = Boolean(hint) || size === 'athlete';
+  const label = hint ? 'Soltar aquí' : '·';
+  const textStyle = [
+    styles.weekEmpty,
+    size === 'athlete' && styles.weekEmptyAthlete,
+    hint && styles.weekEmptyDropTarget,
+  ];
+
+  if (!onDayActionsPress && !onDayPress) {
+    if (!showLabel) return null;
+    return <Text style={textStyle}>{label}</Text>;
+  }
+
+  return (
+    <Pressable
+      ref={ref}
+      collapsable={false}
+      accessibilityRole="button"
+      accessibilityLabel="Acciones del día"
+      onPress={() => {
+        if (onDayActionsPress) {
+          ref.current?.measureInWindow((x, y, width, height) => {
+            onDayActionsPress(day, dayItems, { x, y, width, height });
+          });
+          return;
+        }
+        onDayPress?.(day, dayItems);
+      }}
+      style={({ pressed }) => [
+        styles.weekColumnEmpty,
+        size === 'large' && styles.weekColumnEmptyLarge,
+        styles.weekEmptyPressable,
+        pressed && styles.weekEmptyPressed,
+      ]}
+    >
+      {showLabel ? <Text style={textStyle}>{label}</Text> : null}
+    </Pressable>
   );
 }
 
@@ -461,6 +601,7 @@ export function ScheduleCalendarGrid({
   focusDate,
   onFocusDateChange,
   size = 'compact',
+  layout = 'default',
   selectedDate,
   onDayPress,
   onDayActionsPress,
@@ -475,21 +616,29 @@ export function ScheduleCalendarGrid({
   onSessionMenuPress,
   sessionSelection,
   inlineEditingKey,
+  onWeeklyChallengeWeekSelect,
 }: ScheduleCalendarGridProps) {
+  const weeklyChallengeYear = layout === 'weeklyChallenge';
   const navigate = (direction: -1 | 1) => {
-    onFocusDateChange(shiftSchedulePeriod(focusDate, viewMode, direction));
+    onFocusDateChange(
+      shiftSchedulePeriod(focusDate, viewMode, direction, { weeklyChallengeYear }),
+    );
   };
 
-  const periods = Array.from({ length: Math.max(1, visiblePeriods) }, (_, index) =>
-    shiftSchedulePeriod(focusDate, viewMode, index),
-  );
+  const periods =
+    weeklyChallengeYear && viewMode === 'month'
+      ? [focusDate]
+      : Array.from({ length: Math.max(1, visiblePeriods) }, (_, index) =>
+          shiftSchedulePeriod(focusDate, viewMode, index, { weeklyChallengeYear }),
+        );
   const stretchPeriod = fill && periods.length === 1;
   const periodNames = PERIOD_LABELS[viewMode];
+  const visibleViewModes = weeklyChallengeYear ? WEEKLY_CHALLENGE_VIEW_MODES : VIEW_MODES;
 
   return (
     <View style={fill ? styles.containerFill : undefined}>
       <View style={[styles.modeRow, size === 'athlete' && styles.modeRowAthlete]}>
-        {VIEW_MODES.map((mode) => {
+        {visibleViewModes.map((mode) => {
           const active = viewMode === mode.id;
           return (
             <Pressable
@@ -516,7 +665,7 @@ export function ScheduleCalendarGrid({
           <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
         </Pressable>
         <Text style={[styles.periodLabel, size === 'large' && styles.periodLabelLarge, size === 'athlete' && styles.periodLabelAthlete]}>
-          {periodLabelFor(focusDate, viewMode, size)}
+          {periodLabelFor(focusDate, viewMode, size, weeklyChallengeYear)}
         </Text>
         <Pressable onPress={() => navigate(1)} style={styles.navBtn} accessibilityLabel="Siguiente">
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
@@ -529,25 +678,39 @@ export function ScheduleCalendarGrid({
           style={[styles.period, stretchPeriod && styles.periodFill, index > 0 && styles.periodStacked]}
         >
           {index > 0 ? (
-            <Text style={styles.periodSectionLabel}>{periodLabelFor(periodDate, viewMode, size)}</Text>
+            <Text style={styles.periodSectionLabel}>
+              {periodLabelFor(periodDate, viewMode, size, weeklyChallengeYear)}
+            </Text>
           ) : null}
 
           {viewMode === 'month' ? (
-            <MonthView
-              focusDate={periodDate}
-              items={items}
-              size={size}
-              selectedDate={selectedDate}
-              onDayPress={onDayPress}
-              onDayActionsPress={onDayActionsPress}
-              onSessionPress={onSessionPress}
-            />
+            weeklyChallengeYear ? (
+              <WeeklyChallengeYearGrid
+                focusDate={focusDate}
+                items={items}
+                onWeekPress={(monday) => {
+                  onWeeklyChallengeWeekSelect?.(monday);
+                  onFocusDateChange(monday);
+                }}
+              />
+            ) : (
+              <MonthView
+                focusDate={periodDate}
+                items={items}
+                size={size}
+                selectedDate={selectedDate}
+                onDayPress={onDayPress}
+                onDayActionsPress={onDayActionsPress}
+                onSessionPress={onSessionPress}
+              />
+            )
           ) : null}
           {viewMode === 'week' ? (
             <WeekView
               focusDate={periodDate}
               items={items}
               size={size}
+              layout={layout}
               fill={stretchPeriod}
               selectedDate={selectedDate}
               onDayPress={onDayPress}
@@ -578,7 +741,7 @@ export function ScheduleCalendarGrid({
         </View>
       ))}
 
-      {onVisiblePeriodsChange ? (
+      {onVisiblePeriodsChange && !(weeklyChallengeYear && viewMode === 'month') ? (
         <View style={styles.extendRow}>
           <Pressable
             onPress={() => onVisiblePeriodsChange(visiblePeriods + 1)}
@@ -718,10 +881,200 @@ function MonthView({
   );
 }
 
+function WeeklyChallengeYearGrid({
+  focusDate,
+  items,
+  onWeekPress,
+}: {
+  focusDate: Date;
+  items: SchedulePreviewItem[];
+  onWeekPress: (monday: Date) => void;
+}) {
+  const year = focusDate.getFullYear();
+  const weeks = useMemo(() => buildWeeklyChallengeYearWeeks(items, year), [items, year]);
+  const currentWeekStart = getWeekDays(focusDate)[0];
+
+  return (
+    <View style={styles.weeklyChallengeYearPanel}>
+      <Text style={styles.weeklyChallengeYearIntro}>
+        Pulsa una semana para abrir su desafío. Cada casilla muestra el hero publicado.
+      </Text>
+      <View style={styles.weeklyChallengeYearGrid}>
+        {weeks.map((week) => {
+          const selected = isSameDate(week.monday, currentWeekStart);
+          const hasHero = Boolean(week.hero);
+          return (
+            <Pressable
+              key={week.monday.toISOString()}
+              onPress={() => onWeekPress(week.monday)}
+              accessibilityRole="button"
+              accessibilityLabel={`Semana ${week.weekIndex}, ${formatWeekMonthLabel(week.monday)}, ${formatShortWeekRange(week.monday)}`}
+              style={({ pressed }) => [
+                styles.weeklyChallengeYearCell,
+                selected && styles.weeklyChallengeYearCellSelected,
+                !hasHero && styles.weeklyChallengeYearCellEmpty,
+                pressed && styles.weeklyChallengeYearCellPressed,
+              ]}
+            >
+              <Text style={styles.weeklyChallengeYearCellMonth} numberOfLines={1}>
+                {formatWeekMonthLabel(week.monday)}
+              </Text>
+              <Text style={styles.weeklyChallengeYearCellWeek}>S{week.weekIndex}</Text>
+              <Text style={styles.weeklyChallengeYearCellDates} numberOfLines={1}>
+                {formatShortWeekRange(week.monday)}
+              </Text>
+              {hasHero ? (
+                <>
+                  <Text style={styles.weeklyChallengeYearCellHero} numberOfLines={2}>
+                    {week.hero!.name}
+                  </Text>
+                  {week.hero!.modality ? (
+                    <View style={styles.weeklyChallengeYearCellBadge}>
+                      <Text style={styles.weeklyChallengeYearCellBadgeText}>{week.hero!.modality}</Text>
+                    </View>
+                  ) : null}
+                </>
+              ) : (
+                <Text style={styles.weeklyChallengeYearCellEmptyText}>Sin desafío</Text>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function WeeklyChallengeWeekView({
+  focusDate,
+  items,
+  fill = false,
+  onDayActionsPress,
+  onSessionPress,
+  expandedItemIds,
+  onToggleItemExpanded,
+  renderItemDetail,
+  onSessionMenuPress,
+  sessionSelection,
+  inlineEditingKey,
+}: {
+  focusDate: Date;
+  items: SchedulePreviewItem[];
+  fill?: boolean;
+  onDayActionsPress?: (
+    date: Date,
+    dayItems: SchedulePreviewItem[],
+    anchor: PopoverAnchor,
+  ) => void;
+  onSessionPress?: (item: SchedulePreviewItem) => void;
+  expandedItemIds?: readonly string[];
+  onToggleItemExpanded?: (item: SchedulePreviewItem) => void;
+  renderItemDetail?: (item: SchedulePreviewItem) => ReactNode;
+  onSessionMenuPress?: (item: SchedulePreviewItem, anchor: PopoverAnchor) => void;
+  sessionSelection?: {
+    selectedKeys: ReadonlySet<string>;
+    onToggle: (item: SchedulePreviewItem) => void;
+  };
+  inlineEditingKey?: string;
+}) {
+  const weekStart = getWeekDays(focusDate)[0];
+  const displayItems = weeklyChallengeItemsForWeek(items, focusDate);
+  const createRef = useRef<View>(null);
+
+  const renderChip = (item: SchedulePreviewItem) => {
+    const expanded = expandedItemIds?.includes(scheduleItemKey(item)) ?? false;
+    const itemKey = scheduleItemKey(item);
+    const canSelect = Boolean(sessionSelection && isSelectableCalendarSession(item));
+    return (
+      <SessionChip
+        key={itemKey}
+        item={item}
+        size="large"
+        emphasis="weeklyChallenge"
+        onPress={onSessionPress}
+        expanded={expanded}
+        onToggleExpanded={onToggleItemExpanded ? () => onToggleItemExpanded(item) : undefined}
+        onMenuPress={onSessionMenuPress
+          ? (anchor: PopoverAnchor) => onSessionMenuPress(item, anchor)
+          : undefined}
+        selectionChecked={canSelect && sessionSelection?.selectedKeys.has(itemKey)}
+        onToggleSelection={canSelect ? () => sessionSelection?.onToggle(item) : undefined}
+        inlineEditing={inlineEditingKey === itemKey}
+        detail={renderItemDetail && expanded ? renderItemDetail(item) : undefined}
+      />
+    );
+  };
+
+  const openCreateMenu = () => {
+    if (!onDayActionsPress) return;
+    createRef.current?.measureInWindow((x, y, width, height) => {
+      onDayActionsPress(weekStart, displayItems, { x, y, width, height });
+    });
+  };
+
+  if (displayItems.length === 0 && !onDayActionsPress) {
+    return null;
+  }
+
+  return (
+    <View style={[styles.weeklyChallengePanel, fill && styles.weeklyChallengePanelFill]}>
+      <View style={styles.weeklyChallengeHeader}>
+        <Text style={styles.weeklyChallengeEyebrow}>{formatWeekRangeLabel(weekStart)}</Text>
+        <Text style={styles.weeklyChallengeTitle}>Desafío de la semana</Text>
+        <Text style={styles.weeklyChallengeSubtitle}>
+          Un reto para toda la semana. No va ligado a un día concreto del calendario.
+        </Text>
+      </View>
+
+      <View style={[styles.weeklyChallengeBody, fill && styles.weeklyChallengeBodyFill]}>
+        {displayItems.length === 0 ? (
+          <Pressable
+            ref={createRef}
+            collapsable={false}
+            onPress={openCreateMenu}
+            disabled={!onDayActionsPress}
+            accessibilityRole="button"
+            accessibilityLabel="Crear desafío de la semana"
+            style={({ pressed }) => [
+              styles.weeklyChallengeEmpty,
+              fill && styles.weeklyChallengeEmptyFill,
+              onDayActionsPress && styles.weeklyChallengeEmptyPressable,
+              pressed && styles.weeklyChallengeEmptyPressed,
+            ]}
+          >
+            <Ionicons name="flame-outline" size={36} color={colors.metcon} />
+            <Text style={styles.weeklyChallengeEmptyTitle}>Sin desafío esta semana</Text>
+            <Text style={styles.weeklyChallengeEmptyText}>
+              {onDayActionsPress
+                ? 'Pulsa aquí para crear o importar el reto semanal.'
+                : 'Todavía no hay un desafío publicado para esta semana.'}
+            </Text>
+          </Pressable>
+        ) : (
+          displayItems.map((item) => renderChip(item))
+        )}
+      </View>
+
+      {displayItems.length > 0 && onDayActionsPress ? (
+        <Pressable
+          onPress={openCreateMenu}
+          style={({ pressed }) => [styles.weeklyChallengeAction, pressed && styles.weeklyChallengeEmptyPressed]}
+        >
+          <Ionicons name="add-circle-outline" size={18} color={colors.metcon} />
+          <Text style={styles.weeklyChallengeActionText}>
+            {displayItems.length > 0 ? 'Editar desafío' : 'Añadir desafío'}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function WeekView({
   focusDate,
   items,
   size,
+  layout = 'default',
   fill = false,
   selectedDate,
   onDayPress,
@@ -738,6 +1091,7 @@ function WeekView({
   focusDate: Date;
   items: SchedulePreviewItem[];
   size: ScheduleCalendarSize;
+  layout?: ScheduleCalendarLayout;
   fill?: boolean;
   selectedDate?: Date;
   onDayPress?: (date: Date, dayItems: SchedulePreviewItem[]) => void;
@@ -965,6 +1319,24 @@ function WeekView({
     return <SessionChip key={itemKey} {...chipProps} />;
   };
 
+  if (layout === 'weeklyChallenge') {
+    return (
+      <WeeklyChallengeWeekView
+        focusDate={focusDate}
+        items={items}
+        fill={fill}
+        onDayActionsPress={onDayActionsPress}
+        onSessionPress={onSessionPress}
+        expandedItemIds={expandedItemIds}
+        onToggleItemExpanded={onToggleItemExpanded}
+        renderItemDetail={renderItemDetail}
+        onSessionMenuPress={onSessionMenuPress}
+        sessionSelection={sessionSelection}
+        inlineEditingKey={inlineEditingKey}
+      />
+    );
+  }
+
   if (size === 'athlete') {
     return (
       <AthleteWeekListView
@@ -1042,37 +1414,16 @@ function WeekView({
                 />
               ) : null}
             </Pressable>
-            <View style={fill ? styles.weekColumnBody : undefined}>
+            <View style={styles.weekColumnBody}>
               {dayItems.length === 0 ? (
-                onDayPress ? (
-                  <Pressable
-                    onPress={() => onDayPress(day, dayItems)}
-                    style={({ pressed }) => [
-                      fill && styles.weekColumnEmpty,
-                      pressed && styles.weekEmptyPressed,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.weekEmpty,
-                        size === 'athlete' && styles.weekEmptyAthlete,
-                        hint && styles.weekEmptyDropTarget,
-                      ]}
-                    >
-                      {hint ? 'Soltar aquí' : size === 'athlete' ? '·' : 'Sin sesión'}
-                    </Text>
-                  </Pressable>
-                ) : (
-                  <Text
-                    style={[
-                      styles.weekEmpty,
-                      size === 'athlete' && styles.weekEmptyAthlete,
-                      hint && styles.weekEmptyDropTarget,
-                    ]}
-                  >
-                    {hint ? 'Soltar aquí' : size === 'athlete' ? '·' : 'Sin sesión'}
-                  </Text>
-                )
+                <EmptyDayBlock
+                  day={day}
+                  dayItems={dayItems}
+                  hint={Boolean(hint)}
+                  size={size}
+                  onDayActionsPress={onDayActionsPress}
+                  onDayPress={onDayPress}
+                />
               ) : (
                 dayItems.map((item) => renderChip(item))
               )}
@@ -1225,7 +1576,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     borderWidth: 1,
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: withAlpha(colors.accent, '14'),
   },
   extendBtnGhost: {
     borderColor: colors.border,
@@ -1260,7 +1611,7 @@ const styles = StyleSheet.create({
   },
   modeBtnActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   modeBtnText: {
     ...typography.caption,
@@ -1345,14 +1696,14 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   monthCellMuted: {
-    backgroundColor: `${colors.surfaceLight}88`,
+    backgroundColor: withAlpha(colors.surfaceLight, '88'),
   },
   monthCellPressable: {
     cursor: 'pointer' as const,
   },
   monthCellSelected: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}12`,
+    backgroundColor: withAlpha(colors.accent, '12'),
   },
   monthDayNumber: {
     ...typography.caption,
@@ -1452,7 +1803,15 @@ const styles = StyleSheet.create({
   },
   weekColumnEmpty: {
     flex: 1,
+    alignSelf: 'stretch',
     justifyContent: 'flex-start',
+    minHeight: 120,
+  },
+  weekColumnEmptyLarge: {
+    minHeight: 240,
+  },
+  weekEmptyPressable: {
+    cursor: 'pointer' as const,
   },
   weekColumnLarge: {
     minHeight: 320,
@@ -1483,7 +1842,7 @@ const styles = StyleSheet.create({
   },
   weekColumnSelected: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}10`,
+    backgroundColor: withAlpha(colors.accent, '10'),
   },
   weekColumnHeader: {
     flexDirection: 'row',
@@ -1519,7 +1878,7 @@ const styles = StyleSheet.create({
   },
   weekColumnDropTarget: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: withAlpha(colors.accent, '14'),
   },
   weekColumnDragSource: {
     borderStyle: 'dashed',
@@ -1595,7 +1954,7 @@ const styles = StyleSheet.create({
   },
   sessionChipSelected: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}12`,
+    backgroundColor: withAlpha(colors.accent, '12'),
   },
   chipDragHandle: Platform.select({
     web: { cursor: 'grab', userSelect: 'none', touchAction: 'none', minWidth: 26, minHeight: 26 } as object,
@@ -1623,10 +1982,24 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  sessionChipBody: {
+    flexShrink: 0,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
+  },
   sessionChipExpanded: {
     borderColor: colors.accent,
     backgroundColor: colors.background,
     flexShrink: 0,
+  },
+  sessionChipWeeklyChallenge: {
+    padding: spacing.md,
+    minHeight: 140,
+    borderColor: `${colors.metcon}55`,
+    backgroundColor: `${colors.metcon}10`,
+  },
+  sessionChipNameWeeklyChallenge: {
+    ...typography.h3,
+    color: colors.metcon,
   },
   sessionChipInlineEditing: {
     flexGrow: 1,
@@ -1657,7 +2030,7 @@ const styles = StyleSheet.create({
   },
   sessionChipCurrent: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: withAlpha(colors.accent, '14'),
   },
   sessionChipDraft: {
     borderStyle: 'dashed',
@@ -1674,6 +2047,10 @@ const styles = StyleSheet.create({
     borderColor: `${colors.restDay}66`,
     backgroundColor: `${colors.restDay}1A`,
   },
+  sessionChipPdf: {
+    borderColor: withAlpha(colors.textSecondary, '55'),
+    backgroundColor: withAlpha(colors.textSecondary, '12'),
+  },
   sessionChipPressed: {
     opacity: 0.85,
   },
@@ -1681,8 +2058,32 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text,
     fontWeight: '700',
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  sessionChipTitleRow: {
     flex: 1,
     minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+  },
+  sessionChipModalityBadge: {
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: `${colors.metcon}55`,
+    backgroundColor: `${colors.metcon}18`,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  sessionChipModalityText: {
+    ...typography.caption,
+    color: colors.metcon,
+    fontWeight: '700',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   sessionChipNameAthlete: {
     fontSize: 10,
@@ -1696,6 +2097,9 @@ const styles = StyleSheet.create({
   },
   sessionChipNameRestDay: {
     color: colors.restDay,
+  },
+  sessionChipNamePdf: {
+    color: colors.textSecondary,
   },
   sessionChipMeta: {
     ...typography.caption,
@@ -1753,7 +2157,7 @@ const styles = StyleSheet.create({
   },
   dayCardPressed: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}10`,
+    backgroundColor: withAlpha(colors.accent, '10'),
   },
   dayCardHeader: {
     flexDirection: 'row',
@@ -1786,5 +2190,183 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     lineHeight: 18,
+  },
+  weeklyChallengePanel: {
+    borderWidth: 1,
+    borderColor: `${colors.metcon}66`,
+    borderRadius: borderRadius.lg,
+    backgroundColor: `${colors.metcon}0D`,
+    overflow: 'hidden',
+    minHeight: 420,
+  },
+  weeklyChallengePanelFill: {
+    flex: 1,
+    minHeight: 0,
+  },
+  weeklyChallengeHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: `${colors.metcon}33`,
+    gap: spacing.xs,
+  },
+  weeklyChallengeEyebrow: {
+    ...typography.caption,
+    color: colors.metcon,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  weeklyChallengeTitle: {
+    ...typography.h1,
+    color: colors.metcon,
+    fontSize: 32,
+    lineHeight: 38,
+  },
+  weeklyChallengeSubtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    lineHeight: 24,
+    maxWidth: 720,
+  },
+  weeklyChallengeBody: {
+    padding: spacing.lg,
+    gap: spacing.md,
+    minHeight: 280,
+  },
+  weeklyChallengeBodyFill: {
+    flex: 1,
+    minHeight: 0,
+  },
+  weeklyChallengeEmpty: {
+    flex: 1,
+    minHeight: 280,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: `${colors.metcon}55`,
+    borderRadius: borderRadius.lg,
+    backgroundColor: `${colors.metcon}08`,
+  },
+  weeklyChallengeEmptyFill: {
+    minHeight: 0,
+  },
+  weeklyChallengeEmptyPressable: Platform.select({
+    web: { cursor: 'pointer' } as object,
+    default: {},
+  }),
+  weeklyChallengeEmptyPressed: {
+    opacity: 0.88,
+  },
+  weeklyChallengeEmptyTitle: {
+    ...typography.h3,
+    color: colors.metcon,
+    textAlign: 'center',
+  },
+  weeklyChallengeEmptyText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
+    maxWidth: 420,
+  },
+  weeklyChallengeAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: `${colors.metcon}33`,
+  },
+  weeklyChallengeActionText: {
+    ...typography.bodySmall,
+    color: colors.metcon,
+    fontWeight: '700',
+  },
+  weeklyChallengeYearPanel: {
+    gap: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  weeklyChallengeYearIntro: {
+    ...typography.caption,
+    color: colors.textMuted,
+    lineHeight: 18,
+  },
+  weeklyChallengeYearGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  weeklyChallengeYearCell: {
+    width: '23%',
+    minWidth: 148,
+    flexGrow: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface,
+    padding: spacing.sm,
+    gap: 4,
+    minHeight: 108,
+  },
+  weeklyChallengeYearCellSelected: {
+    borderColor: colors.metcon,
+    backgroundColor: `${colors.metcon}12`,
+  },
+  weeklyChallengeYearCellEmpty: {
+    borderStyle: 'dashed',
+    opacity: 0.85,
+  },
+  weeklyChallengeYearCellPressed: {
+    opacity: 0.88,
+  },
+  weeklyChallengeYearCellMonth: {
+    ...typography.caption,
+    color: colors.metcon,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    fontSize: 10,
+  },
+  weeklyChallengeYearCellWeek: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  weeklyChallengeYearCellDates: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  weeklyChallengeYearCellHero: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  weeklyChallengeYearCellBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: `${colors.metcon}22`,
+  },
+  weeklyChallengeYearCellBadgeText: {
+    ...typography.caption,
+    color: colors.metcon,
+    fontWeight: '700',
+    fontSize: 10,
+  },
+  weeklyChallengeYearCellEmptyText: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
   },
 });

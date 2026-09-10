@@ -4,9 +4,11 @@ import {
   isPrimaryGoal,
   type PhysicalProfileBasics,
 } from '@/lib/bodyMetrics';
+import { readPersistedRecord, writePersistedRecord } from '@/lib/localUserDataStorage';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const TABLE = 'user_physical_profile';
+const LOCAL_STORAGE_KEY = 'user-physical-profile-v1';
 
 /**
  * La altura sigue viviendo en `"Perfil".altura` para no duplicar columnas: se guarda
@@ -45,11 +47,27 @@ function mapRow(row: Record<string, unknown>): PhysicalProfileInput {
   };
 }
 
+async function localProfile(userId: string) {
+  if (!localByUser.has(userId)) {
+    const persisted = await readPersistedRecord<PhysicalProfileInput>(LOCAL_STORAGE_KEY);
+    localByUser.set(userId, persisted[userId] ?? {});
+  }
+  return localByUser.get(userId) ?? {};
+}
+
+async function persistLocalProfile(userId: string, input: PhysicalProfileInput) {
+  localByUser.set(userId, input);
+  const all = await readPersistedRecord<PhysicalProfileInput>(LOCAL_STORAGE_KEY);
+  all[userId] = input;
+  await writePersistedRecord(LOCAL_STORAGE_KEY, all);
+}
+
 export async function fetchPhysicalProfile(userId: string): Promise<PhysicalProfileInput> {
   if (!userId) return {};
 
+  const local = await localProfile(userId);
   const supabase = isSupabaseConfigured ? getSupabase() : null;
-  if (!supabase) return localByUser.get(userId) ?? {};
+  if (!supabase) return local;
 
   const { data, error } = await supabase
     .from(TABLE)
@@ -57,20 +75,22 @@ export async function fetchPhysicalProfile(userId: string): Promise<PhysicalProf
     .eq('user_id', userId)
     .maybeSingle();
 
-  if (error || !data) return localByUser.get(userId) ?? {};
+  if (error || !data) return local;
 
-  return mapRow(data as Record<string, unknown>);
+  const remote = mapRow(data as Record<string, unknown>);
+  await persistLocalProfile(userId, remote);
+  return remote;
 }
 
 export async function savePhysicalProfile(
   userId: string,
   input: PhysicalProfileInput,
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; warning?: string }> {
   if (!userId) return { error: 'No hay sesión activa' };
 
   const supabase = isSupabaseConfigured ? getSupabase() : null;
   if (!supabase) {
-    localByUser.set(userId, input);
+    await persistLocalProfile(userId, input);
     return {};
   }
 
@@ -88,14 +108,16 @@ export async function savePhysicalProfile(
   );
 
   if (error) {
-    localByUser.set(userId, input);
+    await persistLocalProfile(userId, input);
     if (isMissingTableError(error)) {
       return {
-        error: 'La tabla de datos físicos no está disponible. Ejecuta: npm run supabase:physical-profile',
+        warning:
+          'Guardado en este dispositivo. Ejecuta npm run supabase:physical-profile para sincronizar con tu perfil.',
       };
     }
     return { error: error.message };
   }
 
+  await persistLocalProfile(userId, input);
   return {};
 }

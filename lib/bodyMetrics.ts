@@ -328,7 +328,6 @@ export type BodyMetricChartKey =
   | 'weightKg'
   | 'bodyFatPercentage'
   | 'muscleMassKg'
-  | 'waistCm'
   | 'bodyWaterPercentage';
 
 export const BODY_METRIC_CHART_OPTIONS: Array<{
@@ -339,6 +338,5 @@ export const BODY_METRIC_CHART_OPTIONS: Array<{
   { id: 'weightKg', label: 'Peso', unit: 'kg' },
   { id: 'bodyFatPercentage', label: 'Grasa', unit: '%' },
   { id: 'muscleMassKg', label: 'Músculo', unit: 'kg' },
-  { id: 'waistCm', label: 'Cintura', unit: 'cm' },
   { id: 'bodyWaterPercentage', label: 'Agua', unit: '%' },
 ];

@@ -4,10 +4,16 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import { Button } from '@/components/ui/Button';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useSessionTemplates } from '@/hooks/useSessionTemplates';
 import type { SessionTemplate } from '@/lib/sessionTemplateService';
-import { groupTemplatesByTag } from '@/lib/sessionTemplateTags';
+import {
+  groupTemplatesByModalityTag,
+  groupTemplatesByTag,
+  SESSION_TEMPLATE_MODALITY_TAGS,
+  type SessionTemplateModalityTag,
+  type SessionTemplateTag,
+} from '@/lib/sessionTemplateTags';
 import { describeSessionTemplate } from '@/lib/sessionTemplates';
 
 interface SessionTemplatePickerModalProps {
@@ -17,6 +23,8 @@ interface SessionTemplatePickerModalProps {
   subtitle?: string;
   confirmLabel?: string;
   saving?: boolean;
+  zoneTag?: SessionTemplateTag;
+  defaultModality?: SessionTemplateModalityTag | null;
 }
 
 export function SessionTemplatePickerModal({
@@ -26,21 +34,38 @@ export function SessionTemplatePickerModal({
   subtitle = 'Marca una o varias plantillas para combinarlas en la sesión.',
   confirmLabel = 'Usar plantillas',
   saving = false,
+  zoneTag,
+  defaultModality = null,
 }: SessionTemplatePickerModalProps) {
   const { templates, isLoading, refresh } = useSessionTemplates();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [modalityFilter, setModalityFilter] = useState<SessionTemplateModalityTag | null>(null);
+  const metconPicker = zoneTag === 'Metcon';
 
   useEffect(() => {
     if (!visible) return;
     setSelectedIds(new Set());
+    setModalityFilter(defaultModality);
     void refresh();
-  }, [visible, refresh]);
+  }, [visible, refresh, defaultModality]);
 
-  const groups = useMemo(() => groupTemplatesByTag(templates), [templates]);
+  const scopedTemplates = useMemo(() => {
+    return templates.filter((template) => {
+      if (zoneTag && template.tag !== zoneTag) return false;
+      if (metconPicker && modalityFilter && template.modalityTag !== modalityFilter) return false;
+      return true;
+    });
+  }, [templates, zoneTag, metconPicker, modalityFilter]);
+
+  const groups = useMemo(() => {
+    return metconPicker
+      ? groupTemplatesByModalityTag(scopedTemplates)
+      : groupTemplatesByTag(scopedTemplates);
+  }, [metconPicker, scopedTemplates]);
 
   const selectedTemplates = useMemo(
-    () => templates.filter((template) => selectedIds.has(template.id)),
-    [templates, selectedIds],
+    () => scopedTemplates.filter((template) => selectedIds.has(template.id)),
+    [scopedTemplates, selectedIds],
   );
 
   const toggle = (templateId: string) => {
@@ -52,7 +77,7 @@ export function SessionTemplatePickerModal({
     });
   };
 
-  const selectAll = () => setSelectedIds(new Set(templates.map((template) => template.id)));
+  const selectAll = () => setSelectedIds(new Set(scopedTemplates.map((template) => template.id)));
   const selectNone = () => setSelectedIds(new Set());
 
   return (
@@ -66,12 +91,40 @@ export function SessionTemplatePickerModal({
             <Text style={styles.hint}>Aplicando plantillas…</Text>
           ) : isLoading ? (
             <Text style={styles.hint}>Cargando plantillas…</Text>
-          ) : templates.length === 0 ? (
+          ) : scopedTemplates.length === 0 ? (
             <Text style={styles.hint}>
-              Todavía no tienes plantillas guardadas. Créalas desde el menú de una sesión.
+              {metconPicker && modalityFilter
+                ? `No hay plantillas Metcon de ${modalityFilter}.`
+                : 'Todavía no tienes plantillas guardadas. Créalas desde el menú de una sesión.'}
             </Text>
           ) : (
             <>
+              {metconPicker ? (
+                <>
+                  <Text style={styles.tagLabel}>Modalidad</Text>
+                  <View style={styles.tagRow}>
+                    {SESSION_TEMPLATE_MODALITY_TAGS.map((option) => {
+                      const selected = modalityFilter === option;
+                      return (
+                        <Pressable
+                          key={option}
+                          onPress={() => setModalityFilter(selected ? null : option)}
+                          style={({ pressed }) => [
+                            styles.tagChip,
+                            selected && styles.tagChipSelected,
+                            pressed && styles.rowPressed,
+                          ]}
+                        >
+                          <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
+                            {option}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : null}
+
               <View style={styles.selectionBar}>
                 <Text style={styles.selectionCount}>
                   {selectedTemplates.length === 0
@@ -94,7 +147,7 @@ export function SessionTemplatePickerModal({
                     key={group.label}
                     title={group.label}
                     subtitle={`${group.templates.length} plantilla${group.templates.length === 1 ? '' : 's'}`}
-                    defaultExpanded={false}
+                    defaultExpanded={metconPicker && group.templates.some((template) => template.modalityTag === defaultModality)}
                     style={styles.groupCard}
                   >
                     <View style={styles.groupList}>
@@ -120,13 +173,12 @@ export function SessionTemplatePickerModal({
                             />
                             <View style={styles.rowCopy}>
                               <Text style={styles.rowName} numberOfLines={2}>
-                                {template.formatTag
-                                  ? `${template.formatTag}`
-                                  : template.name}
+                                {template.formatTag ?? template.modalityTag ?? template.name}
                               </Text>
-                              {template.formatTag ? (
+                              {template.formatTag || template.modalityTag ? (
                                 <Text style={styles.rowDetails} numberOfLines={1}>
-                                  {template.tag ?? 'Sin zona'}
+                                  {[template.modalityTag, template.tag].filter(Boolean).join(' · ') ||
+                                    'Sin zona'}
                                 </Text>
                               ) : null}
                               <Text style={styles.rowDetails} numberOfLines={1}>
@@ -208,6 +260,38 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 20,
   },
+  tagLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  tagChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background,
+  },
+  tagChipSelected: {
+    borderColor: colors.accent,
+    backgroundColor: withAlpha(colors.accent, '18'),
+  },
+  tagChipText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  tagChipTextSelected: {
+    color: colors.accent,
+  },
   hint: {
     ...typography.bodySmall,
     color: colors.textMuted,
@@ -256,8 +340,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   rowChecked: {
-    borderColor: `${colors.accent}88`,
-    backgroundColor: `${colors.accent}12`,
+    borderColor: withAlpha(colors.accent, '88'),
+    backgroundColor: withAlpha(colors.accent, '12'),
   },
   rowPressed: {
     opacity: 0.9,

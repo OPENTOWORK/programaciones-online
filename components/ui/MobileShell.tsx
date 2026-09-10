@@ -1,6 +1,6 @@
 import { Platform, StyleSheet, View } from 'react-native';
 
-import { colors } from '@/constants/theme';
+import { colors, withAlpha } from '@/constants/theme';
 
 const MOBILE_MAX_WIDTH = 430;
 
@@ -27,7 +27,7 @@ export const mobileShellStyles = {
 const styles = StyleSheet.create({
   outer: {
     flex: 1,
-    backgroundColor: '#080B10',
+    backgroundColor: colors.background,
     alignItems: 'center',
     minHeight: '100vh' as unknown as number,
   },
@@ -35,7 +35,7 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     maxWidth: MOBILE_MAX_WIDTH,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: colors.border,
@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     flexDirection: 'column',
     ...(Platform.OS === 'web'
-      ? { boxShadow: '0 0 40px rgba(0, 230, 118, 0.08)' as unknown as undefined }
+      ? { boxShadow: `0 0 40px ${withAlpha(colors.accent, '14')}` as unknown as undefined }
       : {}),
   },
 });

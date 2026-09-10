@@ -1,6 +1,6 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 
 export interface ActionSheetAction {
   key: string;
@@ -18,16 +18,25 @@ interface ActionSheetModalProps {
   onClose: () => void;
 }
 
+const isWeb = Platform.OS === 'web';
+
 export function ActionSheetModal({ visible, title, subtitle, actions, onClose }: ActionSheetModalProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(event) => event.stopPropagation()}>
-          {title ? <Text style={styles.title}>{title}</Text> : null}
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      <Pressable style={[styles.overlay, isWeb && styles.overlayWeb]} onPress={onClose}>
+        <Pressable
+          style={[styles.sheet, isWeb && styles.sheetWeb]}
+          onPress={(event) => event.stopPropagation()}
+        >
+          {title || subtitle ? (
+            <View style={styles.header}>
+              {title ? <Text style={styles.title}>{title}</Text> : null}
+              {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+            </View>
+          ) : null}
 
-          <View style={styles.actions}>
-            {actions.map((action) => (
+          <View style={styles.actionsGroup}>
+            {actions.map((action, index) => (
               <Pressable
                 key={action.key}
                 onPress={() => {
@@ -37,6 +46,7 @@ export function ActionSheetModal({ visible, title, subtitle, actions, onClose }:
                 disabled={action.disabled}
                 style={({ pressed }) => [
                   styles.actionRow,
+                  index < actions.length - 1 && styles.actionRowBorder,
                   pressed && !action.disabled && styles.actionRowPressed,
                   action.disabled && styles.actionRowDisabled,
                 ]}
@@ -54,7 +64,10 @@ export function ActionSheetModal({ visible, title, subtitle, actions, onClose }:
             ))}
           </View>
 
-          <Pressable onPress={onClose} style={({ pressed }) => [styles.cancelRow, pressed && styles.actionRowPressed]}>
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [styles.cancelRow, pressed && styles.actionRowPressed]}
+          >
             <Text style={styles.cancelText}>Cancelar</Text>
           </Pressable>
         </Pressable>
@@ -69,34 +82,63 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
+  overlayWeb: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: borderRadius.lg,
     borderTopRightRadius: borderRadius.lg,
     padding: spacing.md,
     paddingBottom: spacing.lg,
-    gap: spacing.xs,
+    gap: spacing.sm,
     maxWidth: 480,
     width: '100%',
     alignSelf: 'center',
   },
+  sheetWeb: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxWidth: 360,
+    paddingBottom: spacing.md,
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 12px 40px rgba(15, 20, 25, 0.18)' } as object)
+      : null),
+  },
+  header: {
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+    gap: 2,
+  },
   title: {
     ...typography.h3,
     color: colors.text,
-    marginBottom: 2,
+    fontWeight: '700',
   },
   subtitle: {
     ...typography.bodySmall,
     color: colors.textSecondary,
-    marginBottom: spacing.sm,
+    fontVariant: ['tabular-nums'],
   },
-  actions: {
-    gap: 2,
+  actionsGroup: {
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
   },
   actionRow: {
-    paddingVertical: spacing.sm + 4,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  actionRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   actionRowPressed: {
     backgroundColor: colors.surfaceLight,
@@ -107,20 +149,23 @@ const styles = StyleSheet.create({
   actionText: {
     ...typography.body,
     color: colors.text,
+    fontWeight: '500',
   },
   actionTextDestructive: {
     color: colors.danger,
+    fontWeight: '600',
   },
   actionTextDisabled: {
     color: colors.textMuted,
   },
   cancelRow: {
-    marginTop: spacing.sm,
-    paddingVertical: spacing.sm + 4,
-    paddingHorizontal: spacing.sm,
+    marginTop: spacing.xs,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    backgroundColor: withAlpha(colors.surfaceLight, '88'),
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   cancelText: {
     ...typography.body,

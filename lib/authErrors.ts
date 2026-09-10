@@ -1,9 +1,14 @@
 import { AuthApiError, type SupabaseClient } from '@supabase/supabase-js';
 
 import { TimeoutError } from '@/lib/withTimeout';
+import { isJwtClockSkewError, jwtClockSkewUserMessage } from '@/lib/authSessionRecovery';
 
 export function mapSignInErrorMessage(message: string) {
   const normalized = message.toLowerCase();
+
+  if (isJwtClockSkewError(message)) {
+    return jwtClockSkewUserMessage();
+  }
 
   if (normalized.includes('email not confirmed')) {
     return 'Tu email aún no está confirmado. Revisa tu bandeja de entrada (y spam) y haz clic en el enlace de confirmación.';

@@ -1,4 +1,5 @@
 import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
+import { inferPlanValidityFromSessions, type PlanValidity } from '@/lib/planValidity';
 import {
   formatScheduleSummary,
   formatScheduleWeekdays,
@@ -16,6 +17,7 @@ export interface PersonalizedPlanGroup {
   athleteId: string;
   trainerId: string;
   sessions: AthletePlan[];
+  validity: PlanValidity;
 }
 
 export interface PersonalizedPlanDayGroup {
@@ -151,6 +153,7 @@ export function groupPersonalizedPlans(plans: AthletePlan[]): PersonalizedPlanGr
       athleteId: plan.athleteId,
       trainerId: plan.trainerId,
       sessions: [plan],
+      validity: {},
     });
   }
 
@@ -169,6 +172,7 @@ export function groupPersonalizedPlans(plans: AthletePlan[]): PersonalizedPlanGr
         athleteId: group.athleteId,
         trainerId: group.trainerId,
         sessions,
+        validity: inferPlanValidityFromSessions(sessions),
       };
     })
     .sort((left, right) => left.title.localeCompare(right.title, 'es'));

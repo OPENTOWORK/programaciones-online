@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { appointmentsForDate, isSameCalendarDay } from '@/lib/appointmentSchedule';
 import {
   formatMonthLabel,
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   },
   daySelected: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: withAlpha(colors.accent, '14'),
   },
   dayPressed: {
     backgroundColor: colors.surfaceLight,

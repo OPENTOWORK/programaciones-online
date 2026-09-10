@@ -4,14 +4,17 @@ import { HYPE_CHANNEL_VIDEOS } from '@/lib/hypeChannelVideos';
 export interface ExerciseLibraryItem {
   videoId: string;
   name: string;
-  /** Solo vídeos del canal Trainwithhype. */
-  source: 'channel';
+  /** Vídeos del canal Trainwithhype o subidos por un entrenador. */
+  source: 'channel' | 'user';
+  createdBy?: string;
   /** Otros nombres con los que el mismo vídeo aparece en los entrenos. */
   aliases: string[];
 }
 
+export type ExerciseLibraryOriginFilter = 'all' | 'page' | 'mine';
+
 /**
- * Biblioteca = únicamente el catálogo del canal de YouTube Trainwithhype.
+ * Catálogo del canal de YouTube Trainwithhype.
  */
 export function buildExerciseLibrary(): ExerciseLibraryItem[] {
   const byVideoId = new Map<string, ExerciseLibraryItem>();
@@ -32,6 +35,30 @@ export function buildExerciseLibrary(): ExerciseLibraryItem[] {
   );
 }
 
+/**
+ * Biblioteca = catálogo del canal de YouTube Trainwithhype más los vídeos subidos por el equipo.
+ */
+export function mergeExerciseLibrary(
+  channelItems: ExerciseLibraryItem[],
+  uploads: ExerciseLibraryItem[],
+): ExerciseLibraryItem[] {
+  const byVideoId = new Map<string, ExerciseLibraryItem>();
+
+  for (const item of channelItems) {
+    if (!item.videoId || byVideoId.has(item.videoId)) continue;
+    byVideoId.set(item.videoId, item);
+  }
+
+  for (const item of uploads) {
+    if (!item.videoId || byVideoId.has(item.videoId)) continue;
+    byVideoId.set(item.videoId, item);
+  }
+
+  return Array.from(byVideoId.values()).sort((a, b) =>
+    a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }),
+  );
+}
+
 /** Filtra por nombre o por cualquiera de sus alias, ignorando tildes y mayúsculas. */
 export function filterExerciseLibrary(items: ExerciseLibraryItem[], query: string) {
   const normalized = normalizeExerciseName(query);
@@ -43,6 +70,18 @@ export function filterExerciseLibrary(items: ExerciseLibraryItem[], query: strin
     const haystack = normalizeExerciseName([item.name, ...item.aliases].join(' '));
     return terms.every((term) => haystack.includes(term));
   });
+}
+
+export function filterExerciseLibraryByOrigin(
+  items: ExerciseLibraryItem[],
+  origin: ExerciseLibraryOriginFilter,
+  userId?: string,
+) {
+  if (origin === 'page') return items.filter((item) => item.source === 'channel');
+  if (origin === 'mine') {
+    return items.filter((item) => item.source === 'user' && Boolean(userId) && item.createdBy === userId);
+  }
+  return items;
 }
 
 export function getYoutubeThumbnailUrl(videoId: string) {

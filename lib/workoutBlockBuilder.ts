@@ -1,3 +1,4 @@
+import { freeTextBlockBody } from '@/lib/freeTextBlockVideos';
 import {
   formatWorkoutItemVideoSuffix,
   parseWorkoutItemVideoId,
@@ -73,6 +74,21 @@ export const MOVEMENT_LOAD_METRICS: MovementLoadMetric[] = [
   'rm',
 ];
 
+export const MOVEMENT_PRIMARY_LOAD_METRICS: MovementLoadMetric[] = [
+  'none',
+  'kg',
+  'cal',
+  'distance',
+  'min',
+  'sec',
+  'rir',
+  'percent',
+];
+
+export function isPercentRmLoadMetric(metric: MovementLoadMetric) {
+  return metric === 'percent' || metric === 'rm';
+}
+
 export function getMovementLoadMetricLabel(metric: MovementLoadMetric) {
   if (metric === 'kg') return 'Kg';
   if (metric === 'cal') return 'Cal';
@@ -80,21 +96,21 @@ export function getMovementLoadMetricLabel(metric: MovementLoadMetric) {
   if (metric === 'min') return 'Min';
   if (metric === 'sec') return 'Seg';
   if (metric === 'rir') return 'RIR';
-  if (metric === 'percent') return '%';
-  if (metric === 'rm') return 'RM';
+  if (metric === 'percent' || metric === 'rm') return '%RM';
   return 'Sin carga';
 }
 
 export function getMovementLoadMetric(item: WorkoutBlockItemDraft): MovementLoadMetric {
-  if (item.loadMetric && item.loadMetric !== 'none') return item.loadMetric;
+  if (item.loadMetric && item.loadMetric !== 'none') {
+    return item.loadMetric === 'rm' ? 'percent' : item.loadMetric;
+  }
   if (item.weightKg?.trim()) return 'kg';
   if (item.calories?.trim()) return 'cal';
   if (item.distance?.trim()) return 'distance';
   if (item.minutes?.trim()) return 'min';
   if (item.seconds?.trim()) return 'sec';
   if (item.rir?.trim()) return 'rir';
-  if (item.percent?.trim()) return 'percent';
-  if (item.rm?.trim()) return 'rm';
+  if (item.percent?.trim() || item.rm?.trim()) return 'percent';
   return 'none';
 }
 
@@ -106,8 +122,7 @@ export function getMovementLoadValue(item: WorkoutBlockItemDraft): string {
   if (metric === 'min') return item.minutes ?? '';
   if (metric === 'sec') return item.seconds ?? '';
   if (metric === 'rir') return item.rir ?? '';
-  if (metric === 'percent') return item.percent ?? '';
-  if (metric === 'rm') return item.rm ?? '';
+  if (metric === 'percent') return item.percent?.trim() || item.rm?.trim() || '';
   return '';
 }
 
@@ -118,8 +133,7 @@ export function movementLoadPlaceholder(metric: MovementLoadMetric) {
   if (metric === 'min') return '1';
   if (metric === 'sec') return '30';
   if (metric === 'rir') return '2';
-  if (metric === 'percent') return '80';
-  if (metric === 'rm') return '1';
+  if (metric === 'percent' || metric === 'rm') return '80';
   return '';
 }
 
@@ -133,8 +147,7 @@ export function formatMovementLoad(metric: MovementLoadMetric, value: string) {
   if (metric === 'min') return `${trimmed} min`;
   if (metric === 'sec') return `${trimmed} s`;
   if (metric === 'rir') return `RIR ${trimmed}`;
-  if (metric === 'percent') return `${trimmed}%`;
-  if (metric === 'rm') return `${trimmed}RM`;
+  if (metric === 'percent' || metric === 'rm') return `${trimmed}% RM`;
   return trimmed;
 }
 
@@ -207,7 +220,7 @@ export const WORKOUT_BLOCK_TYPES: Array<{
   },
   {
     type: 'technique',
-    label: 'Entrenamiento de Técnica',
+    label: 'Técnica/skills',
     timingLabel: 'Duración',
     timingPlaceholder: '15',
     timingIsDuration: true,
@@ -246,7 +259,7 @@ const BLOCK_LABELS: Record<WorkoutBlockType, string> = {
   rounds_for_time: 'Rounds For Time',
   emom: 'EMOM',
   time_stations: 'Estaciones de tiempo',
-  technique: 'Entrenamiento de Técnica',
+  technique: 'Técnica/skills',
   mobility: 'Movilidad',
   reps_ladder: 'Reps For Time / Ladder',
   amrap: 'AMRAP',
@@ -422,8 +435,8 @@ export function parseBlockItemFromText(line: string): Omit<WorkoutBlockItemDraft
     result.percent = percentMatch[1];
     result.loadMetric = 'percent';
   } else if (rmMatch) {
-    result.rm = rmMatch[1];
-    result.loadMetric = 'rm';
+    result.percent = rmMatch[1];
+    result.loadMetric = 'percent';
   } else if (minMatch) {
     result.minutes = minMatch[1];
     result.loadMetric = 'min';
@@ -573,12 +586,16 @@ function blockFromParsed(parsed: WorkoutContentBlock): WorkoutBlockDraft {
 
   let title = '';
   const timingParts: string[] = [];
+  // Lo que no es cap, rondas ni el nombre del bloque son las instrucciones del entrenador.
+  const noteParts: string[] = [];
 
   for (const part of parts) {
-    if (!title && !isStructuredTimingPart(part)) {
+    if (isStructuredTimingPart(part)) {
+      timingParts.push(part);
+    } else if (!title) {
       title = part;
     } else {
-      timingParts.push(part);
+      noteParts.push(part);
     }
   }
 
@@ -590,6 +607,7 @@ function blockFromParsed(parsed: WorkoutContentBlock): WorkoutBlockDraft {
     title,
     timing: dedupedTimingParts[0] ?? '',
     subtitle: dedupedTimingParts.slice(1).join(' · ') || '',
+    notes: noteParts.join(' · '),
     items:
       parsed.items.length > 0
         ? parsed.items.map((text) => ({ id: createId('block-item'), ...parseBlockItemFromText(text) }))
@@ -731,7 +749,7 @@ export function getWorkoutBlockSummary(block: WorkoutBlockDraft): string {
 
   if (block.type === 'free_text') {
     const title = block.title?.trim();
-    const text = block.timing.trim();
+    const text = freeTextBlockBody(block.timing).trim();
     if (!text) return title || config.label;
     const firstLine = text.split('\n').find(Boolean) ?? text;
     const summary = firstLine.length > 72 ? `${firstLine.slice(0, 72)}…` : firstLine;

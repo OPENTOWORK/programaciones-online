@@ -1,11 +1,18 @@
+import { annualScheduleForTemplateDate, isAnnualTemplateDate } from '@/lib/annualProgramSchedule';
 import type { Workout } from '@/lib/types';
 
 export type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
-export type SessionRecurrence = 'once' | 'weekly' | 'biweekly' | 'every3weeks' | 'every4weeks';
+export type SessionRecurrence =
+  | 'once'
+  | 'weekly'
+  | 'biweekly'
+  | 'every3weeks'
+  | 'every4weeks'
+  | 'yearly';
 
 /** Tipo de sesión persistido en schedule_config del catálogo. */
-export type CatalogSessionKind = 'session' | 'activation' | 'metcon' | 'rest';
+export type CatalogSessionKind = 'session' | 'activation' | 'metcon' | 'rest' | 'pdf';
 
 export interface SessionSchedule {
   weekdays: WeekdayIndex[];
@@ -13,8 +20,13 @@ export interface SessionSchedule {
   startDate?: string;
   /** Orden dentro de un mismo día cuando hay varias sesiones. */
   dayOrder?: number;
-  /** Activación / metcon / descanso; si falta, se infiere del nombre. */
+  /** Activación / metcon / descanso / pdf; si falta, se infiere del nombre. */
   kind?: CatalogSessionKind;
+  /** PDF adjunto a la sesión (catálogo). */
+  pdfStoragePath?: string;
+  pdfFileName?: string;
+  /** Modalidad del desafío semanal (Calistenia, ATHX, Crosstraining, Hype, Hyrox). */
+  modality?: string;
 }
 
 export const WEEKDAY_OPTIONS: Array<{ index: WeekdayIndex; label: string; short: string }> = [
@@ -33,6 +45,7 @@ export const RECURRENCE_OPTIONS: Array<{ value: SessionRecurrence; label: string
   { value: 'biweekly', label: 'Cada 2 semanas', hint: 'Una semana sí y otra no' },
   { value: 'every3weeks', label: 'Cada 3 semanas', hint: 'Se repite cada 3 semanas' },
   { value: 'every4weeks', label: 'Cada 4 semanas', hint: 'Se repite cada 4 semanas' },
+  { value: 'yearly', label: 'Cada año', hint: 'Misma fecha de calendario todos los años' },
 ];
 
 const VALID_RECURRENCES = new Set<SessionRecurrence>(RECURRENCE_OPTIONS.map((entry) => entry.value));
@@ -135,6 +148,18 @@ export function normalizeSessionSchedule(
       ? schedule.dayOrder
       : base.dayOrder;
   const kind = schedule?.kind ?? base.kind;
+  const pdfStoragePath =
+    typeof schedule?.pdfStoragePath === 'string' && schedule.pdfStoragePath.trim()
+      ? schedule.pdfStoragePath.trim()
+      : base.pdfStoragePath;
+  const pdfFileName =
+    typeof schedule?.pdfFileName === 'string' && schedule.pdfFileName.trim()
+      ? schedule.pdfFileName.trim()
+      : base.pdfFileName;
+  const modality =
+    typeof schedule?.modality === 'string' && schedule.modality.trim()
+      ? schedule.modality.trim()
+      : base.modality;
   return {
     weekdays: weekdays.length > 0 ? [...new Set(weekdays)].sort() : base.weekdays,
     recurrence: VALID_RECURRENCES.has(recurrence as SessionRecurrence)
@@ -143,6 +168,9 @@ export function normalizeSessionSchedule(
     startDate: schedule?.startDate ?? base.startDate,
     dayOrder,
     ...(kind ? { kind } : {}),
+    ...(pdfStoragePath ? { pdfStoragePath } : {}),
+    ...(pdfFileName ? { pdfFileName } : {}),
+    ...(modality ? { modality } : {}),
   };
 }
 
@@ -172,6 +200,10 @@ export function parseScheduleFromSummaryLabel(dayLabel: string): SessionSchedule
 export function parseScheduleFromWorkout(workout: Workout, sessionIndex = 0): SessionSchedule {
   if (workout.schedule) {
     return normalizeSessionSchedule(workout.schedule);
+  }
+
+  if (isAnnualTemplateDate(workout.workoutDate)) {
+    return annualScheduleForTemplateDate(workout.workoutDate!);
   }
 
   const fromSummary = parseScheduleFromSummaryLabel(workout.dayLabel);
@@ -230,6 +262,12 @@ export function sessionOccursOnDate(schedule: SessionSchedule, date: Date, refer
     return isSameDay(date, anchor);
   }
 
+  if (schedule.recurrence === 'yearly') {
+    if (!schedule.startDate) return false;
+    const yearlyAnchor = startOfDay(new Date(`${schedule.startDate}T12:00:00`));
+    return date.getMonth() === yearlyAnchor.getMonth() && date.getDate() === yearlyAnchor.getDate();
+  }
+
   if (schedule.weekdays.length === 0) return false;
 
   const weekday = toWeekdayIndex(date);
@@ -254,5 +292,8 @@ export function serializeScheduleForDb(schedule: SessionSchedule) {
     startDate: schedule.startDate ?? toLocalDateString(startOfDay(new Date())),
     ...(typeof schedule.dayOrder === 'number' ? { dayOrder: schedule.dayOrder } : {}),
     ...(schedule.kind ? { kind: schedule.kind } : {}),
+    ...(schedule.pdfStoragePath ? { pdfStoragePath: schedule.pdfStoragePath } : {}),
+    ...(schedule.pdfFileName ? { pdfFileName: schedule.pdfFileName } : {}),
+    ...(schedule.modality ? { modality: schedule.modality } : {}),
   };
 }

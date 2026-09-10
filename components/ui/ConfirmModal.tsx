@@ -11,11 +11,14 @@ interface ConfirmModalProps {
   message?: string;
   /** Texto de la casilla que hay que marcar antes de poder confirmar. */
   checkboxLabel?: string;
+  /** Casilla opcional; no bloquea la confirmación. */
+  optionalCheckboxLabel?: string;
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
+  busy?: boolean;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (options?: { optionalChecked?: boolean }) => void;
 }
 
 export function ConfirmModal({
@@ -23,24 +26,38 @@ export function ConfirmModal({
   title,
   message,
   checkboxLabel,
+  optionalCheckboxLabel,
   confirmLabel = 'Confirmar',
   cancelLabel = 'Cancelar',
   destructive = false,
+  busy = false,
   onCancel,
   onConfirm,
 }: ConfirmModalProps) {
   const [checked, setChecked] = useState(false);
+  const [optionalChecked, setOptionalChecked] = useState(false);
 
   useEffect(() => {
-    if (visible) setChecked(false);
+    if (visible) {
+      setChecked(false);
+      setOptionalChecked(false);
+    }
   }, [visible]);
 
-  const canConfirm = !checkboxLabel || checked;
+  const canConfirm = (!checkboxLabel || checked) && !busy;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable style={styles.overlay} onPress={onCancel}>
         <Pressable style={styles.card} onPress={(event) => event.stopPropagation()}>
+          <View style={[styles.iconBadge, destructive ? styles.iconBadgeDanger : styles.iconBadgeDefault]}>
+            <AppIcon
+              name={destructive ? 'trash' : 'info'}
+              size={22}
+              color={destructive ? colors.danger : colors.accentBlue}
+            />
+          </View>
+
           <Text style={styles.title}>{title}</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}
 
@@ -58,11 +75,27 @@ export function ConfirmModal({
             </Pressable>
           ) : null}
 
+          {optionalCheckboxLabel ? (
+            <Pressable
+              onPress={() => setOptionalChecked((current) => !current)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: optionalChecked }}
+              style={({ pressed }) => [styles.checkRow, pressed && styles.checkRowPressed]}
+            >
+              <View style={[styles.checkbox, optionalChecked && styles.checkboxChecked]}>
+                {optionalChecked ? <AppIcon name="check" size={12} color={colors.white} /> : null}
+              </View>
+              <Text style={styles.checkLabel}>{optionalCheckboxLabel}</Text>
+            </Pressable>
+          ) : null}
+
           <View style={styles.actions}>
             <Button title={cancelLabel} variant="secondary" onPress={onCancel} style={styles.actionButton} />
             <Button
               title={confirmLabel}
-              onPress={onConfirm}
+              onPress={() =>
+                onConfirm(optionalCheckboxLabel ? { optionalChecked } : undefined)
+              }
               disabled={!canConfirm}
               style={destructive ? styles.destructiveButton : styles.actionButton}
               textStyle={destructive ? styles.destructiveText : undefined}
@@ -85,12 +118,30 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
     width: '100%',
     maxWidth: 420,
     borderWidth: 1,
     borderColor: colors.border,
     gap: spacing.sm,
+  },
+  iconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  iconBadgeDanger: {
+    backgroundColor: `${colors.danger}18`,
+    borderWidth: 1,
+    borderColor: `${colors.danger}44`,
+  },
+  iconBadgeDefault: {
+    backgroundColor: `${colors.accentBlue}18`,
+    borderWidth: 1,
+    borderColor: `${colors.accentBlue}33`,
   },
   title: {
     ...typography.h3,

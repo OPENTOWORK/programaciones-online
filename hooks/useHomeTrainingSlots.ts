@@ -14,10 +14,15 @@ import {
 import { createStaleRefresh } from '@/lib/staleRefresh';
 import type { HomeTrainingSlot } from '@/lib/types';
 
-export function useHomeTrainingSlots() {
+function slotsVisibleToViewer(slots: HomeTrainingSlot[], userId: string, isTrainer: boolean) {
+  if (isTrainer) return slots;
+  return slots.filter((slot) => slot.status === 'open' || slot.athleteId === userId);
+}
+
+export function useHomeTrainingSlots(options?: { asAthlete?: boolean }) {
   const { user, isDemoMode } = useAuth();
   const userId = user?.id;
-  const isTrainer = isTrainerRole(user?.role);
+  const isTrainer = isTrainerRole(user?.role) && !options?.asAthlete;
 
   const [slots, setSlots] = useState<HomeTrainingSlot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,7 +41,7 @@ export function useHomeTrainingSlots() {
 
       try {
         const board = await fetchHomeTrainingSlots({ userId, isTrainer, isDemoMode });
-        setSlots(board.slots);
+        setSlots(slotsVisibleToViewer(board.slots, userId, isTrainer));
         setPersistent(board.persistent);
         setError(null);
         refreshGate.current.markFetched();

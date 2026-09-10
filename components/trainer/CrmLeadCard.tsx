@@ -1,6 +1,7 @@
 import type { PanResponderInstance } from 'react-native';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AlertDismissButton } from '@/components/trainer/AlertDismissButton';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { borderRadius, colors, goalLabels, levelColors, spacing, typography } from '@/constants/theme';
 import type { AthleteSummary } from '@/lib/types';
@@ -15,6 +16,8 @@ interface CrmLeadCardProps {
   onMovePrev: () => void;
   onMoveNext: () => void;
   onOpenActions: () => void;
+  onDismissAlerts?: () => void;
+  readOnly?: boolean;
 }
 
 export function CrmLeadCard({
@@ -27,34 +30,57 @@ export function CrmLeadCard({
   onMovePrev,
   onMoveNext,
   onOpenActions,
+  onDismissAlerts,
+  readOnly = false,
 }: CrmLeadCardProps) {
+  const pendingCount = athlete.alerts?.total ?? athlete.unansweredCount ?? 0;
+  const hasPendingAlerts = pendingCount > 0;
+
   return (
-    <View style={[styles.card, isDragging && styles.cardDragging]}>
-      <Pressable onPress={onPress} style={({ pressed }) => [styles.body, pressed && styles.bodyPressed]}>
+    <View style={[styles.card, isDragging && styles.cardDragging, hasPendingAlerts && styles.cardPending]}>
+      <View style={styles.body}>
         <View style={styles.headerRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{athlete.avatarInitials}</Text>
-          </View>
-          <View style={styles.headerCopy}>
-            <Text style={styles.name} numberOfLines={1}>
-              {athlete.name}
-            </Text>
-            <Text style={styles.email} numberOfLines={1}>
-              {athlete.email}
-            </Text>
-            {athlete.role === 'entrenador' ? (
-              <View style={styles.roleTag}>
-                <Text style={styles.roleTagText}>Rol entrenador</Text>
-              </View>
-            ) : null}
-          </View>
-          {(athlete.alerts?.total ?? athlete.unansweredCount ?? 0) > 0 ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {(athlete.alerts?.total ?? athlete.unansweredCount ?? 0) > 99
-                  ? '99+'
-                  : athlete.alerts?.total ?? athlete.unansweredCount}
+          <Pressable
+            onPress={onPress}
+            style={({ pressed }) => [styles.headerMain, pressed && styles.bodyPressed]}
+          >
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{athlete.avatarInitials}</Text>
+            </View>
+            <View style={styles.headerCopy}>
+              <Text style={styles.name} numberOfLines={1}>
+                {athlete.name}
               </Text>
+              <Text style={styles.email} numberOfLines={1}>
+                {athlete.email}
+              </Text>
+              {athlete.role === 'administrador' ? (
+                <View style={styles.roleTag}>
+                  <Text style={styles.roleTagText}>Rol administrador</Text>
+                </View>
+              ) : athlete.role === 'entrenador' ? (
+                <View style={styles.roleTag}>
+                  <Text style={styles.roleTagText}>Rol entrenador</Text>
+                </View>
+              ) : athlete.assignedTrainerName ? (
+                <Text style={styles.assignedTrainer} numberOfLines={1}>
+                  Cedido a {athlete.assignedTrainerName}
+                </Text>
+              ) : readOnly ? (
+                <View style={styles.roleTag}>
+                  <Text style={styles.roleTagText}>Cliente cedido</Text>
+                </View>
+              ) : null}
+            </View>
+          </Pressable>
+          {hasPendingAlerts ? (
+            <View style={styles.pendingActions}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{pendingCount > 99 ? '99+' : pendingCount}</Text>
+              </View>
+              {onDismissAlerts ? (
+                <AlertDismissButton onPress={onDismissAlerts} />
+              ) : null}
             </View>
           ) : null}
           {dragHandleProps ? (
@@ -64,36 +90,43 @@ export function CrmLeadCard({
           ) : null}
         </View>
 
-        {(athlete.fitnessLevel || athlete.mainGoal) ? (
-          <View style={styles.metaRow}>
-            {athlete.fitnessLevel ? (
-              <Text style={[styles.meta, { color: levelColors[athlete.fitnessLevel] }]}>{athlete.fitnessLevel}</Text>
-            ) : null}
-            {athlete.mainGoal ? <Text style={styles.meta}>{goalLabels[athlete.mainGoal]}</Text> : null}
-          </View>
-        ) : null}
+        <Pressable
+          onPress={onPress}
+          style={({ pressed }) => pressed && styles.bodyPressed}
+        >
+          {(athlete.fitnessLevel || athlete.mainGoal) ? (
+            <View style={styles.metaRow}>
+              {athlete.fitnessLevel ? (
+                <Text style={[styles.meta, { color: levelColors[athlete.fitnessLevel] }]}>{athlete.fitnessLevel}</Text>
+              ) : null}
+              {athlete.mainGoal ? <Text style={styles.meta}>{goalLabels[athlete.mainGoal]}</Text> : null}
+            </View>
+          ) : null}
 
-        {athlete.currentProgramName ? (
-          <Text style={styles.program} numberOfLines={1}>
-            {athlete.currentProgramName}
-          </Text>
-        ) : null}
+          {athlete.currentProgramName ? (
+            <Text style={styles.program} numberOfLines={1}>
+              {athlete.currentProgramName}
+            </Text>
+          ) : null}
 
-        {athlete.alerts && athlete.alerts.total > 0 ? (
-          <View style={styles.alertSources}>
-            {athlete.alerts.chatCount > 0 ? (
-              <Text style={styles.alertSource}>Chat · {athlete.alerts.chatCount}</Text>
-            ) : null}
-            {athlete.alerts.sessionCount > 0 ? (
-              <Text style={styles.alertSource}>Entrenos · {athlete.alerts.sessionCount}</Text>
-            ) : null}
-            {athlete.alerts.intakeChanged ? (
-              <Text style={styles.alertSource}>Cuestionario</Text>
-            ) : null}
-          </View>
-        ) : null}
-      </Pressable>
+          {hasPendingAlerts && athlete.alerts ? (
+            <View style={styles.alertSources}>
+              <Text style={styles.pendingLabel}>Pendiente</Text>
+              {athlete.alerts.chatCount > 0 ? (
+                <Text style={styles.alertSource}>Chat · {athlete.alerts.chatCount}</Text>
+              ) : null}
+              {athlete.alerts.sessionCount > 0 ? (
+                <Text style={styles.alertSource}>Entrenos · {athlete.alerts.sessionCount}</Text>
+              ) : null}
+              {athlete.alerts.intakeChanged ? (
+                <Text style={styles.alertSource}>Cuestionario</Text>
+              ) : null}
+            </View>
+          ) : null}
+        </Pressable>
+      </View>
 
+      {readOnly ? null : (
       <View style={styles.actionsRow}>
         <Pressable
           onPress={onMovePrev}
@@ -121,6 +154,7 @@ export function CrmLeadCard({
           <AppIcon name="chevronRight" size={16} color={canMoveNext ? colors.textSecondary : colors.textMuted} />
         </Pressable>
       </View>
+      )}
     </View>
   );
 }
@@ -138,6 +172,10 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
     opacity: 0.92,
   },
+  cardPending: {
+    borderColor: colors.warning,
+    backgroundColor: `${colors.warning}0D`,
+  },
   body: {
     padding: spacing.sm + 2,
     gap: spacing.xs,
@@ -149,6 +187,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  headerMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minWidth: 0,
   },
   avatar: {
     width: 32,
@@ -165,6 +210,11 @@ const styles = StyleSheet.create({
   },
   headerCopy: {
     flex: 1,
+  },
+  pendingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   name: {
     ...typography.bodySmall,
@@ -190,6 +240,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 10,
     lineHeight: 14,
+  },
+  assignedTrainer: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginTop: 3,
   },
   badge: {
     minWidth: 20,
@@ -228,8 +284,16 @@ const styles = StyleSheet.create({
   alertSources: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    alignItems: 'center',
     gap: spacing.xs,
     marginTop: 2,
+  },
+  pendingLabel: {
+    ...typography.caption,
+    color: colors.warning,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   alertSource: {
     ...typography.caption,

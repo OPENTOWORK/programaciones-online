@@ -1,17 +1,29 @@
 import {
   normalizeSessionTemplateFormatTag,
+  normalizeSessionTemplateModalityTag,
   normalizeSessionTemplateTag,
   type SessionTemplateFormatTag,
+  type SessionTemplateModalityTag,
   type SessionTemplateTag,
 } from '@/lib/sessionTemplateTags';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const TABLE = 'trainer_session_templates';
-const LOCAL_STORAGE_KEY = 'trainer-session-templates-v3';
+const LOCAL_STORAGE_KEY = 'trainer-session-templates-v5';
 const SELECT_FULL =
+  'id, trainer_id, name, content, tag, format_tag, modality_tag, visibility, created_at, updated_at';
+const SELECT_WITH_FORMAT =
+  'id, trainer_id, name, content, tag, format_tag, visibility, created_at, updated_at';
+const SELECT_WITH_TAG = 'id, trainer_id, name, content, tag, visibility, created_at, updated_at';
+const SELECT_WITHOUT_TAG = 'id, trainer_id, name, content, visibility, created_at, updated_at';
+const SELECT_FULL_LEGACY =
+  'id, trainer_id, name, content, tag, format_tag, modality_tag, created_at, updated_at';
+const SELECT_WITH_FORMAT_LEGACY =
   'id, trainer_id, name, content, tag, format_tag, created_at, updated_at';
-const SELECT_WITH_TAG = 'id, trainer_id, name, content, tag, created_at, updated_at';
-const SELECT_WITHOUT_TAG = 'id, trainer_id, name, content, created_at, updated_at';
+const SELECT_WITH_TAG_LEGACY = 'id, trainer_id, name, content, tag, created_at, updated_at';
+const SELECT_WITHOUT_TAG_LEGACY = 'id, trainer_id, name, content, created_at, updated_at';
+
+export type SessionTemplateVisibility = 'personal' | 'admin';
 
 export interface SessionTemplate {
   id: string;
@@ -20,6 +32,8 @@ export interface SessionTemplate {
   content: string;
   tag: SessionTemplateTag | null;
   formatTag: SessionTemplateFormatTag | null;
+  modalityTag: SessionTemplateModalityTag | null;
+  visibility: SessionTemplateVisibility;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +45,8 @@ function normalizeTemplate(template: Partial<SessionTemplate> & { name: string; 
     ...template,
     tag: normalizeSessionTemplateTag(template.tag),
     formatTag: normalizeSessionTemplateFormatTag(template.formatTag),
+    modalityTag: normalizeSessionTemplateModalityTag(template.modalityTag),
+    visibility: template.visibility === 'personal' ? 'personal' : 'admin',
   };
 }
 
@@ -107,6 +123,7 @@ function isDuplicateNameError(error: { message?: string; code?: string } | null 
 function mapRow(row: Record<string, unknown>): SessionTemplate {
   const rawTag = typeof row.tag === 'string' ? row.tag : null;
   const rawFormat = typeof row.format_tag === 'string' ? row.format_tag : null;
+  const rawModality = typeof row.modality_tag === 'string' ? row.modality_tag : null;
 
   // Legacy: Activación estaba como zona; ahora es formato.
   const legacyActivation = rawTag?.trim() === 'Activación';
@@ -120,9 +137,16 @@ function mapRow(row: Record<string, unknown>): SessionTemplate {
     formatTag:
       normalizeSessionTemplateFormatTag(rawFormat) ??
       (legacyActivation ? 'Activación' : null),
+    modalityTag: normalizeSessionTemplateModalityTag(rawModality),
+    visibility: row.visibility === 'personal' ? 'personal' : 'admin',
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
+}
+
+function visibleToTrainer(template: SessionTemplate, trainerId: string, isAdmin: boolean) {
+  if (isAdmin) return template.visibility === 'admin' || template.trainerId === trainerId;
+  return template.visibility === 'personal' && template.trainerId === trainerId;
 }
 
 function sortByName(templates: SessionTemplate[]) {
@@ -162,41 +186,76 @@ function uniqueName(trainerId: string, baseName: string) {
 export async function fetchSessionTemplates(
   trainerId: string,
   useLocalStore = false,
+  isAdmin = false,
 ): Promise<{ templates: SessionTemplate[]; persistent: boolean }> {
   if (!trainerId) return { templates: [], persistent: false };
 
   if (useLocalStore || !isSupabaseConfigured) {
-    return { templates: sortByName(localList(trainerId)), persistent: false };
+    return {
+      templates: sortByName(localList(trainerId).filter((template) => visibleToTrainer(template, trainerId, isAdmin))),
+      persistent: false,
+    };
   }
 
   const supabase = getSupabase();
-  if (!supabase) return { templates: sortByName(localList(trainerId)), persistent: false };
+  if (!supabase) {
+    return {
+      templates: sortByName(localList(trainerId).filter((template) => visibleToTrainer(template, trainerId, isAdmin))),
+      persistent: false,
+    };
+  }
 
-  let { data, error } = await supabase.from(TABLE).select(SELECT_FULL).order('name', { ascending: true });
+  const scopedSelect = async (columns: string) => {
+    let query = supabase.from(TABLE).select(columns).order('name', { ascending: true });
+    if (isAdmin) {
+      query = query.or(`visibility.eq.admin,and(visibility.eq.personal,trainer_id.eq.${trainerId})`);
+    } else {
+      query = query.eq('visibility', 'personal').eq('trainer_id', trainerId);
+    }
+    return query;
+  };
+
+  const unscopedSelect = async (columns: string) =>
+    supabase.from(TABLE).select(columns).eq('trainer_id', trainerId).order('name', { ascending: true });
+
+  let { data, error } = await scopedSelect(SELECT_FULL);
+
+  if (error && isMissingColumnError(error, 'visibility')) {
+    ({ data, error } = await unscopedSelect(SELECT_FULL_LEGACY));
+  }
 
   if (error && isMissingColumnError(error, 'format_tag')) {
-    ({ data, error } = await supabase
-      .from(TABLE)
-      .select(SELECT_WITH_TAG)
-      .order('name', { ascending: true }));
+    ({ data, error } = await scopedSelect(SELECT_WITH_TAG));
+    if (error && isMissingColumnError(error, 'visibility')) {
+      ({ data, error } = await unscopedSelect(SELECT_WITH_TAG_LEGACY));
+    }
+  }
+
+  if (error && isMissingColumnError(error, 'modality_tag')) {
+    ({ data, error } = await scopedSelect(SELECT_WITH_FORMAT));
+    if (error && isMissingColumnError(error, 'visibility')) {
+      ({ data, error } = await unscopedSelect(SELECT_WITH_FORMAT_LEGACY));
+    }
   }
 
   if (error && isMissingColumnError(error, 'tag')) {
-    ({ data, error } = await supabase
-      .from(TABLE)
-      .select(SELECT_WITHOUT_TAG)
-      .order('name', { ascending: true }));
+    ({ data, error } = await scopedSelect(SELECT_WITHOUT_TAG));
+    if (error && isMissingColumnError(error, 'visibility')) {
+      ({ data, error } = await unscopedSelect(SELECT_WITHOUT_TAG_LEGACY));
+    }
   }
 
   if (error || !data) {
     if (isMissingTableError(error)) {
       return { templates: sortByName(localList(trainerId)), persistent: false };
     }
-    const local = localList(trainerId);
+    const local = localList(trainerId).filter((template) => visibleToTrainer(template, trainerId, isAdmin));
     return { templates: sortByName(local), persistent: local.length > 0 ? false : true };
   }
 
-  const templates = data.map((row) => mapRow(row as Record<string, unknown>));
+  const templates = data
+    .map((row) => mapRow(row as Record<string, unknown>))
+    .filter((template) => visibleToTrainer(template, trainerId, isAdmin));
   localTemplatesByTrainer.set(trainerId, [...templates]);
   persistLocalList(trainerId);
 
@@ -209,7 +268,9 @@ export async function createSessionTemplate(input: {
   content: string;
   tag: SessionTemplateTag;
   formatTag?: SessionTemplateFormatTag | null;
+  modalityTag?: SessionTemplateModalityTag | null;
   useLocalStore: boolean;
+  isAdmin?: boolean;
 }): Promise<{ template?: SessionTemplate; error?: string }> {
   const tagError = validateTag(input.tag);
   if (tagError) return { error: tagError };
@@ -221,6 +282,8 @@ export async function createSessionTemplate(input: {
 
   const tag = input.tag;
   const formatTag = input.formatTag ?? null;
+  const modalityTag = input.modalityTag ?? null;
+  const visibility: SessionTemplateVisibility = input.isAdmin ? 'admin' : 'personal';
 
   if (input.useLocalStore || !isSupabaseConfigured) {
     const templates = localList(input.trainerId);
@@ -236,6 +299,8 @@ export async function createSessionTemplate(input: {
       content: input.content,
       tag,
       formatTag,
+      modalityTag,
+      visibility,
       createdAt: now,
       updatedAt: now,
     };
@@ -253,17 +318,49 @@ export async function createSessionTemplate(input: {
     content: input.content,
     tag,
     format_tag: formatTag,
+    modality_tag: modalityTag,
+    visibility,
   };
 
   let { data, error } = await supabase.from(TABLE).insert(insertPayload).select(SELECT_FULL).single();
+
+  if (error && isMissingColumnError(error, 'visibility')) {
+    delete insertPayload.visibility;
+    ({ data, error } = await supabase.from(TABLE).insert(insertPayload).select(SELECT_FULL_LEGACY).single());
+  }
 
   if (error && isMissingColumnError(error, 'format_tag')) {
     delete insertPayload.format_tag;
     ({ data, error } = await supabase
       .from(TABLE)
       .insert(insertPayload)
-      .select(SELECT_WITH_TAG)
+      .select(insertPayload.visibility ? SELECT_WITH_FORMAT : SELECT_WITH_FORMAT_LEGACY)
       .single());
+    if (error && isMissingColumnError(error, 'visibility')) {
+      delete insertPayload.visibility;
+      ({ data, error } = await supabase
+        .from(TABLE)
+        .insert(insertPayload)
+        .select(SELECT_WITH_FORMAT_LEGACY)
+        .single());
+    }
+  }
+
+  if (error && isMissingColumnError(error, 'modality_tag')) {
+    delete insertPayload.modality_tag;
+    ({ data, error } = await supabase
+      .from(TABLE)
+      .insert(insertPayload)
+      .select(insertPayload.visibility ? SELECT_WITH_FORMAT : SELECT_WITH_FORMAT_LEGACY)
+      .single());
+    if (error && isMissingColumnError(error, 'visibility')) {
+      delete insertPayload.visibility;
+      ({ data, error } = await supabase
+        .from(TABLE)
+        .insert(insertPayload)
+        .select(SELECT_WITH_FORMAT_LEGACY)
+        .single());
+    }
   }
 
   if (error && isMissingColumnError(error, 'tag')) {
@@ -271,8 +368,16 @@ export async function createSessionTemplate(input: {
     ({ data, error } = await supabase
       .from(TABLE)
       .insert(insertPayload)
-      .select(SELECT_WITHOUT_TAG)
+      .select(insertPayload.visibility ? SELECT_WITHOUT_TAG : SELECT_WITHOUT_TAG_LEGACY)
       .single());
+    if (error && isMissingColumnError(error, 'visibility')) {
+      delete insertPayload.visibility;
+      ({ data, error } = await supabase
+        .from(TABLE)
+        .insert(insertPayload)
+        .select(SELECT_WITHOUT_TAG_LEGACY)
+        .single());
+    }
   }
 
   if (error || !data) {
@@ -293,6 +398,8 @@ export async function createSessionTemplate(input: {
     ...mapped,
     tag: mapped.tag ?? tag,
     formatTag: mapped.formatTag ?? formatTag,
+    modalityTag: mapped.modalityTag ?? modalityTag,
+    visibility,
   };
   mirrorLocal(input.trainerId, template);
   return { template };
@@ -304,12 +411,14 @@ export async function updateSessionTemplate(input: {
   content?: string;
   tag?: SessionTemplateTag | null;
   formatTag?: SessionTemplateFormatTag | null;
+  modalityTag?: SessionTemplateModalityTag | null;
   useLocalStore: boolean;
 }): Promise<{ template?: SessionTemplate; error?: string }> {
   const { template } = input;
   const name = input.name?.trim() ?? template.name;
   const tag = input.tag === undefined ? template.tag : input.tag;
   const formatTag = input.formatTag === undefined ? template.formatTag : input.formatTag;
+  const modalityTag = input.modalityTag === undefined ? template.modalityTag : input.modalityTag;
 
   const nameError = validateName(name);
   if (nameError) return { error: nameError };
@@ -329,7 +438,16 @@ export async function updateSessionTemplate(input: {
     if (duplicated) return { error: 'Ya hay una plantilla con ese nombre.' };
 
     const index = templates.findIndex((entry) => entry.id === template.id);
-    const updated: SessionTemplate = { ...template, name, content, tag, formatTag, updatedAt };
+    const updated: SessionTemplate = {
+      ...template,
+      name,
+      content,
+      tag,
+      formatTag,
+      modalityTag,
+      visibility: template.visibility,
+      updatedAt,
+    };
     if (index >= 0) templates[index] = updated;
     else templates.push(updated);
     persistLocalList(template.trainerId);
@@ -344,6 +462,7 @@ export async function updateSessionTemplate(input: {
     content,
     tag,
     format_tag: formatTag,
+    modality_tag: modalityTag,
     updated_at: updatedAt,
   };
 
@@ -354,14 +473,49 @@ export async function updateSessionTemplate(input: {
     .select(SELECT_FULL)
     .single();
 
+  if (error && isMissingColumnError(error, 'visibility')) {
+    ({ data, error } = await supabase
+      .from(TABLE)
+      .update(updatePayload)
+      .eq('id', template.id)
+      .select(SELECT_FULL_LEGACY)
+      .single());
+  }
+
   if (error && isMissingColumnError(error, 'format_tag')) {
     delete updatePayload.format_tag;
     ({ data, error } = await supabase
       .from(TABLE)
       .update(updatePayload)
       .eq('id', template.id)
-      .select(SELECT_WITH_TAG)
+      .select(SELECT_WITH_FORMAT)
       .single());
+    if (error && isMissingColumnError(error, 'visibility')) {
+      ({ data, error } = await supabase
+        .from(TABLE)
+        .update(updatePayload)
+        .eq('id', template.id)
+        .select(SELECT_WITH_FORMAT_LEGACY)
+        .single());
+    }
+  }
+
+  if (error && isMissingColumnError(error, 'modality_tag')) {
+    delete updatePayload.modality_tag;
+    ({ data, error } = await supabase
+      .from(TABLE)
+      .update(updatePayload)
+      .eq('id', template.id)
+      .select(SELECT_WITH_FORMAT)
+      .single());
+    if (error && isMissingColumnError(error, 'visibility')) {
+      ({ data, error } = await supabase
+        .from(TABLE)
+        .update(updatePayload)
+        .eq('id', template.id)
+        .select(SELECT_WITH_FORMAT_LEGACY)
+        .single());
+    }
   }
 
   if (error && isMissingColumnError(error, 'tag')) {
@@ -372,6 +526,14 @@ export async function updateSessionTemplate(input: {
       .eq('id', template.id)
       .select(SELECT_WITHOUT_TAG)
       .single());
+    if (error && isMissingColumnError(error, 'visibility')) {
+      ({ data, error } = await supabase
+        .from(TABLE)
+        .update(updatePayload)
+        .eq('id', template.id)
+        .select(SELECT_WITHOUT_TAG_LEGACY)
+        .single());
+    }
   }
 
   if (error || !data) {
@@ -384,6 +546,7 @@ export async function updateSessionTemplate(input: {
     ...mapped,
     tag: mapped.tag ?? tag,
     formatTag: mapped.formatTag ?? formatTag,
+    modalityTag: mapped.modalityTag ?? modalityTag,
   };
   mirrorLocal(template.trainerId, updated);
   return { template: updated };

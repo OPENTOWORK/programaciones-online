@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import {
   getTodayWeekDay,
   groupMealsByDay,
@@ -154,9 +154,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   macroChip: {
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
     borderWidth: 1,
-    borderColor: `${colors.accent}33`,
+    borderColor: withAlpha(colors.accent, '33'),
     borderRadius: 12,
     paddingVertical: 6,
     paddingHorizontal: spacing.sm,
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
   },
   dayTabActive: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   dayTabDisabled: {
     opacity: 0.4,

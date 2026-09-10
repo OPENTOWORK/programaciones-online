@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { FeedbackAttachmentList } from '@/components/feedback/FeedbackAttachmentList';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Card } from '@/components/ui/Card';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useTrainerAthleteFeedback } from '@/hooks/useTrainerAthleteFeedback';
 
 function formatDate(iso: string) {
@@ -14,24 +14,28 @@ function formatDate(iso: string) {
   });
 }
 
-export function TrainerFeedbackCard({ dense = false }: { dense?: boolean }) {
-  const { latest, isLoading } = useTrainerAthleteFeedback();
+export function TrainerFeedbackCard({ dense = false, embedded = false }: { dense?: boolean; embedded?: boolean }) {
+  const { latestGeneral, isLoading } = useTrainerAthleteFeedback();
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Feedback del entrenador</Text>
+    <View style={[styles.section, embedded && styles.sectionEmbedded]}>
+      {embedded ? null : <Text style={styles.sectionTitle}>Feedback del entrenador</Text>}
       <Card style={dense ? styles.cardDense : styles.card}>
         {isLoading ? (
           <ActivityIndicator color={colors.accent} />
-        ) : latest ? (
+        ) : latestGeneral ? (
           <View style={styles.row}>
             <View style={styles.icon}>
               <AppIcon name="trainer" size={18} color={colors.accent} />
             </View>
             <View style={styles.copy}>
-              <Text style={styles.meta}>Último feedback · {formatDate(latest.createdAt)}</Text>
-              {latest.message ? <Text style={styles.message}>{latest.message}</Text> : null}
-              <FeedbackAttachmentList attachments={latest.attachments} />
+              <Text style={styles.meta}>
+                Último feedback general · {formatDate(latestGeneral.createdAt)}
+              </Text>
+              {latestGeneral.message ? (
+                <Text style={styles.message}>{latestGeneral.message}</Text>
+              ) : null}
+              <FeedbackAttachmentList attachments={latestGeneral.attachments} />
             </View>
           </View>
         ) : (
@@ -40,9 +44,9 @@ export function TrainerFeedbackCard({ dense = false }: { dense?: boolean }) {
               <AppIcon name="trainer" size={18} color={colors.textMuted} />
             </View>
             <View style={styles.copy}>
-              <Text style={styles.emptyTitle}>Sin feedback todavía</Text>
+              <Text style={styles.emptyTitle}>Sin feedback general todavía</Text>
               <Text style={styles.emptyText}>
-                Cuando tu entrenador revise tu progreso, su comentario aparecerá aquí.
+                Cuando tu entrenador te envíe una valoración global, aparecerá aquí.
               </Text>
             </View>
           </View>
@@ -55,6 +59,9 @@ export function TrainerFeedbackCard({ dense = false }: { dense?: boolean }) {
 const styles = StyleSheet.create({
   section: {
     gap: spacing.xs,
+  },
+  sectionEmbedded: {
+    gap: 0,
   },
   sectionTitle: {
     ...typography.body,
@@ -79,7 +86,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   copy: {
     flex: 1,

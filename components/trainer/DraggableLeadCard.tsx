@@ -12,11 +12,13 @@ interface DraggableLeadCardProps {
   onMovePrev: () => void;
   onMoveNext: () => void;
   onOpenActions: () => void;
+  onDismissAlerts?: () => void;
   /** El tablero mide la tarjeta al empezar un arrastre para saber dónde cae la que se mueve. */
   cardRef?: (node: View | null) => void;
   onDragStart: (athleteId: string) => void;
   onDragMove: (athleteId: string, pageX: number, pageY: number) => void;
   onDragEnd: (athleteId: string, pageX: number, pageY: number) => void;
+  readOnly?: boolean;
 }
 
 export function DraggableLeadCard({
@@ -25,6 +27,7 @@ export function DraggableLeadCard({
   onDragStart,
   onDragMove,
   onDragEnd,
+  readOnly = false,
   ...cardProps
 }: DraggableLeadCardProps) {
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -33,7 +36,8 @@ export function DraggableLeadCard({
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponder: () => !readOnly,
+        onMoveShouldSetPanResponder: () => !readOnly,
         onPanResponderGrant: () => {
           pan.setValue({ x: 0, y: 0 });
           setIsDragging(true);
@@ -55,7 +59,7 @@ export function DraggableLeadCard({
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [athlete.id],
+    [athlete.id, readOnly],
   );
 
   return (
@@ -67,7 +71,14 @@ export function DraggableLeadCard({
         isDragging && { zIndex: 50, elevation: 12 },
       ]}
     >
-      <CrmLeadCard athlete={athlete} isDragging={isDragging} dragHandleProps={panResponder.panHandlers} {...cardProps} />
+      <CrmLeadCard
+        athlete={athlete}
+        isDragging={isDragging}
+        readOnly={readOnly}
+        dragHandleProps={readOnly ? undefined : panResponder.panHandlers}
+        {...cardProps}
+      />
     </Animated.View>
   );
 }
+

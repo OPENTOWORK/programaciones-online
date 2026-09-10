@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
+import { MonthDatePicker } from '@/components/ui/MonthDatePicker';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { isSameCalendarDay } from '@/lib/appointmentSchedule';
 import { formatDayLabel, shiftDay } from '@/lib/programSchedulePreview';
 
 interface CopyDayToDateModalProps {
@@ -11,6 +12,9 @@ interface CopyDayToDateModalProps {
   sourceDate: Date | null;
   sessionCount: number;
   saving?: boolean;
+  /** Día completo o una sola sesión. */
+  variant?: 'day' | 'session';
+  sessionName?: string;
   onCancel: () => void;
   onConfirm: (targetDate: Date) => void;
 }
@@ -20,6 +24,8 @@ export function CopyDayToDateModal({
   sourceDate,
   sessionCount,
   saving = false,
+  variant = 'day',
+  sessionName,
   onCancel,
   onConfirm,
 }: CopyDayToDateModalProps) {
@@ -32,41 +38,40 @@ export function CopyDayToDateModal({
 
   if (!sourceDate) return null;
 
-  const sameDay =
-    sourceDate.getFullYear() === targetDate.getFullYear() &&
-    sourceDate.getMonth() === targetDate.getMonth() &&
-    sourceDate.getDate() === targetDate.getDate();
+  const sameDay = isSameCalendarDay(sourceDate, targetDate);
+  const isSession = variant === 'session';
+  const blocked = !isSession && sameDay;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable style={styles.overlay} onPress={onCancel}>
         <Pressable style={styles.card} onPress={(event) => event.stopPropagation()}>
-          <Text style={styles.title}>Copiar sesiones del día</Text>
+          <Text style={styles.title}>{isSession ? 'Copiar sesión' : 'Copiar sesiones del día'}</Text>
           <Text style={styles.subtitle}>
-            Se copiarán {sessionCount} sesión{sessionCount === 1 ? '' : 'es'} de{' '}
-            <Text style={styles.emphasis}>{formatDayLabel(sourceDate)}</Text> al día que elijas.
+            {isSession ? (
+              <>
+                Se copiará <Text style={styles.emphasis}>{sessionName ?? 'esta sesión'}</Text> de{' '}
+                <Text style={styles.emphasis}>{formatDayLabel(sourceDate)}</Text> al día que elijas.
+              </>
+            ) : (
+              <>
+                Se copiarán {sessionCount} sesión{sessionCount === 1 ? '' : 'es'} de{' '}
+                <Text style={styles.emphasis}>{formatDayLabel(sourceDate)}</Text> al día que elijas.
+              </>
+            )}
           </Text>
 
           <Text style={styles.fieldLabel}>Día destino</Text>
-          <View style={styles.dateRow}>
-            <Pressable
-              onPress={() => setTargetDate((current) => shiftDay(current, -1))}
-              accessibilityLabel="Día anterior"
-              style={({ pressed }) => [styles.dateNav, pressed && styles.dateNavPressed]}
-            >
-              <AppIcon name="chevronLeft" size={18} color={colors.textSecondary} />
-            </Pressable>
-            <Text style={styles.dateLabel}>{formatDayLabel(targetDate)}</Text>
-            <Pressable
-              onPress={() => setTargetDate((current) => shiftDay(current, 1))}
-              accessibilityLabel="Día siguiente"
-              style={({ pressed }) => [styles.dateNav, pressed && styles.dateNavPressed]}
-            >
-              <AppIcon name="chevronRight" size={18} color={colors.textSecondary} />
-            </Pressable>
-          </View>
+          <Text style={styles.selectedLabel}>{formatDayLabel(targetDate)}</Text>
 
-          {sameDay ? (
+          <MonthDatePicker
+            selectedDate={targetDate}
+            onSelectDate={setTargetDate}
+            highlightDate={sourceDate}
+            disabledDate={!isSession ? (date) => isSameCalendarDay(date, sourceDate) : undefined}
+          />
+
+          {blocked ? (
             <Text style={styles.error}>Elige un día distinto al que estás copiando.</Text>
           ) : null}
 
@@ -76,7 +81,7 @@ export function CopyDayToDateModal({
               title="Copiar"
               onPress={() => onConfirm(targetDate)}
               loading={saving}
-              disabled={sameDay}
+              disabled={blocked}
               style={styles.actionButton}
             />
           </View>
@@ -125,32 +130,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     marginTop: spacing.xs,
   },
-  dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  dateNav: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  dateNavPressed: {
-    opacity: 0.85,
-  },
-  dateLabel: {
+  selectedLabel: {
     ...typography.body,
     color: colors.text,
     fontWeight: '700',
-    flex: 1,
-    textAlign: 'center',
   },
   error: {
     ...typography.caption,

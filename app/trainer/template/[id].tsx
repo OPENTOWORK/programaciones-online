@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useSessionTemplates } from '@/hooks/useSessionTemplates';
 import { safeGoBack } from '@/lib/navigation';
+import { inferSessionTemplateModality } from '@/lib/sessionTemplateModality';
 import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import {
   canSaveSessionAsTemplate,
@@ -19,8 +20,10 @@ import {
 import {
   buildSessionTemplateName,
   SESSION_TEMPLATE_FORMAT_TAGS,
+  SESSION_TEMPLATE_MODALITY_TAGS,
   SESSION_TEMPLATE_ZONE_TAGS,
   type SessionTemplateFormatTag,
+  type SessionTemplateModalityTag,
   type SessionTemplateTag,
 } from '@/lib/sessionTemplateTags';
 import { createEmptySessionDraft, type SessionDraft } from '@/lib/trainerSessionDraft';
@@ -37,6 +40,7 @@ export default function TrainerSessionTemplateScreen() {
 
   const [tag, setTag] = useState<SessionTemplateTag | null>(null);
   const [formatTag, setFormatTag] = useState<SessionTemplateFormatTag | null>(null);
+  const [modalityTag, setModalityTag] = useState<SessionTemplateModalityTag | null>(null);
   const [draft, setDraft] = useState<SessionDraft>(() => createEmptySessionDraft(0));
   const [hasPendingBlocks, setHasPendingBlocks] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -47,6 +51,7 @@ export default function TrainerSessionTemplateScreen() {
     hydratedRef.current = true;
     setTag(template.tag);
     setFormatTag(template.formatTag);
+    setModalityTag(template.modalityTag);
     setDraft(parsePersonalizedPlanContent(template.content));
   }, [isNew, template]);
 
@@ -76,10 +81,15 @@ export default function TrainerSessionTemplateScreen() {
           : {}),
     });
     const exerciseHint = describeSessionTemplate(content).exerciseLines[0] ?? null;
-    const name = buildSessionTemplateName({ tag, formatTag, exerciseHint });
+    const resolvedModality =
+      modalityTag ??
+      (tag === 'Metcon'
+        ? inferSessionTemplateModality({ name: template?.name ?? tag, content, tag })
+        : null);
+    const name = buildSessionTemplateName({ tag, formatTag, modalityTag: resolvedModality, exerciseHint });
     const result = template
-      ? await update(template, { name, content, tag, formatTag })
-      : await create(name, content, tag, formatTag);
+      ? await update(template, { name, content, tag, formatTag, modalityTag: resolvedModality })
+      : await create(name, content, tag, formatTag, resolvedModality);
 
     if (!result.error) {
       safeGoBack(router, '/tabs/trainer');
@@ -134,7 +144,7 @@ export default function TrainerSessionTemplateScreen() {
     <ScreenWrapper>
       <SectionHeader
         title={isNew ? 'Nueva plantilla' : 'Editar plantilla'}
-        subtitle="Elige zona y formato; el nombre se genera solo"
+        subtitle="Elige zona, formato y modalidad; el nombre se genera solo"
       />
 
       {!persistent ? (
@@ -175,6 +185,28 @@ export default function TrainerSessionTemplateScreen() {
               <Pressable
                 key={option}
                 onPress={() => setFormatTag(selected ? null : option)}
+                style={({ pressed }) => [
+                  styles.tagChip,
+                  selected && styles.tagChipSelected,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
+                  {option}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={styles.tagLabel}>Modalidad</Text>
+        <View style={styles.tagRow}>
+          {SESSION_TEMPLATE_MODALITY_TAGS.map((option) => {
+            const selected = modalityTag === option;
+            return (
+              <Pressable
+                key={option}
+                onPress={() => setModalityTag(selected ? null : option)}
                 style={({ pressed }) => [
                   styles.tagChip,
                   selected && styles.tagChipSelected,
@@ -271,7 +303,7 @@ const styles = StyleSheet.create({
   },
   tagChipSelected: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   tagChipText: {
     ...typography.caption,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -9,9 +9,10 @@ import {
   type ProgressPhotosState,
 } from '@/lib/photoService';
 
-export function useProgressPhotos() {
+export function useProgressPhotos(targetUserId?: string) {
   const { user, isDemoMode } = useAuth();
-  const userId = user?.id;
+  const userId = targetUserId ?? user?.id;
+  const canUpload = !targetUserId || targetUserId === user?.id;
   const [photos, setPhotos] = useState<ProgressPhotosState>(emptyProgressPhotos);
   const [isLoading, setIsLoading] = useState(!isDemoMode);
   const [isUploading, setIsUploading] = useState(false);
@@ -37,6 +38,11 @@ export function useProgressPhotos() {
 
   const uploadPhoto = useCallback(
     async (tipo: PhotoTipo, imageUri: string, mimeType?: string) => {
+      if (!canUpload) {
+        setError('Solo el atleta puede subir sus fotos de progreso');
+        return { error: 'Solo lectura' };
+      }
+
       if (isDemoMode) {
         setError('Sube fotos con tu cuenta real, no en modo demo');
         return { error: 'Modo demo' };
@@ -60,7 +66,7 @@ export function useProgressPhotos() {
       setIsUploading(false);
       return result;
     },
-    [isDemoMode, userId],
+    [canUpload, isDemoMode, userId],
   );
 
   return {

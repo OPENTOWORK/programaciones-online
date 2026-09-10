@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
@@ -16,14 +16,47 @@ import {
   savePhysicalProfile,
   type PhysicalProfileInput,
 } from '@/lib/physicalProfileService';
-import { createStaleRefresh } from '@/lib/staleRefresh';
-
-const refreshGate = createStaleRefresh(30_000);
 
 export interface PhysicalDataUpdate {
   basics: PhysicalProfileInput;
   measured: MeasuredBodyMetrics;
   source?: MeasurementSource;
+}
+
+type PhysicalProfileSnapshot = {
+  userId: string;
+  basicsRecord: PhysicalProfileInput;
+  history: BodyMeasurement[];
+  isLoading: boolean;
+  saving: boolean;
+  version: number;
+};
+
+const EMPTY_SNAPSHOT: PhysicalProfileSnapshot = {
+  userId: '',
+  basicsRecord: {},
+  history: [],
+  isLoading: false,
+  saving: false,
+  version: 0,
+};
+
+let snapshot: PhysicalProfileSnapshot = EMPTY_SNAPSHOT;
+const listeners = new Set<() => void>();
+const loadSeqByUser = new Map<string, number>();
+
+function emit(next: Partial<PhysicalProfileSnapshot>) {
+  snapshot = { ...snapshot, ...next, version: snapshot.version + 1 };
+  listeners.forEach((listener) => listener());
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function getSnapshot() {
+  return snapshot;
 }
 
 /**
@@ -42,42 +75,55 @@ export function usePhysicalProfile(
   const isOwnProfile = !targetUserId || targetUserId === user?.id;
   const heightCm = fallback?.heightCm ?? (isOwnProfile ? user?.height : undefined);
   const profileWeightKg = fallback?.weightKg ?? (isOwnProfile ? user?.weight : undefined);
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
 
-  const [basicsRecord, setBasicsRecord] = useState<PhysicalProfileInput>({});
-  const [history, setHistory] = useState<BodyMeasurement[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const load = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    const activeUserId = userIdRef.current;
+    if (!activeUserId) {
+      emit({
+        userId: '',
+        basicsRecord: {},
+        history: [],
+        isLoading: false,
+        saving: false,
+      });
+      return;
+    }
 
-  const load = useCallback(
-    async ({ silent = false }: { silent?: boolean } = {}) => {
-      if (!userId) {
-        setBasicsRecord({});
-        setHistory([]);
-        setIsLoading(false);
-        return;
-      }
+    const seq = (loadSeqByUser.get(activeUserId) ?? 0) + 1;
+    loadSeqByUser.set(activeUserId, seq);
+    if (!silent) emit({ userId: activeUserId, isLoading: true });
 
-      if (!silent) setIsLoading(true);
-      const [profile, measurements] = await Promise.all([
-        fetchPhysicalProfile(userId),
-        fetchBodyMeasurements(userId),
-      ]);
-      setBasicsRecord(profile);
-      setHistory(measurements);
-      refreshGate.markFetched();
-      setIsLoading(false);
-    },
-    [userId],
-  );
+    const [profile, measurements] = await Promise.all([
+      fetchPhysicalProfile(activeUserId),
+      fetchBodyMeasurements(activeUserId),
+    ]);
+
+    if (loadSeqByUser.get(activeUserId) !== seq) return;
+
+    emit({
+      userId: activeUserId,
+      basicsRecord: profile,
+      history: measurements,
+      isLoading: false,
+    });
+  }, []);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, userId]);
 
   useFocusRefresh(() => {
-    if (!refreshGate.shouldRefresh()) return;
     void load({ silent: true });
   });
+
+  const isCurrentUser = state.userId === userId;
+  const basicsRecord = isCurrentUser ? state.basicsRecord : {};
+  const history = isCurrentUser ? state.history : [];
+  const isLoading = isCurrentUser ? state.isLoading : true;
+  const saving = isCurrentUser ? state.saving : false;
 
   const latest = useMemo(() => latestBodyMeasurement(history), [history]);
 
@@ -105,22 +151,24 @@ export function usePhysicalProfile(
 
   const save = useCallback(
     async ({ basics: nextBasics, measured: nextMeasured, source = 'manual' }: PhysicalDataUpdate) => {
-      if (!userId) return { error: 'No hay sesión activa' };
+      const activeUserId = userIdRef.current;
+      if (!activeUserId) return { error: 'No hay sesión activa' };
 
-      setSaving(true);
+      emit({ userId: activeUserId, saving: true });
       const [profileResult, measurementResult] = await Promise.all([
-        savePhysicalProfile(userId, nextBasics),
-        recordBodyMeasurement(userId, nextMeasured, source),
+        savePhysicalProfile(activeUserId, nextBasics),
+        recordBodyMeasurement(activeUserId, nextMeasured, source),
       ]);
-      setSaving(false);
+      emit({ saving: false });
 
       const error = profileResult.error ?? measurementResult.error;
       if (error) return { error };
 
+      const warning = profileResult.warning ?? measurementResult.warning;
       await load({ silent: true });
-      return {};
+      return { warning };
     },
-    [userId, load],
+    [load],
   );
 
   return {

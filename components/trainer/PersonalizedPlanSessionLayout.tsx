@@ -45,7 +45,10 @@ interface PersonalizedPlanSessionLayoutProps {
   onLoadCalendarSessionDraft?: (item: SchedulePreviewItem) => SessionDraft | null;
   /** Guarda el entreno creado o editado desde el calendario ampliado. */
   onSaveCalendarSession?: (input: CalendarSessionSaveInput) => Promise<string | null> | string | null;
-  onSessionCopy?: (item: SchedulePreviewItem) => Promise<string | null> | string | null;
+  onSessionCopy?: (
+    item: SchedulePreviewItem,
+    targetDate: Date,
+  ) => Promise<string | null> | string | null;
   onSessionDelete?: (item: SchedulePreviewItem) => Promise<string | null> | string | null;
   onSessionMoveToDate?: (
     item: SchedulePreviewItem,

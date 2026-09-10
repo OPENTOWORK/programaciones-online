@@ -25,13 +25,10 @@ export function ProfileAppointmentsCard() {
     : 0;
 
   return (
-    <CollapsibleSection
-      title="Citas"
-      subtitle={
-        isTrainer ? 'Videollamadas con tus atletas' : 'Videollamadas con tu entrenador'
-      }
-      style={styles.card}
-    >
+    <CollapsibleSection title="Citas" style={styles.card}>
+      <Text style={styles.sectionLead}>
+        {isTrainer ? 'Videollamadas con tus atletas' : 'Videollamadas con tu entrenador'}
+      </Text>
       {pendingForMe > 0 ? (
         <View style={styles.pendingRow}>
           <Badge
@@ -77,6 +74,12 @@ export function ProfileAppointmentsCard() {
 const styles = StyleSheet.create({
   card: {
     marginTop: spacing.md,
+  },
+  sectionLead: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
   },
   pendingRow: {
     marginBottom: spacing.sm,

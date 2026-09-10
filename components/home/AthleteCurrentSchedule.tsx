@@ -86,7 +86,7 @@ export function AthleteCurrentSchedule({
           weeks: [],
         } satisfies Program;
       })
-      .filter((program) => !isVenuePlaceholderProgram(program));
+      .filter((program) => !isVenuePlaceholderProgram(program) && program.category !== 'standard');
   }, [getById, isTrainer, user?.currentProgram, user?.currentPrograms]);
 
   const assignedPersonalizedGroups = useMemo(
@@ -163,7 +163,7 @@ export function AthleteCurrentSchedule({
 
   return (
     <View style={styles.wrap} key={menusKey}>
-      <CollapsibleSection title="Tu calendario" defaultExpanded>
+      <CollapsibleSection title="Tu calendario" defaultExpanded={forceExpanded}>
         <AthleteScheduleCalendar
           program={activeProgramForCalendar}
           assignedPlans={assignedPlansForCalendar}
@@ -177,6 +177,7 @@ export function AthleteCurrentSchedule({
         }))}
         selectedId={selectedCalendar.id}
         onSelect={setSelectedCalendarId}
+        defaultExpanded={forceExpanded}
       />
     </View>
   );

@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { formatExercisePrescription } from '@/lib/exercisePrescription';
 import type { Exercise } from '@/lib/types';
 
@@ -60,46 +60,53 @@ export function ExerciseRow({
       )}
 
       <View style={styles.content}>
-        <Pressable
-          onPress={() => {
-            if (hasVideo) {
-              onOpenVideo?.();
-              return;
-            }
-            onToggle?.();
-          }}
-          style={styles.contentPressable}
-        >
-          <View style={styles.nameRow}>
+        <View style={styles.nameRow}>
+          <Pressable
+            onPress={() => {
+              if (hasVideo) {
+                onOpenVideo?.();
+                return;
+              }
+              onToggle?.();
+            }}
+            style={styles.contentPressable}
+          >
             <Text style={[styles.name, completed && styles.nameCompleted]}>{exercise.name}</Text>
-            {hasVideo ? <AppIcon name="play" size={18} color={colors.accent} outlined /> : null}
-          </View>
-          <Text style={styles.details}>{formatExerciseDetail(exercise)}</Text>
-          {hasVideo ? (
-            <Text style={styles.videoHint}>
-              {isVideoActive ? 'Reproduciendo el vídeo abajo' : 'Pulsa para ver el vídeo'}
-            </Text>
-          ) : null}
-          {exercise.notes ? (
-            <View style={styles.notesRow}>
-              <AppIcon name="info" size={14} color={colors.accentBlue} />
-              <Text style={styles.notes}>{exercise.notes}</Text>
+          </Pressable>
+          {hasVideo || onSendVideo ? (
+            <View style={styles.iconRow}>
+              {hasVideo ? (
+                <Pressable
+                  onPress={() => onOpenVideo?.()}
+                  style={[styles.iconBtn, isVideoActive && styles.iconBtnActive]}
+                  accessibilityRole="button"
+                  accessibilityLabel={isVideoActive ? 'Ocultar vídeo' : 'Ver vídeo'}
+                >
+                  <AppIcon name="play" size={16} color={colors.accent} outlined />
+                </Pressable>
+              ) : null}
+              {onSendVideo ? (
+                <Pressable
+                  onPress={onSendVideo}
+                  disabled={isSendingVideo}
+                  style={[styles.iconBtn, isSendingVideo && styles.iconBtnMuted]}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isSendingVideo ? 'Subiendo vídeo…' : hasSentVideo ? 'Enviar otro vídeo' : 'Enviar vídeo'
+                  }
+                >
+                  <AppIcon name="camera" size={16} color={colors.accent} outlined />
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
-        </Pressable>
-
-        {onSendVideo ? (
-          <Pressable
-            onPress={onSendVideo}
-            disabled={isSendingVideo}
-            style={({ pressed }) => [styles.sendBtn, pressed && styles.sendBtnPressed]}
-            accessibilityLabel="Grabar y enviar vídeo del ejercicio"
-          >
-            <AppIcon name="camera" size={16} color={colors.accentBlue} outlined />
-            <Text style={styles.sendText}>
-              {isSendingVideo ? 'Subiendo…' : hasSentVideo ? 'Enviar otro vídeo' : 'Enviar vídeo'}
-            </Text>
-          </Pressable>
+        </View>
+        <Text style={styles.details}>{formatExerciseDetail(exercise)}</Text>
+        {exercise.notes ? (
+          <View style={styles.notesRow}>
+            <AppIcon name="info" size={14} color={colors.accentBlue} />
+            <Text style={styles.notes}>{exercise.notes}</Text>
+          </View>
         ) : null}
       </View>
     </View>
@@ -119,11 +126,11 @@ const styles = StyleSheet.create({
   },
   rowCompleted: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}11`,
+    backgroundColor: withAlpha(colors.accent, '11'),
   },
   rowVideoActive: {
-    borderColor: `${colors.accent}88`,
-    backgroundColor: `${colors.accent}16`,
+    borderColor: withAlpha(colors.accent, '88'),
+    backgroundColor: withAlpha(colors.accent, '16'),
   },
   checkboxPressable: {
     marginRight: spacing.md,
@@ -149,6 +156,7 @@ const styles = StyleSheet.create({
   },
   contentPressable: {
     flex: 1,
+    minWidth: 0,
   },
   content: {
     flex: 1,
@@ -156,9 +164,31 @@ const styles = StyleSheet.create({
   },
   nameRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     gap: spacing.sm,
+  },
+  iconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  iconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.full,
+    backgroundColor: withAlpha(colors.accent, '16'),
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, '44'),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBtnActive: {
+    backgroundColor: withAlpha(colors.accent, '28'),
+    borderColor: withAlpha(colors.accent, '88'),
+  },
+  iconBtnMuted: {
+    opacity: 0.5,
   },
   name: {
     ...typography.body,
@@ -175,12 +205,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 4,
   },
-  videoHint: {
-    ...typography.caption,
-    color: colors.accent,
-    marginTop: spacing.xs,
-    fontWeight: '600',
-  },
   notesRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -191,26 +215,5 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.accentBlue,
     flex: 1,
-  },
-  sendBtn: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-    paddingVertical: 6,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.sm,
-    backgroundColor: `${colors.accentBlue}14`,
-    borderWidth: 1,
-    borderColor: `${colors.accentBlue}44`,
-  },
-  sendBtnPressed: {
-    opacity: 0.85,
-  },
-  sendText: {
-    ...typography.caption,
-    color: colors.accentBlue,
-    fontWeight: '700',
   },
 });

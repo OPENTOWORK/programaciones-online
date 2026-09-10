@@ -13,6 +13,7 @@ import { parseSchedulePreviewItemKey, type SchedulePreviewItem } from '@/lib/pro
 import {
   formatScheduleSummary,
   moveScheduleToDate,
+  parseScheduleFromWorkout,
   scheduleForCalendarDate,
   type SessionSchedule,
 } from '@/lib/sessionSchedule';
@@ -23,13 +24,18 @@ import {
   defaultDayOrder,
   isActivationSessionDraft,
   isMetconSessionDraft,
+  isPdfSessionDraft,
   isRestDaySessionDraft,
   METCON_SESSION_NAME,
+  PDF_SESSION_DURATION,
+  pdfSessionTitle,
   renameSessionCopy,
   workoutToSessionDraft,
   type SessionDraft,
 } from '@/lib/trainerSessionDraft';
 import type { Program, Workout } from '@/lib/types';
+import type { PickedPlanPdf } from '@/lib/planPdfPicker';
+import { uploadCatalogWorkoutPdf } from '@/lib/catalogWorkoutPdfService';
 
 export function workoutIdFromCalendarItem(item: SchedulePreviewItem) {
   const { sourceId } = parseSchedulePreviewItemKey(item.id);
@@ -48,6 +54,54 @@ export function applyDateToSessionDraft(draft: SessionDraft, date: Date): Sessio
     dayLabel: formatScheduleSummary(schedule),
     dayOrder: draft.dayOrder ?? defaultDayOrder(draft),
   };
+}
+
+/** Ancla una sesión a un día concreto del calendario (solo ese día, sin repetirse). */
+export function pinCatalogSessionToDate(
+  draft: SessionDraft,
+  date: Date,
+  dayOrder?: number,
+): SessionDraft {
+  const pinned = applyDateToSessionDraft(draft, date);
+  if (typeof dayOrder === 'number') {
+    pinned.dayOrder = dayOrder;
+    pinned.schedule = { ...pinned.schedule, dayOrder };
+  }
+  return pinned;
+}
+
+/**
+ * Al guardar desde el calendario, las sesiones recurrentes se bifurcan en copias puntuales
+ * para no arrastrar cambios a otras semanas clonadas.
+ */
+export function resolveCatalogSessionSaveTarget(
+  draft: SessionDraft,
+  workouts: Workout[],
+  options: { item?: SchedulePreviewItem; date: Date },
+): { draft: SessionDraft; targetWorkoutId?: string } {
+  const occurrenceDate = options.item?.date ?? options.date;
+  const pinned = pinCatalogSessionToDate(draft, occurrenceDate, draft.dayOrder ?? defaultDayOrder(draft));
+
+  if (!options.item) {
+    return { draft: pinned };
+  }
+
+  const targetWorkoutId = workoutIdFromCalendarItem(options.item);
+  if (!targetWorkoutId) {
+    return { draft: pinned };
+  }
+
+  const index = workouts.findIndex((workout) => workout.id === targetWorkoutId);
+  if (index < 0) {
+    return { draft: pinned, targetWorkoutId };
+  }
+
+  const schedule = parseScheduleFromWorkout(workouts[index], index);
+  if (schedule.recurrence !== 'once') {
+    return { draft: pinned };
+  }
+
+  return { draft: pinned, targetWorkoutId };
 }
 
 function sessionDraftToCatalogPayload(draft: SessionDraft) {
@@ -86,6 +140,7 @@ export async function persistCatalogSessionDraft(
 
   if (
     !isRestDaySessionDraft(normalizedDraft) &&
+    !isPdfSessionDraft(normalizedDraft) &&
     !isActivationSessionDraft(normalizedDraft) &&
     extractExercisesFromSessionDraft(normalizedDraft).every((exercise) => !exercise.name.trim()) &&
     !hasSessionBlockContent(normalizedDraft)
@@ -128,16 +183,38 @@ export async function copyCatalogSession(
   program: Program,
   workouts: Workout[],
   item: SchedulePreviewItem,
+  targetDate: Date = item.date,
 ) {
   const source = loadCatalogSessionDraft(workouts, item);
   if (!source) return 'No se pudo copiar la sesión.';
 
-  const copied = applyDateToSessionDraft(
+  const sourceWorkoutId = workoutIdFromCalendarItem(item);
+  const dayOrder = item.dayOrder ?? defaultDayOrder(source);
+  const copied = pinCatalogSessionToDate(
     renameSessionCopy(source, workouts.length + 1),
-    item.date,
+    targetDate,
+    dayOrder,
   );
 
-  return persistCatalogSessionDraft(program, workouts, copied);
+  const error = await persistCatalogSessionDraft(program, workouts, copied);
+  if (error) return error;
+
+  if (sourceWorkoutId) {
+    const pinnedSource = pinCatalogSessionToDate(
+      source,
+      item.date,
+      source.dayOrder ?? defaultDayOrder(source),
+    );
+    const pinError = await persistCatalogSessionDraft(
+      program,
+      workouts,
+      pinnedSource,
+      sourceWorkoutId,
+    );
+    if (pinError) return pinError;
+  }
+
+  return null;
 }
 
 export async function copyCatalogDaySessions(
@@ -152,14 +229,28 @@ export async function copyCatalogDaySessions(
     const source = loadCatalogSessionDraft(workouts, item);
     if (!source) return 'No se pudo copiar una de las sesiones.';
 
-    const copied = applyDateToSessionDraft(
+    const sourceWorkoutId = workoutIdFromCalendarItem(item);
+    const dayOrder = item.dayOrder ?? defaultDayOrder(source);
+
+    const copied = pinCatalogSessionToDate(
       renameSessionCopy(source, workouts.length + 1),
       targetDate,
+      dayOrder,
     );
-    copied.dayOrder = item.dayOrder ?? defaultDayOrder(source);
 
     const error = await persistCatalogSessionDraft(program, workouts, copied);
     if (error) return error;
+
+    if (sourceWorkoutId) {
+      const pinnedSource = pinCatalogSessionToDate(source, item.date, dayOrder);
+      const pinError = await persistCatalogSessionDraft(
+        program,
+        workouts,
+        pinnedSource,
+        sourceWorkoutId,
+      );
+      if (pinError) return pinError;
+    }
   }
 
   return null;
@@ -232,4 +323,42 @@ export function buildCatalogSessionDraftForDate(workouts: Workout[], date: Date)
 
 export function buildCatalogRestDayDraftForDate(workouts: Workout[], date: Date) {
   return applyDateToSessionDraft(createRestDayDraft(workouts.length), date);
+}
+
+function nextDayOrder(dayItems: SchedulePreviewItem[]) {
+  if (dayItems.length === 0) return 0;
+  return Math.max(...dayItems.map((item) => item.dayOrder ?? defaultDayOrder(item))) + 1;
+}
+
+export async function attachCatalogPdfToDate(
+  program: Program,
+  workouts: Workout[],
+  date: Date,
+  pdf: PickedPlanPdf,
+  dayItems: SchedulePreviewItem[] = [],
+) {
+  const uploaded = await uploadCatalogWorkoutPdf(program.id, pdf);
+  if ('error' in uploaded) return uploaded.error;
+
+  const schedule = {
+    ...scheduleForCalendarDate(date),
+    kind: 'pdf' as const,
+    pdfStoragePath: uploaded.storagePath,
+    pdfFileName: uploaded.fileName,
+  };
+
+  const draft = pinCatalogSessionToDate(
+    {
+      ...createEmptySessionDraft(workouts.length),
+      name: pdfSessionTitle(uploaded.fileName),
+      kind: 'pdf',
+      estimatedDuration: PDF_SESSION_DURATION,
+      main: '',
+      schedule,
+    },
+    date,
+    nextDayOrder(dayItems),
+  );
+
+  return persistCatalogSessionDraft(program, workouts, draft);
 }

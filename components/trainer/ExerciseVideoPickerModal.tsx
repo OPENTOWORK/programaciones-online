@@ -11,10 +11,12 @@ import {
   View,
 } from 'react-native';
 
+import { AlphabetFilter } from '@/components/library/AlphabetFilter';
 import { Button } from '@/components/ui/Button';
 import { YoutubeThumbnail } from '@/components/workout/YoutubeThumbnail';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useExerciseLibrary } from '@/hooks/useExerciseLibrary';
+import { buildAvailableFirstLetters, filterByFirstLetter } from '@/lib/alphabetFilter';
 import { filterExerciseLibrary, type ExerciseLibraryItem } from '@/lib/exerciseLibrary';
 import { parseWorkoutItemVideoFromInput } from '@/lib/workoutItemVideo';
 
@@ -40,20 +42,35 @@ export function ExerciseVideoPickerModal({
 }: ExerciseVideoPickerModalProps) {
   const { items, isLoading, error, refresh } = useExerciseLibrary();
   const [query, setQuery] = useState('');
+  const [letter, setLetter] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState('');
   const [urlError, setUrlError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
     setQuery(exerciseName?.trim() ?? '');
+    setLetter(null);
     setUrlInput('');
     setUrlError(null);
   }, [exerciseName, visible]);
 
-  const results = useMemo(() => {
-    const filtered = filterExerciseLibrary(items, query);
-    return filtered.slice(0, 24);
-  }, [items, query]);
+  const filteredItems = useMemo(() => filterExerciseLibrary(items, query), [items, query]);
+
+  const availableLetters = useMemo(
+    () => buildAvailableFirstLetters(filteredItems.map((item) => item.name)),
+    [filteredItems],
+  );
+
+  const results = useMemo(
+    () => filterByFirstLetter(filteredItems, letter, (item) => item.name).slice(0, 24),
+    [filteredItems, letter],
+  );
+
+  useEffect(() => {
+    if (letter && !availableLetters.has(letter)) {
+      setLetter(null);
+    }
+  }, [availableLetters, letter]);
 
   const handlePickLibrary = (item: ExerciseLibraryItem) => {
     onConfirm({ youtubeVideoId: item.videoId, label: item.name });
@@ -138,6 +155,12 @@ export function ExerciseVideoPickerModal({
             placeholder="Buscar en la biblioteca..."
             placeholderTextColor={colors.textMuted}
             style={styles.searchInput}
+          />
+
+          <AlphabetFilter
+            selected={letter}
+            availableLetters={availableLetters}
+            onSelect={setLetter}
           />
 
           {isLoading ? (

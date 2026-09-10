@@ -301,7 +301,13 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
         onConfirm={(input) => {
           void (async () => {
             setCreateSaving(true);
-            const result = await create(input.name, input.content, input.tag, input.formatTag);
+            const result = await create(
+              input.name,
+              input.content,
+              input.tag,
+              input.formatTag,
+              input.modalityTag,
+            );
             setCreateSaving(false);
             if (result.error) {
               setNotice(result.error);

@@ -1,106 +1,178 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Card } from '@/components/ui/Card';
-import { SessionLogVideos } from '@/components/workout/SessionLogVideos';
-import { colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
+import type { useTrainerAthleteFeedback } from '@/hooks/useTrainerAthleteFeedback';
 import type { SessionLogRecord } from '@/lib/sessionLogService';
+import { isSessionLogPendingReview } from '@/lib/sessionLogReview';
+
+type TrainerAthleteFeedbackState = ReturnType<typeof useTrainerAthleteFeedback>;
+
+const STAR_GOLD = '#F5B942';
 
 function formatLogDate(value: string) {
   return new Date(`${value}T12:00:00`).toLocaleDateString('es-ES', {
-    weekday: 'short',
     day: 'numeric',
     month: 'short',
   });
 }
 
+function formatCompletionMeta(log: SessionLogRecord) {
+  const count = log.completedItems.length;
+  const parts =
+    count > 0
+      ? `${count} parte${count === 1 ? '' : 's'} completada${count === 1 ? '' : 's'}`
+      : 'Sin marcar';
+  return log.duration ? `${parts} · ${log.duration}` : parts;
+}
+
 export function AthleteSessionLogCard({
   log,
   onPress,
+  feedback,
+  favorite = false,
+  onToggleFavorite,
+  last = false,
 }: {
   log: SessionLogRecord;
   onPress?: () => void;
+  feedback?: TrainerAthleteFeedbackState;
+  favorite?: boolean;
+  onToggleFavorite?: () => void;
+  last?: boolean;
 }) {
-  const completedCount = log.completedItems.length;
+  const pendingReview = isSessionLogPendingReview(log.id, feedback);
 
   return (
-    <View style={styles.wrapper}>
-      <Pressable
-        onPress={onPress}
-        disabled={!onPress}
-        accessibilityRole={onPress ? 'button' : undefined}
-        accessibilityLabel={onPress ? `Abrir registro de ${log.workoutName}` : undefined}
-        style={({ pressed }) => [onPress && pressed && styles.pressed]}
-      >
-        <Card style={styles.card}>
-          <View style={styles.header}>
-            <Text style={styles.title}>{log.workoutName}</Text>
-            <View style={styles.headerRight}>
-              <Text style={styles.date}>{formatLogDate(log.scheduledDate)}</Text>
-              {onPress ? <Text style={styles.chevron}>›</Text> : null}
+    <View style={[styles.row, last && styles.rowLast]}>
+      <View style={styles.header}>
+        <Pressable
+          onPress={onPress}
+          disabled={!onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`Abrir registro de ${log.workoutName}`}
+          style={({ pressed }) => [styles.headerMainPressable, pressed && onPress && styles.pressed]}
+        >
+          <View style={styles.headerMain}>
+            <Text style={styles.title} numberOfLines={1}>
+              {log.workoutName}
+            </Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {formatCompletionMeta(log)}
+              </Text>
+              {pendingReview ? (
+                <View style={styles.pendingPill}>
+                  <Text style={styles.pendingPillText}>Por revisar</Text>
+                </View>
+              ) : null}
             </View>
           </View>
-          <Text style={styles.meta}>
-            {completedCount > 0 ? `${completedCount} partes completadas` : 'Sin partes marcadas'}
-            {log.duration ? ` · ${log.duration}` : ''}
-          </Text>
-          {log.feelings ? (
-            <View style={styles.feelingsWrap}>
-              <Text style={styles.feelingsLabel}>Sensaciones</Text>
-              <Text style={styles.feelingsText} numberOfLines={2}>
-                {log.feelings}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.noFeelings}>Sin comentarios de sensaciones</Text>
-          )}
-          {onPress ? <Text style={styles.openHint}>Ver ejercicios y detalle de la sesión</Text> : null}
-        </Card>
-      </Pressable>
 
-      <Card style={styles.videoCard}>
-        <SessionLogVideos logId={log.id} readOnly compact />
-      </Card>
+          <View style={styles.headerTrailing}>
+            <Text style={styles.date}>{formatLogDate(log.scheduledDate)}</Text>
+            {onPress ? (
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            ) : null}
+          </View>
+        </Pressable>
+
+        {onToggleFavorite ? (
+          <Pressable
+            onPress={onToggleFavorite}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={favorite ? 'Quitar de favoritos' : 'Marcar entreno como favorito'}
+            style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+          >
+            <Ionicons
+              name={favorite ? 'star' : 'star-outline'}
+              size={16}
+              color={favorite ? STAR_GOLD : colors.textMuted}
+            />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: { marginBottom: spacing.sm },
-  pressed: { opacity: 0.88 },
-  card: { marginBottom: spacing.xs },
-  videoCard: {
-    paddingTop: spacing.xs,
+  row: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  rowLast: {
+    borderBottomWidth: 0,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.xs,
+    paddingRight: spacing.md,
+    paddingVertical: 12,
   },
-  headerRight: {
+  headerMainPressable: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
+    paddingLeft: spacing.md,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
   },
-  title: { ...typography.body, color: colors.text, fontWeight: '700', flex: 1 },
-  date: { ...typography.caption, color: colors.textMuted, fontWeight: '600' },
-  chevron: { ...typography.h3, color: colors.textMuted, lineHeight: 22 },
-  meta: { ...typography.bodySmall, color: colors.textSecondary },
-  feelingsWrap: { marginTop: spacing.sm },
-  feelingsLabel: {
-    ...typography.caption,
-    color: colors.accent,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 4,
+  headerMain: {
+    flex: 1,
+    minWidth: 0,
   },
-  feelingsText: { ...typography.bodySmall, color: colors.text, lineHeight: 20 },
-  noFeelings: { ...typography.caption, color: colors.textMuted, marginTop: spacing.sm, fontStyle: 'italic' },
-  openHint: {
-    ...typography.caption,
-    color: colors.accent,
+  headerTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexShrink: 0,
+  },
+  title: {
+    ...typography.body,
+    color: colors.text,
     fontWeight: '600',
-    marginTop: spacing.sm,
+    fontSize: 15,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 3,
+    flexWrap: 'wrap',
+  },
+  subtitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+  },
+  date: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  pendingPill: {
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: withAlpha(colors.warning, '18'),
+  },
+  pendingPillText: {
+    ...typography.caption,
+    color: colors.warning,
+    fontWeight: '700',
+    fontSize: 10,
+    letterSpacing: 0.2,
+  },
+  iconBtn: {
+    padding: 2,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
+  },
+  pressed: {
+    opacity: 0.72,
   },
 });

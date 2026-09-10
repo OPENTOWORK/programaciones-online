@@ -35,6 +35,7 @@ function mapRow(row: Record<string, unknown>): TrainerAthleteFeedback {
     id: row.id as string,
     trainerId: row.trainer_id as string,
     athleteId: row.athlete_id as string,
+    sessionLogId: (row.session_log_id as string | null) ?? undefined,
     message: (row.message as string) ?? '',
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -60,7 +61,7 @@ export async function fetchTrainerAthleteFeedback(
 
   const { data, error } = await supabase
     .from(TABLE)
-    .select('id, trainer_id, athlete_id, message, created_at, updated_at')
+    .select('id, trainer_id, athlete_id, session_log_id, message, created_at, updated_at')
     .eq('athlete_id', athleteId)
     .order('created_at', { ascending: false });
 
@@ -87,6 +88,7 @@ export async function createTrainerAthleteFeedback(input: {
   trainerId: string;
   athleteId: string;
   message: string;
+  sessionLogId?: string;
   useLocalStore: boolean;
   allowEmptyMessage?: boolean;
 }): Promise<{ entry?: TrainerAthleteFeedback; error?: string }> {
@@ -102,6 +104,7 @@ export async function createTrainerAthleteFeedback(input: {
       id: `local-feedback-${Date.now()}`,
       trainerId: input.trainerId,
       athleteId: input.athleteId,
+      sessionLogId: input.sessionLogId,
       message,
       createdAt: now,
       updatedAt: now,
@@ -119,9 +122,10 @@ export async function createTrainerAthleteFeedback(input: {
     .insert({
       trainer_id: input.trainerId,
       athlete_id: input.athleteId,
+      session_log_id: input.sessionLogId ?? null,
       message,
     })
-    .select('id, trainer_id, athlete_id, message, created_at, updated_at')
+    .select('id, trainer_id, athlete_id, session_log_id, message, created_at, updated_at')
     .single();
 
   if (error || !data) {
@@ -133,6 +137,60 @@ export async function createTrainerAthleteFeedback(input: {
   }
 
   return { entry: mapRow(data as Record<string, unknown>) };
+}
+
+export async function updateTrainerAthleteFeedback(input: {
+  entry: TrainerAthleteFeedback;
+  message: string;
+  useLocalStore: boolean;
+  allowEmptyMessage?: boolean;
+}): Promise<{ entry?: TrainerAthleteFeedback; error?: string }> {
+  const message = input.message.trim();
+  if (!message && !input.allowEmptyMessage) {
+    return { error: 'Escribe un feedback antes de guardarlo.' };
+  }
+  if (message.length > 2000) return { error: 'El feedback no puede superar los 2000 caracteres.' };
+
+  const now = new Date().toISOString();
+
+  if (input.useLocalStore || input.entry.id.startsWith('local-feedback-')) {
+    const entries = localEntries(input.entry.athleteId);
+    const index = entries.findIndex((item) => item.id === input.entry.id);
+    if (index < 0) return { error: 'No se encontró el feedback.' };
+    const updated: TrainerAthleteFeedback = {
+      ...entries[index],
+      message,
+      updatedAt: now,
+    };
+    entries[index] = updated;
+    return { entry: { ...updated, attachments: input.entry.attachments } };
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) return { error: 'Supabase no está disponible.' };
+
+  const { data, error } = await supabase
+    .from(TABLE)
+    .update({ message, updated_at: now })
+    .eq('id', input.entry.id)
+    .select('id, trainer_id, athlete_id, session_log_id, message, created_at, updated_at')
+    .single();
+
+  if (error || !data) {
+    return {
+      error: isMissingTableError(error)
+        ? 'Falta aplicar la tabla de feedback en Supabase.'
+        : error?.message ?? 'No se pudo guardar el feedback.',
+    };
+  }
+
+  return {
+    entry: {
+      ...mapRow(data as Record<string, unknown>),
+      trainerName: input.entry.trainerName,
+      attachments: input.entry.attachments,
+    },
+  };
 }
 
 export async function deleteTrainerAthleteFeedback(

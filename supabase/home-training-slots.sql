@@ -33,6 +33,9 @@ create index if not exists home_training_slots_open_idx
   on public.home_training_slots (starts_at)
   where status = 'open';
 
+alter table public.home_training_slots
+  add column if not exists cancelled_by uuid references auth.users(id) on delete set null;
+
 alter table public.home_training_slots enable row level security;
 
 drop policy if exists "Athletes can view open or own home slots" on public.home_training_slots;

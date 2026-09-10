@@ -11,8 +11,10 @@ import {
   View,
 } from 'react-native';
 
+import { AlphabetFilter } from '@/components/library/AlphabetFilter';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useExerciseNameCatalog } from '@/hooks/useExerciseNameCatalog';
+import { buildAvailableFirstLetters, filterByFirstLetter } from '@/lib/alphabetFilter';
 import { filterExerciseNameCatalog, type ExerciseNameOption } from '@/lib/exerciseNameCatalog';
 
 interface ExerciseNamePickerModalProps {
@@ -30,13 +32,31 @@ export function ExerciseNamePickerModal({
 }: ExerciseNamePickerModalProps) {
   const { items, isLoading, error, refresh } = useExerciseNameCatalog();
   const [query, setQuery] = useState('');
+  const [letter, setLetter] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
     setQuery('');
+    setLetter(null);
   }, [visible]);
 
-  const results = useMemo(() => filterExerciseNameCatalog(items, query), [items, query]);
+  const filteredItems = useMemo(() => filterExerciseNameCatalog(items, query, 500), [items, query]);
+
+  const availableLetters = useMemo(
+    () => buildAvailableFirstLetters(filteredItems.map((item) => item.name)),
+    [filteredItems],
+  );
+
+  const results = useMemo(
+    () => filterByFirstLetter(filteredItems, letter, (item) => item.name).slice(0, 50),
+    [filteredItems, letter],
+  );
+
+  useEffect(() => {
+    if (letter && !availableLetters.has(letter)) {
+      setLetter(null);
+    }
+  }, [availableLetters, letter]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -61,6 +81,12 @@ export function ExerciseNamePickerModal({
             placeholderTextColor={colors.textMuted}
             autoFocus
             style={styles.searchInput}
+          />
+
+          <AlphabetFilter
+            selected={letter}
+            availableLetters={availableLetters}
+            onSelect={setLetter}
           />
 
           {isLoading ? (

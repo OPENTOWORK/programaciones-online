@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
@@ -9,31 +9,81 @@ import {
 } from '@/lib/savedMetconService';
 import type { SavedMetcon } from '@/lib/types';
 
+type SavedMetconsSnapshot = {
+  userId: string;
+  entries: SavedMetcon[];
+  isLoading: boolean;
+  savingIds: Set<string>;
+  version: number;
+};
+
+const EMPTY_SNAPSHOT: SavedMetconsSnapshot = {
+  userId: '',
+  entries: [],
+  isLoading: false,
+  savingIds: new Set(),
+  version: 0,
+};
+
+let snapshot: SavedMetconsSnapshot = EMPTY_SNAPSHOT;
+const listeners = new Set<() => void>();
+let loadSeq = 0;
+
+function emit(next: Partial<SavedMetconsSnapshot>) {
+  snapshot = { ...snapshot, ...next, version: snapshot.version + 1 };
+  listeners.forEach((listener) => listener());
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function getSnapshot() {
+  return snapshot;
+}
+
 export function useSavedMetcons(targetUserId?: string) {
   const { user } = useAuth();
   const userId = targetUserId ?? user?.id ?? '';
-
-  const [entries, setEntries] = useState<SavedMetcon[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [savingIds, setSavingIds] = useState<Set<string>>(() => new Set());
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
 
   const load = useCallback(async () => {
-    if (!userId) {
-      setEntries([]);
-      setIsLoading(false);
+    const activeUserId = userIdRef.current;
+    if (!activeUserId) {
+      emit({
+        userId: '',
+        entries: [],
+        isLoading: false,
+        savingIds: new Set(),
+      });
       return;
     }
 
-    setIsLoading(true);
-    setEntries(await fetchSavedMetcons(userId));
-    setIsLoading(false);
-  }, [userId]);
+    const seq = ++loadSeq;
+    emit({ userId: activeUserId, isLoading: true });
+
+    const entries = await fetchSavedMetcons(activeUserId);
+    if (seq !== loadSeq) return;
+
+    emit({
+      userId: activeUserId,
+      entries,
+      isLoading: false,
+    });
+  }, []);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, userId]);
 
   useFocusRefresh(() => load());
+
+  const entries = state.userId === userId ? state.entries : [];
+  const isLoading = state.userId === userId ? state.isLoading : true;
+  const savingIds = state.userId === userId ? state.savingIds : new Set<string>();
 
   const savedWorkoutIds = useMemo(() => new Set(entries.map((entry) => entry.workoutId)), [entries]);
 
@@ -46,30 +96,30 @@ export function useSavedMetcons(targetUserId?: string) {
       workoutName: string;
       programName?: string;
     }) => {
-      if (!userId) return { error: 'No hay sesión activa' };
+      const activeUserId = userIdRef.current;
+      if (!activeUserId) return { error: 'No hay sesión activa' };
 
-      setSavingIds((current) => new Set(current).add(input.workoutId));
+      const nextSavingIds = new Set(savingIds).add(input.workoutId);
+      emit({ savingIds: nextSavingIds });
 
       const wasSaved = savedWorkoutIds.has(input.workoutId);
       const result = wasSaved
-        ? await removeSavedMetcon(userId, input.workoutId)
-        : await saveMetconToProfile({ userId, ...input });
+        ? await removeSavedMetcon(activeUserId, input.workoutId)
+        : await saveMetconToProfile({ userId: activeUserId, ...input });
 
       await load();
 
-      setSavingIds((current) => {
-        const next = new Set(current);
-        next.delete(input.workoutId);
-        return next;
-      });
+      const clearedSavingIds = new Set(snapshot.savingIds);
+      clearedSavingIds.delete(input.workoutId);
+      emit({ savingIds: clearedSavingIds });
 
-      if (!wasSaved && !result.entry) {
+      if (!wasSaved && !('entry' in result && result.entry)) {
         return { error: 'No se pudo guardar el metcon' };
       }
 
       return { warning: result.warning };
     },
-    [userId, savedWorkoutIds, load],
+    [savedWorkoutIds, savingIds, load],
   );
 
   return {

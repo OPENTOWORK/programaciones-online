@@ -41,12 +41,9 @@ export const supabaseRuntimeWarnings = resolved.warnings;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-/** Solo web en desarrollo sin .env. Nunca en Android/iOS de Play Store. */
+/** Solo web en desarrollo sin Supabase configurado. Nunca en Android/iOS de Play Store. */
 export const isAuthDemoMode =
-  Platform.OS === 'web' &&
-  __DEV__ &&
-  !process.env.EXPO_PUBLIC_SUPABASE_URL &&
-  !extraConfig.url;
+  Platform.OS === 'web' && __DEV__ && !isSupabaseConfigured;
 
 export function assertSupabaseConfiguredForNative() {
   if (Platform.OS === 'web') return;

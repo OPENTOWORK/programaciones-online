@@ -1,10 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { getSessionLabel, type PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
+import type { PlanValidity } from '@/lib/planValidity';
 import { ATHLETE_PLAN_TYPE_LABELS } from '@/lib/trainerConstants';
 import type { AthletePlan } from '@/lib/types';
+import { planGroupUsesOnceRecurrence } from '@/lib/planGroupRecurrence';
+import { PlanGroupValidityFields } from '@/components/program/PlanGroupValidityFields';
 
 interface AssignedPlansListProps {
   personalizedGroups: PersonalizedPlanGroup[];
@@ -13,6 +17,8 @@ interface AssignedPlansListProps {
   onOpenNutritionPlan: (planId: string) => void;
   onViewGroupCalendar?: (group: PersonalizedPlanGroup) => void;
   onEditGroup?: (group: PersonalizedPlanGroup) => void;
+  onUpdateGroupValidity?: (group: PersonalizedPlanGroup, validity: PlanValidity) => void | Promise<void>;
+  onRepeatGroupWeekly?: (group: PersonalizedPlanGroup) => void | Promise<void>;
   onDeleteSession?: (planId: string, label: string) => void;
   onDeleteGroup?: (group: PersonalizedPlanGroup) => void;
   onEditNutritionPlan?: (planId: string) => void;
@@ -41,29 +47,55 @@ function PlanActionButton({
   );
 }
 
-export function AssignedPlansList({
-  personalizedGroups,
-  nutritionPlans,
+function PlanGroupCard({
+  group,
   onOpenSession,
-  onOpenNutritionPlan,
   onViewGroupCalendar,
   onEditGroup,
+  onUpdateGroupValidity,
+  onRepeatGroupWeekly,
   onDeleteSession,
   onDeleteGroup,
-  onEditNutritionPlan,
-  onDeleteNutritionPlan,
-}: AssignedPlansListProps) {
+  defaultExpanded = false,
+}: {
+  group: PersonalizedPlanGroup;
+  onOpenSession: (planId: string) => void;
+  onViewGroupCalendar?: (group: PersonalizedPlanGroup) => void;
+  onEditGroup?: (group: PersonalizedPlanGroup) => void;
+  onUpdateGroupValidity?: (group: PersonalizedPlanGroup, validity: PlanValidity) => void | Promise<void>;
+  onRepeatGroupWeekly?: (group: PersonalizedPlanGroup) => void | Promise<void>;
+  onDeleteSession?: (planId: string, label: string) => void;
+  onDeleteGroup?: (group: PersonalizedPlanGroup) => void;
+  defaultExpanded?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
   return (
-    <View style={styles.wrap}>
-      {personalizedGroups.map((group) => (
-        <View key={group.id} style={styles.group}>
-          <View style={styles.groupHeader}>
-            <View style={styles.groupHeaderText}>
+    <View style={styles.group}>
+      <View style={[styles.groupHeader, expanded && styles.groupHeaderExpanded]}>
+        <View style={styles.groupHeaderTop}>
+          <View style={styles.groupHeaderBody}>
+            <Pressable
+              onPress={() => setExpanded((current) => !current)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              accessibilityLabel={expanded ? `Contraer ${group.title}` : `Desplegar ${group.title}`}
+              style={({ pressed }) => [styles.groupHeaderText, pressed && styles.rowPressed]}
+            >
               <Text style={styles.groupTitle}>{group.title}</Text>
               <Text style={styles.groupMeta}>
                 Plan personalizado · {group.sessions.length} sesión{group.sessions.length === 1 ? '' : 'es'}
               </Text>
-            </View>
+            </Pressable>
+
+            {onUpdateGroupValidity ? (
+              <PlanGroupValidityFields
+                variant="inline"
+                value={group.validity}
+                onCommit={(validity) => void onUpdateGroupValidity(group, validity)}
+              />
+            ) : null}
+
             <View style={styles.groupHeaderActions}>
               {onViewGroupCalendar ? (
                 <Pressable
@@ -93,6 +125,39 @@ export function AssignedPlansList({
             </View>
           </View>
 
+          <Pressable
+            onPress={() => setExpanded((current) => !current)}
+            accessibilityRole="button"
+            accessibilityLabel={expanded ? `Contraer ${group.title}` : `Desplegar ${group.title}`}
+            hitSlop={8}
+            style={({ pressed }) => [styles.expandBtnTrailing, pressed && styles.actionBtnPressed]}
+          >
+            <Ionicons
+              name={expanded ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      {expanded ? (
+        <>
+          {onRepeatGroupWeekly && planGroupUsesOnceRecurrence(group.sessions) ? (
+            <View style={styles.recurrenceNotice}>
+              <Text style={styles.recurrenceNoticeText}>
+                Las sesiones están como «una sola vez»: solo aparecen en su semana inicial. La vigencia no
+                las repite cada semana.
+              </Text>
+              <Pressable
+                onPress={() => onRepeatGroupWeekly(group)}
+                style={({ pressed }) => [styles.repeatWeeklyBtn, pressed && styles.repeatWeeklyBtnPressed]}
+              >
+                <Text style={styles.repeatWeeklyBtnText}>Repetir cada semana</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           {group.sessions.map((session, index) => {
             const sessionLabel = getSessionLabel(session, index);
             return (
@@ -120,7 +185,40 @@ export function AssignedPlansList({
               </View>
             );
           })}
-        </View>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+export function AssignedPlansList({
+  personalizedGroups,
+  nutritionPlans,
+  onOpenSession,
+  onOpenNutritionPlan,
+  onViewGroupCalendar,
+  onEditGroup,
+  onUpdateGroupValidity,
+  onRepeatGroupWeekly,
+  onDeleteSession,
+  onDeleteGroup,
+  onEditNutritionPlan,
+  onDeleteNutritionPlan,
+}: AssignedPlansListProps) {
+  return (
+    <View style={styles.wrap}>
+      {personalizedGroups.map((group) => (
+        <PlanGroupCard
+          key={group.id}
+          group={group}
+          onOpenSession={onOpenSession}
+          onViewGroupCalendar={onViewGroupCalendar}
+          onEditGroup={onEditGroup}
+          onUpdateGroupValidity={onUpdateGroupValidity}
+          onRepeatGroupWeekly={onRepeatGroupWeekly}
+          onDeleteSession={onDeleteSession}
+          onDeleteGroup={onDeleteGroup}
+        />
       ))}
 
       {nutritionPlans.map((plan) => (
@@ -170,22 +268,48 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+    backgroundColor: withAlpha(colors.surfaceLight, '88'),
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  groupHeaderExpanded: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    backgroundColor: `${colors.surfaceLight}88`,
+  },
+  groupHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  groupHeaderBody: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.md,
   },
   groupHeaderText: {
-    flex: 1,
+    flexShrink: 0,
+    minWidth: 140,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
+  },
+  expandBtnTrailing: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    marginTop: 2,
+    flexShrink: 0,
+    alignSelf: 'flex-start',
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
   },
   groupHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+    flexShrink: 0,
   },
   groupTitle: {
     ...typography.body,
@@ -196,6 +320,39 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  recurrenceNotice: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    padding: spacing.sm,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: `${colors.warning}55`,
+    backgroundColor: `${colors.warning}10`,
+    gap: spacing.sm,
+  },
+  recurrenceNoticeText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  repeatWeeklyBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: withAlpha(colors.accent, '12'),
+  },
+  repeatWeeklyBtnPressed: {
+    opacity: 0.88,
+  },
+  repeatWeeklyBtnText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
   },
   sessionRow: {
     flexDirection: 'row',
@@ -256,12 +413,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: `${colors.accent}55`,
-    backgroundColor: `${colors.accent}14`,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '14'),
     marginRight: spacing.xs,
   },
   viewPlanBtnPressed: {
-    backgroundColor: `${colors.accent}26`,
+    backgroundColor: withAlpha(colors.accent, '26'),
   },
   viewPlanText: {
     ...typography.caption,
@@ -276,6 +433,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   actionBtnPressed: {
-    backgroundColor: `${colors.textMuted}18`,
+    backgroundColor: withAlpha(colors.textMuted, '18'),
   },
 });

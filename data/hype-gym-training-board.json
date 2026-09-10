@@ -1,0 +1,283 @@
+{
+  "from": "2026-09-07",
+  "to": "2026-09-13",
+  "programs": ["ATHX", "Calistenia", "Crosstraining", "Hype", "Hyrox"],
+  "sessions": [
+    {
+      "day": 0,
+      "program": "Crosstraining",
+      "title": "OPEN / FUERZA",
+      "lines": [
+        "SHOULDER PRESS BARBELL 4x5 65% RM",
+        "RING-ROW 4x12",
+        "",
+        "EMOM · TOTAL 16 MINUTOS",
+        "8 DEADLIFT BARBELL 70% RM",
+        "150m RUN",
+        "150m RUN",
+        "10 BURPEE OVER THE BARBELL"
+      ]
+    },
+    {
+      "day": 0,
+      "program": "Hype",
+      "title": "OPEN / FUERZA",
+      "lines": [
+        "BACK SQUAT 5x8",
+        "",
+        "EMOM · TOTAL 20 MINUTOS",
+        "20 WALL BALL",
+        "16 BOX JUMP OVER",
+        "15/12 cal ANY CARDIO MACH-CAL",
+        "1' REST"
+      ]
+    },
+    {
+      "day": 0,
+      "program": "Hyrox",
+      "title": "EMOM 36 MINS",
+      "lines": [
+        "SKIERG 12/10 CAL",
+        "BURPEE OVER BOX 10 REPS",
+        "ROW 12/10 CAL",
+        "DB WALKING LUNGES 16",
+        "KB SWINGS 15 REPS",
+        "REST"
+      ]
+    },
+    {
+      "day": 0,
+      "program": "ATHX",
+      "title": "OPEN / FUERZA",
+      "lines": [
+        "HIP THRUST 4x6",
+        "",
+        "OPEN / FUERZA",
+        "FLOOR PRESS BARBELL 4x6",
+        "",
+        "TRABAJO DE SERIES EN MAQUINA",
+        "200M REST 30\"",
+        "T.C 12'",
+        "",
+        "12' AMRAP",
+        "16 HEAVY DB SNATCH",
+        "20 WALL BALL",
+        "18 PUSH-UPS",
+        "45\" REST"
+      ]
+    },
+    {
+      "day": 0,
+      "program": "Calistenia",
+      "title": "FUERZA",
+      "lines": [
+        "PIKE PUSH-UP 3x10",
+        "V-UP 3x20",
+        "",
+        "FUERZA",
+        "STRICT TOES TO BAR 3x10",
+        "PUSH-UP 3x20",
+        "",
+        "9' AMRAP",
+        "9 DIPS BAR",
+        "6 STRICT PULLUP",
+        "3 NAVY SEAL-BURPEE"
+      ]
+    },
+    {
+      "day": 1,
+      "program": "Crosstraining",
+      "title": "OPEN / FUERZA",
+      "lines": [
+        "BACK SQUAT BARBELL 5x5 70% RM",
+        "JUMPING SQUAT 5x14",
+        "",
+        "FOR TIME",
+        "300m RUN",
+        "20 JUMPING PULL-UP",
+        "50 MOUNTAIN CLIMBERS",
+        "20 SWING AMERICANO KTB",
+        "300m RUN",
+        "15 JUMPING PULL-UP",
+        "40 MOUNTAIN CLIMBERS",
+        "15 SWING AMERICANO KTB",
+        "300m RUN",
+        "10 JUMPING PULL-UP",
+        "30 MOUNTAIN CLIMBERS",
+        "10 SWING AMERICANO KTB"
+      ]
+    },
+    {
+      "day": 1,
+      "program": "Hype",
+      "title": "OPEN / FUERZA",
+      "lines": [
+        "5 X COMPLEX",
+        "TEMPO CLEAN PULL 5 reps",
+        "HANG POWER CLEAN BARBELL 5 reps",
+        "",
+        "4' ON 1' OFF · 4 RONDAS",
+        "15 PUSH PRESS",
+        "10 BURPEES",
+        "20 SIT UP",
+        "25 SQUATS",
+        "MAX PUSH UP / MAX RING ROW",
+        "",
+        "Salimos en tiradas separadas de 1 min.",
+        "Alternaremos el push up y el ring row."
+      ]
+    },
+    {
+      "day": 1,
+      "program": "Hyrox",
+      "title": "32 MINS AMRAP",
+      "lines": [
+        "Se descansa dos minutos cuando Partner 1 y Partner 2 hayan completado una ronda.",
+        "",
+        "PARTNER 1",
+        "300 M RUN",
+        "16 DB THRUSTERS",
+        "12 BURPEES",
+        "",
+        "PARTNER 2",
+        "CALORÍAS EN SKIERG / BIKE / ROW"
+      ]
+    },
+    {
+      "day": 2,
+      "program": "Crosstraining",
+      "title": "OPEN / FUERZA",
+      "lines": [
+        "COMPLEX",
+        "POWER CLEAN BARBELL 1",
+        "HANG POWER CLEAN BARBELL 2 x 70% RM",
+        "FRONT SQUAT BARBELL 3",
+        "",
+        "EMOM · TOTAL 16 MINUTOS",
+        "8 HANG POWER CLEAN BARBELL",
+        "12/9 cal ANY CARDIO MACH-CAL",
+        "30 HOLLOW ROCKS",
+        "10 BURPEE"
+      ]
+    },
+    {
+      "day": 2,
+      "program": "Hype",
+      "title": "32' AMRAP",
+      "lines": [
+        "60 DEADLIFT BARBELL",
+        "50 KNEES TO-ELBOW",
+        "20 SYNCHRO LUNGE",
+        "600m ANY CARDIO MACH-METROS",
+        "40 FRONT SQUAT BARBELL",
+        "30 PULL UP",
+        "20 SYNCHRO LUNGE",
+        "500m RUN SYNCHRO"
+      ]
+    },
+    {
+      "day": 3,
+      "program": "Crosstraining",
+      "title": "PARTNER WOD (I GO, YOU GO)",
+      "lines": [
+        "36' AMRAP",
+        "50 WALL BALL",
+        "50 RUSSIAN KTB SWING",
+        "50 BOX-JUMP",
+        "50 PUSH-UP",
+        "50 RING-ROW",
+        "800m RUN SYNCHRO"
+      ]
+    },
+    {
+      "day": 3,
+      "program": "Hyrox",
+      "title": "AMRAP 35 MINS PARTNER",
+      "lines": [
+        "600 M ROW",
+        "40 SANDBAG LUNGES",
+        "30 KB SWINGS",
+        "20 BOX STEP UP CON DB",
+        "10 BURPEE BROAD JUMP"
+      ]
+    },
+    {
+      "day": 3,
+      "program": "Hyrox",
+      "title": "HYROX 40 MIN",
+      "lines": [
+        "COMPLETAR 4 RONDAS",
+        "500 M RUN",
+        "40M KB FARMER CARRY",
+        "500 M SKIERG O ROW O 1000 BIKE",
+        "30 SANDBAG WALKING LUNGES",
+        "15 BURPEES OVER BOX"
+      ]
+    },
+    {
+      "day": 3,
+      "program": "Hype",
+      "title": "OPEN / FUERZA",
+      "lines": [
+        "DOUBLE DUMBBELL STRICT PRESS 4x8",
+        "CURL BICEPS 4x10",
+        "",
+        "5 ROUNDS FOR TIME",
+        "4 WALL WALK",
+        "8 DEVILPRESS",
+        "12 TURKISH SITUP",
+        "300m RUN"
+      ]
+    },
+    {
+      "day": 4,
+      "program": "Hyrox",
+      "title": "5 RONDAS 4' TRABAJO 1' DESCANSO",
+      "lines": [
+        "PARTNER I GO YOU GO",
+        "10 CAL",
+        "10 BURPEES",
+        "12,5M SLED PUSH",
+        "10 WALLBALL",
+        "",
+        "Después de cada ronda: 300m RUN"
+      ]
+    },
+    {
+      "day": 4,
+      "program": "Crosstraining",
+      "title": "OPEN / FUERZA",
+      "lines": [
+        "FLOOR PRESS BARBELL 4x12",
+        "DB BENT-OVER ROW 4x20",
+        "RING-ROW 4x16",
+        "",
+        "EMOM · TOTAL 18 MINUTOS",
+        "12/9 cal ERGO SKI-CAL",
+        "16 PUSH-UP",
+        "12/9 cal ERGO BIKE-CAL",
+        "20 V-UP",
+        "12 cal ERGO ROW-CAL",
+        "24 m WALKING SANDBAG LUNGE"
+      ]
+    },
+    {
+      "day": 4,
+      "program": "Hype",
+      "title": "OPEN / FUERZA",
+      "lines": [
+        "THRUSTER 4x8",
+        "MAX REPS DIAMOND PUSH-UP 4x",
+        "",
+        "5 ROUNDS FOR TIME",
+        "250m ANY CARDIO MACH-METROS",
+        "20 RUSSIAN KTB SWING",
+        "",
+        "EMOM · TOTAL 9 MINUTOS",
+        "25 m SLED-PUSH",
+        "12 STEP UP KTB 24/16 kg",
+        "12 BURPEE"
+      ]
+    }
+  ]
+}

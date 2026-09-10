@@ -6,7 +6,12 @@ import {
   uploadSessionVideo,
   type SessionLogVideo,
 } from '@/lib/sessionVideoService';
-import { pickSessionVideo, type SessionVideoSource } from '@/lib/sessionVideoPicker';
+import {
+  editSessionVideoBeforeSend,
+  pickSessionVideo,
+  type SessionVideoAsset,
+  type SessionVideoSource,
+} from '@/lib/sessionVideoPicker';
 
 export type UploadSessionVideoOptions = {
   source?: SessionVideoSource;
@@ -16,12 +21,21 @@ export type UploadSessionVideoOptions = {
   ensureLogId?: () => Promise<{ logId?: string; error?: string }>;
 };
 
+type PendingSessionVideoUpload = {
+  asset: SessionVideoAsset;
+  activeLogId: string;
+  source: SessionVideoSource;
+  exerciseKey?: string;
+  exerciseName?: string;
+};
+
 export function useSessionVideos(logId?: string, userId?: string) {
   const [videos, setVideos] = useState<SessionLogVideo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadingExerciseKey, setUploadingExerciseKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<PendingSessionVideoUpload | null>(null);
 
   const load = useCallback(async (overrideLogId?: string) => {
     const targetLogId = overrideLogId ?? logId;
@@ -48,6 +62,47 @@ export function useSessionVideos(logId?: string, userId?: string) {
     void load();
   }, [load]);
 
+  const uploadPickedVideo = useCallback(
+    async (pending: PendingSessionVideoUpload) => {
+      if (!userId) {
+        return { error: 'Inicia sesión para subir un video' };
+      }
+
+      setIsUploading(true);
+      setUploadingExerciseKey(pending.exerciseKey ?? null);
+      setError(null);
+
+      const result = await uploadSessionVideo({
+        userId,
+        logId: pending.activeLogId,
+        uri: pending.asset.uri,
+        mimeType: pending.asset.mimeType,
+        fileName: pending.asset.fileName,
+        file: pending.asset.file,
+        exerciseKey: pending.exerciseKey,
+        exerciseName: pending.exerciseName,
+      });
+
+      setIsUploading(false);
+      setUploadingExerciseKey(null);
+
+      if (result.error) {
+        setError(result.error);
+        return { error: result.error };
+      }
+
+      if (result.video) {
+        setVideos((current) => [result.video!, ...current.filter((video) => video.id !== result.video!.id)]);
+        if (pending.activeLogId !== logId) {
+          await load(pending.activeLogId);
+        }
+      }
+
+      return { video: result.video, logId: pending.activeLogId };
+    },
+    [load, logId, userId],
+  );
+
   const uploadVideo = useCallback(
     async (options: UploadSessionVideoOptions = {}) => {
       if (!userId) {
@@ -72,39 +127,55 @@ export function useSessionVideos(logId?: string, userId?: string) {
       if ('error' in picked) return { error: picked.error };
       if (!('uri' in picked)) return {};
 
-      setIsUploading(true);
-      setUploadingExerciseKey(options.exerciseKey ?? null);
-      setError(null);
-
-      const result = await uploadSessionVideo({
-        userId,
-        logId: activeLogId,
-        uri: picked.uri,
-        mimeType: picked.mimeType,
-        fileName: picked.fileName,
+      setPendingUpload({
+        asset: picked,
+        activeLogId,
+        source,
         exerciseKey: options.exerciseKey,
         exerciseName: options.exerciseName,
       });
 
-      setIsUploading(false);
-      setUploadingExerciseKey(null);
-
-      if (result.error) {
-        setError(result.error);
-        return { error: result.error };
-      }
-
-      if (result.video) {
-        setVideos((current) => [result.video!, ...current.filter((video) => video.id !== result.video!.id)]);
-        if (activeLogId !== logId) {
-          await load(activeLogId);
-        }
-      }
-
-      return { video: result.video, logId: activeLogId };
+      return { pending: true, logId: activeLogId };
     },
-    [load, logId, userId],
+    [logId, userId],
   );
+
+  const confirmPendingUpload = useCallback(async () => {
+    if (!pendingUpload) return {};
+
+    const result = await uploadPickedVideo(pendingUpload);
+    if (!result.error) {
+      setPendingUpload(null);
+    }
+    return result;
+  }, [pendingUpload, uploadPickedVideo]);
+
+  const cancelPendingUpload = useCallback(() => {
+    setPendingUpload(null);
+  }, []);
+
+  const editPendingUpload = useCallback(async () => {
+    if (!pendingUpload) return {};
+
+    const edited = await editSessionVideoBeforeSend(pendingUpload.source);
+    if ('cancelled' in edited) return {};
+    if ('error' in edited) {
+      setError(edited.error);
+      return { error: edited.error };
+    }
+    if (!('uri' in edited)) return {};
+
+    setPendingUpload((current) =>
+      current
+        ? {
+            ...current,
+            asset: edited,
+          }
+        : null,
+    );
+
+    return { pending: true };
+  }, [pendingUpload]);
 
   const removeVideo = useCallback(
     async (videoId: string) => {
@@ -132,7 +203,11 @@ export function useSessionVideos(logId?: string, userId?: string) {
     isUploading,
     uploadingExerciseKey,
     error,
+    pendingUpload,
     uploadVideo,
+    confirmPendingUpload,
+    cancelPendingUpload,
+    editPendingUpload,
     removeVideo,
     videosForExercise,
     refresh: load,

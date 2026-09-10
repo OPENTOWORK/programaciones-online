@@ -4,7 +4,7 @@ import { Platform, Pressable, StyleSheet, Text, View, type View as RNView } from
 
 import { DraggableTemplateRow } from '@/components/trainer/DraggableTemplateRow';
 import { Card } from '@/components/ui/Card';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import {
   resolveTemplateDropTarget,
   templateGroupKey,
@@ -150,7 +150,13 @@ export function SessionTemplateGroupList({
     <View style={styles.list}>
       {draggingTemplateId ? (
         <Text style={styles.dragHint}>
-          Arrastra la plantilla a otro grupo{groupMode === 'format' ? ' de formato' : ' de zona'} y suéltala.
+          Arrastra la plantilla a otro grupo
+          {groupMode === 'format'
+            ? ' de formato'
+            : groupMode === 'modality'
+              ? ' de modalidad'
+              : ' de zona'}{' '}
+          y suéltala.
         </Text>
       ) : null}
 
@@ -250,7 +256,7 @@ const styles = StyleSheet.create({
   },
   groupCardDropTarget: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}10`,
+    backgroundColor: withAlpha(colors.accent, '10'),
   },
   groupCardDragSource: {
     overflow: 'visible',
@@ -301,7 +307,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingVertical: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: `${colors.accent}44`,
+    borderTopColor: withAlpha(colors.accent, '44'),
     borderStyle: 'dashed',
   },
   collapsedDropHintText: {

@@ -12,6 +12,7 @@ import type { User } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
 import { checkEmailRegistered } from '@/lib/authService';
+import { isJwtClockSkewError, jwtClockSkewUserMessage, recoverJwtClockSkew } from '@/lib/authSessionRecovery';
 import { mapAuthException, mapSignInErrorMessage, signInWithPasswordSafe } from '@/lib/authErrors';
 import {
   clearAuthCallbackParams,
@@ -30,7 +31,7 @@ import {
   subscribeNativeAuthUrls,
 } from '@/lib/authRedirect';
 import { hasRecoveryUrlParams, setActiveRecoveryUrl } from '@/lib/recoverySession';
-import { isAuthDemoMode, getSupabase, requireSupabase } from '@/lib/supabase';
+import { isAuthDemoMode, getSupabase, isSupabaseConfigured, requireSupabase } from '@/lib/supabase';
 import {
   fetchUserProfileResult,
   updateUserProfile,
@@ -89,6 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [initAttempt, setInitAttempt] = useState(0);
   const [pendingAuthCallbackUrl, setPendingAuthCallbackUrl] = useState<string | null>(null);
   const isDemoMode = isAuthDemoMode;
+  const bootstrappedRef = useRef(false);
+  const authListenerRef = useRef<{ unsubscribe: () => void } | null>(null);
 
   const loadUserFromSupabase = useCallback(async (authUser: User) => {
     const result = await withTimeout(
@@ -192,10 +195,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let cancelled = false;
-    let subscription: { unsubscribe: () => void } | undefined;
 
     async function init() {
-      setIsLoading(true);
+      const isRetry = initAttempt > 0;
+      if (!isRetry && bootstrappedRef.current) {
+        return;
+      }
+
+      if (!bootstrappedRef.current || isRetry) {
+        setIsLoading(true);
+      }
       setInitError(null);
       logAuthEvent('init_start');
 
@@ -227,6 +236,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const { data, error } = await supabase.auth.getSession();
             if (error) {
               logAuthEvent('session_restore_error', { message: error.message }, 'warn');
+              if (isJwtClockSkewError(error.message)) {
+                await recoverJwtClockSkew(supabase);
+              }
             }
 
             if (data.session?.user && !hasRecoveryUrlParams()) {
@@ -244,27 +256,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (cancelled) return;
 
-        const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-          logAuthEvent('state_change', { event, hasSession: Boolean(session?.user) });
+        if (!authListenerRef.current) {
+          const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+            logAuthEvent('state_change', { event, hasSession: Boolean(session?.user) });
 
-          if (session?.user) {
+            if (!session?.user) {
+              if (event === 'PASSWORD_RECOVERY' || hasRecoveryUrlParams()) {
+                return;
+              }
+              setUser(null);
+              setProfileError(null);
+              return;
+            }
+
             if (event === 'PASSWORD_RECOVERY' || hasRecoveryUrlParams()) {
               return;
             }
-            if (event === 'TOKEN_REFRESHED') {
+
+            if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
               return;
             }
+
             try {
               await loadUserFromSupabase(session.user);
             } catch (error) {
               logReleaseError('auth_state_profile_failed', error, { event });
             }
-          } else {
-            setUser(null);
-            setProfileError(null);
-          }
-        });
-        subscription = listener.subscription;
+          });
+          authListenerRef.current = listener.subscription;
+        }
+
+        bootstrappedRef.current = true;
         logAuthEvent('init_done');
       } catch (error) {
         const message =
@@ -284,15 +306,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    init();
+    void init();
 
     return () => {
       cancelled = true;
-      subscription?.unsubscribe();
     };
   }, [isDemoMode, loadUserFromSupabase, initAttempt]);
 
+  useEffect(() => {
+    return () => {
+      authListenerRef.current?.unsubscribe();
+      authListenerRef.current = null;
+      bootstrappedRef.current = false;
+    };
+  }, []);
+
   const retryInit = useCallback(() => {
+    bootstrappedRef.current = false;
+    authListenerRef.current?.unsubscribe();
+    authListenerRef.current = null;
     setInitAttempt((attempt) => attempt + 1);
   }, []);
 
@@ -327,13 +359,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (email: string, password: string) => {
+      const normalizedEmail = email.trim().toLowerCase();
+
+      if (isSupabaseConfigured) {
+        logAuthEvent('sign_in_start');
+        setProfileError(null);
+
+        try {
+          const { data, error } = await withTimeout(
+            signInWithPasswordSafe(requireSupabase(), {
+              email: normalizedEmail,
+              password,
+            }),
+            SIGN_IN_TIMEOUT_MS,
+            'Tiempo de espera agotado al iniciar sesión',
+          );
+
+          if (error) {
+            logAuthEvent('sign_in_failed', { reason: mapSignInErrorMessage(error.message) }, 'warn');
+            return { error: mapSignInErrorMessage(error.message) };
+          }
+
+          if (data.user) {
+            const loaded = await loadUserFromSupabase(data.user);
+            if (!loaded.ok) {
+              return { error: loaded.error };
+            }
+            logAuthEvent('sign_in_ok', { userId: data.user.id });
+            return { profile: loaded.profile };
+          }
+
+          return { error: 'No se pudo completar el inicio de sesión.' };
+        } catch (error) {
+          logReleaseError('sign_in_exception', error);
+          if (error instanceof TimeoutError) {
+            return { error: 'La conexión tardó demasiado. Comprueba tu red e inténtalo de nuevo.' };
+          }
+          return { error: mapAuthException(error) };
+        }
+      }
+
       if (isDemoMode) {
-        if (email === DEMO_USER.email && password === DEMO_USER.password) {
+        if (normalizedEmail === DEMO_USER.email && password === DEMO_USER.password) {
           setUser(mockUser);
           setProfileError(null);
           return { profile: mockUser };
         }
-        if (email === DEMO_TRAINER.email && password === DEMO_TRAINER.password) {
+        if (normalizedEmail === DEMO_TRAINER.email && password === DEMO_TRAINER.password) {
           setUser(mockTrainerUser);
           setProfileError(null);
           return { profile: mockTrainerUser };
@@ -344,38 +416,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      logAuthEvent('sign_in_start');
-      setProfileError(null);
-
-      try {
-        const { data, error } = await withTimeout(
-          signInWithPasswordSafe(requireSupabase(), { email, password }),
-          SIGN_IN_TIMEOUT_MS,
-          'Tiempo de espera agotado al iniciar sesión',
-        );
-
-        if (error) {
-          logAuthEvent('sign_in_failed', { reason: mapSignInErrorMessage(error.message) }, 'warn');
-          return { error: mapSignInErrorMessage(error.message) };
-        }
-
-        if (data.user) {
-          const loaded = await loadUserFromSupabase(data.user);
-          if (!loaded.ok) {
-            return { error: loaded.error };
-          }
-          logAuthEvent('sign_in_ok', { userId: data.user.id });
-          return { profile: loaded.profile };
-        }
-
-        return { error: 'No se pudo completar el inicio de sesión.' };
-      } catch (error) {
-        logReleaseError('sign_in_exception', error);
-        if (error instanceof TimeoutError) {
-          return { error: 'La conexión tardó demasiado. Comprueba tu red e inténtalo de nuevo.' };
-        }
-        return { error: mapAuthException(error) };
-      }
+      return { error: 'Supabase no está configurado en este entorno.' };
     },
     [isDemoMode, loadUserFromSupabase],
   );
@@ -497,6 +538,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfileError(null);
     setPendingAuthCallbackUrl(null);
+    bootstrappedRef.current = false;
+    authListenerRef.current?.unsubscribe();
+    authListenerRef.current = null;
     resetAuthCallbackCoordinator();
   }, [isDemoMode]);
 

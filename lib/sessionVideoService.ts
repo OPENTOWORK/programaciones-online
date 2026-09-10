@@ -132,6 +132,7 @@ export async function uploadSessionVideo(input: {
   fileName: string;
   exerciseKey?: string;
   exerciseName?: string;
+  file?: File;
 }): Promise<{ error?: string; video?: SessionLogVideo }> {
   const safeName = sanitizeFileName(input.fileName);
   const ext = extensionFromMime(input.mimeType);
@@ -183,7 +184,7 @@ export async function uploadSessionVideo(input: {
   }
 
   try {
-    const fileData = await uriToArrayBuffer(input.uri);
+    const fileData = input.file ? await input.file.arrayBuffer() : await uriToArrayBuffer(input.uri);
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, fileData, {
       contentType: input.mimeType,
       upsert: false,

@@ -1,9 +1,12 @@
-import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { ProfileAppointmentsCard } from '@/components/appointments/ProfileAppointmentsCard';
-import { PrivacyPolicyLink } from '@/components/legal/PrivacyPolicyLink';
+import { BodyMeasurementReminderCard } from '@/components/profile/BodyMeasurementReminderCard';
+import { ProfileChallengeCard } from '@/components/profile/ProfileChallengeCard';
+import { ProfileNotificationsCard } from '@/components/profile/ProfileNotificationsCard';
+import { ProfileFooterLinks } from '@/components/legal/ProfileFooterLinks';
 import { SavedMetconsCard } from '@/components/program/SavedMetconsCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -11,8 +14,10 @@ import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, goalLabels, levelColors, spacing, typography } from '@/constants/theme';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
+import { useAthleteIntakeForms } from '@/hooks/useAthleteIntakeForms';
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
+import { useIntakeFormTemplates } from '@/hooks/useIntakeFormTemplates';
 import { useNutritionProfile } from '@/hooks/useNutritionProfile';
 import { usePhysicalProfile } from '@/hooks/usePhysicalProfile';
 import { useTrainingProfile } from '@/hooks/useTrainingProfile';
@@ -27,6 +32,17 @@ import {
     primaryGoalLabels,
 } from '@/lib/bodyMetrics';
 import { dietaryPreferenceLabels, trainingExperienceLabels } from '@/lib/profilePreferences';
+import { shouldShowBodyMeasurementReminder } from '@/lib/bodyMeasurementReminder';
+import type { IntakeFormTemplate } from '@/lib/intakeFormTypes';
+
+function trainerFormButtonLabel(template: IntakeFormTemplate) {
+  const badges: string[] = [];
+  if (template.isDefault) badges.push('Por defecto');
+  if (!template.isActive) badges.push('Inactivo');
+  const suffix = badges.length > 0 ? ` · ${badges.join(' · ')}` : '';
+  const fieldCount = template.schema.fields.length;
+  return `${template.name}${suffix} · ${fieldCount} campo${fieldCount === 1 ? '' : 's'}`;
+}
 
 function formatList(values: string[]) {
   return values.length > 0 ? values.join(', ') : NOT_INDICATED;
@@ -40,11 +56,13 @@ export default function ProfileScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { user, signOut, refreshUser } = useAuth();
-  const { basics, measured, derived } = usePhysicalProfile();
-  const { profile: nutrition } = useNutritionProfile();
-  const { profile: training } = useTrainingProfile();
+  const { basics, measured, derived, refresh, latestMeasurement } = usePhysicalProfile();
+  const { profile: nutrition, refresh: refreshNutrition } = useNutritionProfile();
+  const { profile: training, refresh: refreshTraining } = useTrainingProfile();
   const isAthlete = !isTrainerRole(user?.role);
-  const { isComplete: intakeComplete, isLoading: intakeLoading } = useAthleteIntakeForm();
+  const { isComplete: intakeComplete, isLoading: intakeLoading, usesCustomForms } = useAthleteIntakeForm();
+  const { statuses: intakeStatuses, isLoading: intakeListLoading } = useAthleteIntakeForms();
+  const { templates: trainerIntakeForms, isLoading: trainerIntakeFormsLoading } = useIntakeFormTemplates();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   /** Remonta las secciones para dejarlas siempre cerradas al volver al perfil. */
@@ -69,6 +87,9 @@ export default function ProfileScreen() {
 
   useFocusRefresh(() => {
     void refreshUser();
+    void refresh();
+    void refreshNutrition();
+    void refreshTraining();
   });
 
   if (!user) return null;
@@ -97,6 +118,25 @@ export default function ProfileScreen() {
     router.push('/profile/edit');
   };
 
+  const showBodyMeasurementReminder =
+    isAthlete && shouldShowBodyMeasurementReminder(user, latestMeasurement?.measuredAt);
+
+  const intakeSubtitle =
+    intakeLoading || intakeListLoading
+      ? 'Comprobando…'
+      : usesCustomForms && intakeStatuses.length > 0
+        ? `${intakeStatuses.filter((status) => status.isComplete).length}/${intakeStatuses.length} completados`
+        : intakeComplete
+          ? 'Completado'
+          : 'Pendiente · ayuda a tu entrenador a conocerte';
+
+  const trainerFormsSubtitle =
+    trainerIntakeFormsLoading
+      ? 'Comprobando…'
+      : trainerIntakeForms.length > 0
+        ? `${trainerIntakeForms.length} formulario${trainerIntakeForms.length === 1 ? '' : 's'} creado${trainerIntakeForms.length === 1 ? '' : 's'}`
+        : 'Crea cuestionarios personalizados para tus atletas';
+
   return (
     <ScreenWrapper>
       <View style={styles.header}>
@@ -115,54 +155,111 @@ export default function ProfileScreen() {
         ) : null}
       </View>
 
+      {showBodyMeasurementReminder ? (
+        <BodyMeasurementReminderCard
+          lastMeasuredAt={latestMeasurement?.measuredAt}
+          onPress={handleEdit}
+        />
+      ) : null}
+
       <View key={sectionsKey}>
         {isAthlete ? (
           <CollapsibleSection
-            title="Formulario de bienvenida"
-            subtitle={
-              intakeLoading
-                ? 'Comprobando…'
-                : intakeComplete
-                  ? 'Completado'
-                  : 'Pendiente · ayuda a tu entrenador a conocerte'
-            }
+            title="Formularios del entrenador"
             style={
-              !intakeComplete && !intakeLoading
+              !intakeComplete && !intakeLoading && !intakeListLoading
                 ? { ...styles.sectionCard, ...styles.intakeCardPending }
                 : styles.sectionCard
             }
           >
-            <Button
-              title={intakeComplete ? 'Ver o editar respuestas' : 'Completar formulario'}
-              variant={intakeComplete ? 'outline' : 'primary'}
-              onPress={() => router.push('/profile/intake-form')}
-            />
+            <Text style={styles.sectionLead}>{intakeSubtitle}</Text>
+            {usesCustomForms && intakeStatuses.length > 0 ? (
+              <View style={styles.intakeList}>
+                {intakeStatuses.map((status) => (
+                  <Button
+                    key={status.template.id}
+                    title={
+                      status.isComplete
+                        ? `${status.template.name} · Ver respuestas`
+                        : `${status.template.name} · Completar`
+                    }
+                    variant={status.isComplete ? 'outline' : 'primary'}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/profile/intake-form',
+                        params: { templateId: status.template.id },
+                      })
+                    }
+                    style={styles.intakeListButton}
+                  />
+                ))}
+              </View>
+            ) : (
+              <Button
+                title={intakeComplete ? 'Ver o editar respuestas' : 'Completar formulario'}
+                variant={intakeComplete ? 'outline' : 'primary'}
+                onPress={() => router.push('/profile/intake-form')}
+              />
+            )}
+          </CollapsibleSection>
+        ) : null}
+
+        {!isAthlete ? (
+          <CollapsibleSection title="Formularios para atletas" style={styles.sectionCard}>
+            <Text style={styles.sectionLead}>{trainerFormsSubtitle}</Text>
+            {trainerIntakeFormsLoading ? (
+              <ActivityIndicator color={colors.accent} style={styles.sectionLoader} />
+            ) : trainerIntakeForms.length > 0 ? (
+              <View style={styles.intakeList}>
+                {trainerIntakeForms.map((template) => (
+                  <Button
+                    key={template.id}
+                    title={trainerFormButtonLabel(template)}
+                    variant="outline"
+                    onPress={() =>
+                      router.push(`/profile/intake-forms/${template.id}` as Href)
+                    }
+                    style={styles.intakeListButton}
+                  />
+                ))}
+                <Button
+                  title="Gestionar formularios"
+                  variant="primary"
+                  onPress={() => router.push('/profile/intake-forms')}
+                  style={styles.sectionButton}
+                />
+              </View>
+            ) : (
+              <Button
+                title="Crear formulario"
+                variant="primary"
+                onPress={() => router.push('/profile/intake-forms')}
+                style={styles.sectionButton}
+              />
+            )}
           </CollapsibleSection>
         ) : null}
 
         <ProfileAppointmentsCard />
 
+        {!isAthlete ? <ProfileNotificationsCard /> : null}
+
+        {!isAthlete ? <ProfileChallengeCard /> : null}
+
         {isAthlete ? (
-          <CollapsibleSection
-            title="Metcons guardados"
-            subtitle="Entrenamientos que marcaste con la estrella"
-            style={styles.sectionCard}
-          >
+          <CollapsibleSection title="Entrenamientos favoritos" style={styles.sectionCard}>
+            <Text style={styles.sectionLead}>Sesiones que marcaste con la estrella</Text>
             <SavedMetconsCard />
           </CollapsibleSection>
         ) : null}
 
         {isAthlete ? (
           <>
-            <CollapsibleSection
-              title="Datos físicos"
-              subtitle="Medidas corporales y valores calculados"
-              style={styles.sectionCard}
-            >
+            <CollapsibleSection title="Datos físicos" style={styles.sectionCard}>
+              <Text style={styles.sectionLead}>Medidas corporales y valores calculados</Text>
               <InfoRow label="Edad" value={formatDerived(derived.age, ' años', 0)} />
               <InfoRow label="Altura" value={formatMeasured(basics.heightCm, ' cm')} />
               <InfoRow label="Peso" value={formatMeasured(measured.weightKg, ' kg')} />
-              <InfoRow label="Cintura" value={formatMeasured(measured.waistCm, ' cm')} />
               <InfoRow label="FC en reposo" value={formatMeasured(measured.restingHeartRate, ' lpm')} />
               <InfoRow label="Peso objetivo" value={formatMeasured(basics.targetWeightKg, ' kg')} />
               <InfoRow
@@ -209,11 +306,8 @@ export default function ProfileScreen() {
               />
             </CollapsibleSection>
 
-            <CollapsibleSection
-              title="Nutrición"
-              subtitle="Preferencias y alimentos a evitar"
-              style={styles.sectionCard}
-            >
+            <CollapsibleSection title="Nutrición" style={styles.sectionCard}>
+              <Text style={styles.sectionLead}>Preferencias y alimentos a evitar</Text>
               <InfoRow
                 label="Tipo de dieta"
                 value={
@@ -235,11 +329,8 @@ export default function ProfileScreen() {
               />
             </CollapsibleSection>
 
-            <CollapsibleSection
-              title="Entrenamiento"
-              subtitle="Disponibilidad y limitaciones"
-              style={styles.sectionCard}
-            >
+            <CollapsibleSection title="Entrenamiento" style={styles.sectionCard}>
+              <Text style={styles.sectionLead}>Disponibilidad y limitaciones</Text>
               <InfoRow
                 label="Experiencia"
                 value={
@@ -295,7 +386,7 @@ export default function ProfileScreen() {
         <Button title="Cerrar sesión" onPress={handleLogout} variant="ghost" style={styles.btn} />
       )}
 
-      <PrivacyPolicyLink variant="small" />
+      <ProfileFooterLinks />
     </ScreenWrapper>
   );
 }
@@ -337,8 +428,17 @@ const styles = StyleSheet.create({
   email: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 4 },
   badges: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   sectionCard: { marginTop: spacing.md },
+  sectionLead: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
+  },
+  sectionLoader: { marginVertical: spacing.sm },
   sectionButton: { marginTop: spacing.md },
   intakeCardPending: { borderColor: colors.accent },
+  intakeList: { gap: spacing.sm },
+  intakeListButton: { marginTop: 0 },
   groupTitle: { marginTop: spacing.md, marginBottom: spacing.xs },
   groupTitleText: { ...typography.bodySmall, color: colors.text, fontWeight: '700' },
   groupTitleHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },

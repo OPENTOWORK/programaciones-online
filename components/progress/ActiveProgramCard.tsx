@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { IconBadge } from '@/components/ui/AppIcon';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { ActiveProgramSummary } from '@/lib/types';
 
 interface ActiveProgramCardProps {
@@ -13,7 +13,7 @@ interface ActiveProgramCardProps {
 export function ActiveProgramCard({ active, dense = false }: ActiveProgramCardProps) {
   return (
     <LinearGradient
-      colors={[colors.surface, `${colors.accent}18`]}
+      colors={[colors.surface, withAlpha(colors.accent, '18')]}
       style={[styles.card, dense && styles.cardDense]}
     >
       <Text style={[styles.label, dense && styles.labelDense]}>Programación activa</Text>
@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: `${colors.accent}44`,
+    borderColor: withAlpha(colors.accent, '44'),
   },
   cardDense: {
     padding: spacing.sm + 2,

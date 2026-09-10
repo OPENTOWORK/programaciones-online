@@ -1,0 +1,121 @@
+✓ 14 productos migrados a rutas por tema
+Generando 77 imágenes para Hype (tema: lavender)…
+→ 1 Agua · lavender… ok
+→ 2 Barebells chocolatina · lavender… ok
+→ 3 Barrita Staff · lavender… ok
+→ 4 Batido · lavender… ok
+→ 5 Batido Staff · lavender… ok
+→ 6 Belevels - Clean gut · lavender… ok
+→ 7 Belevels - Gutday · lavender… ok
+→ 8 Belevels - Omega 3 · lavender… ok
+→ 9 Belevels - Triple magnesium · lavender… ok
+→ 10 Belevels be calm · lavender… ok
+→ 11 Belevels Chill mood · lavender… ok
+→ 12 Belevels Colageno · lavender… ok
+→ 13 Belevels Fem Balance · lavender… ok
+→ 14 Belevels Vitamina D3 + K2 · lavender… ok
+→ 15 Belevels Wake up · lavender… ok
+→ 16 Bono Personal 10 · lavender… ok
+→ 17 calcetines · lavender… ok
+→ 18 Calleras - Quad Pro · lavender… ok
+→ 19 Calleras Quad Competition · lavender… ok
+→ 20 COLETERO VELITES · lavender… ok
+→ 21 Comba earth · lavender… ok
+→ 22 Creatina 500 creapure · lavender… ok
+→ 23 Crema Magma · lavender… ok
+→ 24 Crema Polar · lavender… ok
+→ 25 Crop Top Holo Coral · lavender… ok
+→ 26 Crop Top Holo Negro by HY-PE · lavender… error (Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.)
+→ 27 Drop in · lavender… ok
+→ 28 EAAS · lavender… ok
+→ 29 Foam roller · lavender… ok
+→ 30 Gafas Sol Horizon · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 31 Gafas Sol Raptor · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 32 Gafas Sol Urban · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 33 Gorra · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 34 Hy-pe - Parche · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 35 Hybrid 1.0 - Bubblegum · lavender… ok
+→ 36 Hybrid 1.0 - Caribbean Blue · lavender… ok
+→ 37 Hybrid 1.0 - Deep forest · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 38 Hybrid 1.0 - Deep ocean · lavender… ok
+→ 39 L-Carnitina · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 40 Leggin largo burdeos · lavender… ok
+→ 41 Leggin largo negro · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 42 Legging Coral Corto · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 43 Leggins Largo Morado · lavender… ok
+→ 44 Leggins Largos Verdes · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 45 Lija manos · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 46 Magnesio liquido · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 47 Minimal 1.0 · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 48 Mochila Storm · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 49 Mochila Urban · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 50 QNS - Glucogen · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 51 QNS - ISO - PROTEIN 1KG · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 52 QNS Magnesio 4 · lavender… ok
+→ 53 QNS Super omega 3 · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 54 Red Bull · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 55 Riñonera Urban · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 56 Shirt 1.0 - Black · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 57 Shirt 1.0 - Coral · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 58 Shirt 1.0 - Gris · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 59 Short Holo · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 60 Sudadera Holo - Black · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 61 T-shirt Holo Black · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 62 T-Shirt Holo Coral · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 63 T-Shirt Holo Gris · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 64 Taza - Drop 1.0 · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 65 Totebag urban · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 66 Velites - Calleras Quad ultra · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 67 Velites - Cinturon · lavender… ok
+→ 68 Velites - gorro · lavender… ok
+→ 69 Velites - Head Band · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 70 Velites - mochila · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 71 Velites - Muñequeras nylon · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 72 Velites - Muñequeras tela · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 73 Velites Calleras All terrain · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 74 Velites Comba Cyclone · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 75 Velites Comba Fire 2.0 · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 76 Vitamin well · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+→ 77 Vitamina D3 · lavender… error (You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.)
+✓ 36 imágenes generadas, 41 fallos.
+  · Crop Top Holo Negro by HY-PE (lavender): Rate limit reached for gpt-image-1.5 (for limit gpt-image) in organization org-y1Yrsik1JFuFAA1zI8LjFjo5 on input-images per min: Limit 20, Used 20, Requested 1. Please try again in 3s. Visit https://platform.openai.com/account/rate-limits to learn more.
+  · Gafas Sol Horizon (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Gafas Sol Raptor (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Gafas Sol Urban (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Gorra (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hy-pe - Parche (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Hybrid 1.0 - Deep forest (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · L-Carnitina (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Leggin largo negro (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Legging Coral Corto (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Leggins Largos Verdes (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Lija manos (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Magnesio liquido (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Minimal 1.0 (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Mochila Storm (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Mochila Urban (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS - Glucogen (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS - ISO - PROTEIN 1KG (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · QNS Super omega 3 (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Red Bull (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Riñonera Urban (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Black (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Coral (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Shirt 1.0 - Gris (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Short Holo (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Sudadera Holo - Black (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-shirt Holo Black (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-Shirt Holo Coral (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · T-Shirt Holo Gris (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Taza - Drop 1.0 (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Totebag urban (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Calleras Quad ultra (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Head Band (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - mochila (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Muñequeras nylon (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites - Muñequeras tela (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Calleras All terrain (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Comba Cyclone (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Velites Comba Fire 2.0 (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Vitamin well (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+  · Vitamina D3 (lavender): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.

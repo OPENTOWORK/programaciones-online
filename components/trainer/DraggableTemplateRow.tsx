@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { SessionTemplate } from '@/lib/sessionTemplateService';
 import { describeSessionTemplate } from '@/lib/sessionTemplates';
 
@@ -26,6 +26,12 @@ export function DraggableTemplateRow({
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const [isDragging, setIsDragging] = useState(false);
   const summary = describeSessionTemplate(template.content);
+  const metaTags: string[] = [];
+  for (const value of [template.formatTag, template.modalityTag, template.tag]) {
+    if (value && !metaTags.includes(value)) metaTags.push(value);
+  }
+  const primaryLabel = metaTags[0] ?? template.name;
+  const secondaryLabel = metaTags.slice(1).join(' · ');
 
   const panResponder = useMemo(
     () =>
@@ -77,13 +83,10 @@ export function DraggableTemplateRow({
         style={({ pressed }) => [styles.rowMain, pressed && styles.pressed]}
       >
         <Text style={styles.rowName} numberOfLines={2}>
-          {template.formatTag ?? template.tag ?? template.name}
+          {primaryLabel}
         </Text>
         <Text style={styles.rowDetails} numberOfLines={1}>
-          {[
-            template.formatTag && template.tag ? template.tag : null,
-            `${summary.blockCount} bloque${summary.blockCount === 1 ? '' : 's'}`,
-          ]
+          {[secondaryLabel || null, `${summary.blockCount} bloque${summary.blockCount === 1 ? '' : 's'}`]
             .filter(Boolean)
             .join(' · ')}
         </Text>
@@ -125,7 +128,7 @@ const styles = StyleSheet.create({
   rowDragging: {
     zIndex: 40,
     elevation: 10,
-    borderColor: `${colors.accent}88`,
+    borderColor: withAlpha(colors.accent, '88'),
     backgroundColor: colors.surface,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },

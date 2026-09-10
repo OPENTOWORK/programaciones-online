@@ -42,10 +42,21 @@ export function parseBlockItemForDisplay(line: string): BlockItemDisplay {
 
   let load: string | undefined;
   let loadLabel: BlockItemDisplay['loadLabel'];
+
+  // El porcentaje va antes que la carga genérica: «55% RM» se leería como 55 kg.
+  const percentMatch = prescription.match(/(?:@|·)?\s*(\d+[\d.,]*)\s*%\s*(?:rm)?/i);
+  if (percentMatch) {
+    load = `${percentMatch[1]}% RM`;
+    loadLabel = 'Carga';
+    prescription = prescription.replace(percentMatch[0], ' ').trim();
+  }
+
   // Las alternativas largas van primero para que "min" no se quede en "m" ni "mi".
-  const loadMatch = prescription.match(
-    /(?:@|·)\s*(\d+[\d.,]*)\s*(kg|cal|km|minutos|mins|min|mi|m|ft|segundos|segs|seg|s)?\b/i,
-  );
+  const loadMatch = load
+    ? null
+    : prescription.match(
+        /(?:@|·)\s*(\d+[\d.,]*)\s*(kg|cal|km|minutos|mins|min|mi|m|ft|segundos|segs|seg|s)?\b/i,
+      );
   if (loadMatch) {
     const value = loadMatch[1];
     const unit = normalizeLoadUnit(loadMatch[2]);

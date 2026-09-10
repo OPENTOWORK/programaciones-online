@@ -36,9 +36,13 @@ export type AppIconName =
   | 'time'
   | 'chevronLeft'
   | 'chevronRight'
+  | 'chevronDown'
+  | 'moon'
+  | 'sunny'
   | 'menuDots'
   | 'add'
   | 'close'
+  | 'edit'
   | 'trash'
   | 'dragHandle'
   | 'search'
@@ -47,7 +51,21 @@ export type AppIconName =
   | 'pause'
   | 'video'
   | 'camera'
-  | 'templates';
+  | 'templates'
+  | 'support'
+  | 'settings'
+  | 'gym'
+  | 'shop'
+  | 'wallet'
+  | 'tv'
+  | 'colorPalette'
+  | 'catalogBasico'
+  | 'catalogCalistenia'
+  | 'catalogAthx'
+  | 'catalogCrosstraining'
+  | 'catalogHype'
+  | 'catalogHyrox'
+  | 'catalogChallenge';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -86,9 +104,13 @@ const ICONS: Record<AppIconName, { default: IoniconName; outline?: IoniconName }
   time: { default: 'time-outline' },
   chevronLeft: { default: 'chevron-back' },
   chevronRight: { default: 'chevron-forward' },
+  chevronDown: { default: 'chevron-down' },
+  moon: { default: 'moon', outline: 'moon-outline' },
+  sunny: { default: 'sunny', outline: 'sunny-outline' },
   menuDots: { default: 'ellipsis-horizontal' },
   add: { default: 'add' },
   close: { default: 'close' },
+  edit: { default: 'create-outline' },
   trash: { default: 'trash-outline' },
   dragHandle: { default: 'reorder-three-outline' },
   search: { default: 'search-outline' },
@@ -98,6 +120,20 @@ const ICONS: Record<AppIconName, { default: IoniconName; outline?: IoniconName }
   video: { default: 'videocam', outline: 'videocam-outline' },
   camera: { default: 'camera', outline: 'camera-outline' },
   templates: { default: 'albums', outline: 'albums-outline' },
+  support: { default: 'help-buoy', outline: 'help-buoy-outline' },
+  settings: { default: 'settings', outline: 'settings-outline' },
+  gym: { default: 'business', outline: 'business-outline' },
+  shop: { default: 'storefront', outline: 'storefront-outline' },
+  wallet: { default: 'wallet', outline: 'wallet-outline' },
+  tv: { default: 'tv', outline: 'tv-outline' },
+  colorPalette: { default: 'color-palette', outline: 'color-palette-outline' },
+  catalogBasico: { default: 'fitness-outline', outline: 'fitness-outline' },
+  catalogCalistenia: { default: 'body-outline', outline: 'body-outline' },
+  catalogAthx: { default: 'flash-outline', outline: 'flash-outline' },
+  catalogCrosstraining: { default: 'stopwatch-outline', outline: 'stopwatch-outline' },
+  catalogHype: { default: 'pulse-outline', outline: 'pulse-outline' },
+  catalogHyrox: { default: 'medal-outline', outline: 'medal-outline' },
+  catalogChallenge: { default: 'trophy-outline', outline: 'trophy-outline' },
 };
 
 export function resolveIconName(name: AppIconName, outlined = false): IoniconName {

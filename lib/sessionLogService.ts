@@ -76,7 +76,7 @@ export async function fetchSessionLog(
 
 export async function fetchAthleteSessionLogs(
   athleteId: string,
-  limit = 20,
+  limit = 500,
 ): Promise<SessionLogRecord[]> {
   if (!isSupabaseConfigured) {
     return [...demoLogs.values()]
@@ -119,6 +119,28 @@ export async function fetchSessionLogById(logId: string): Promise<SessionLogReco
 
   if (error || !data) return null;
   return mapRow(data as Record<string, unknown>);
+}
+
+export async function fetchSessionLogsByIds(logIds: string[]): Promise<SessionLogRecord[]> {
+  const uniqueIds = [...new Set(logIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return [];
+
+  if (!isSupabaseConfigured) {
+    return [...demoLogs.values()].filter((log) => uniqueIds.includes(log.id));
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('workout_logs')
+    .select(
+      'id, user_id, entreno_id, athlete_plan_id, program_id, scheduled_date, workout_name, feelings, completed_items, duration, completed_at, updated_at',
+    )
+    .in('id', uniqueIds);
+
+  if (error || !data) return [];
+  return data.map((row) => mapRow(row as Record<string, unknown>));
 }
 
 export async function saveSessionLog(input: {

@@ -1,9 +1,12 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, type RefObject } from 'react';
-import { Platform, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import { ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppBackgroundScaffold } from '@/components/ui/AppBackgroundLogo';
 import { colors, spacing } from '@/constants/theme';
+import { ATHLETE_TAB_BAR_HEIGHT, useBottomSafeInset } from '@/lib/mobileInsets';
+import { isWebPlatform } from '@/lib/platformAccess';
 
 interface ScreenWrapperProps {
   children: React.ReactNode;
@@ -25,6 +28,10 @@ export function ScreenWrapper({
 }: ScreenWrapperProps) {
   const internalScrollRef = useRef<ScrollView>(null);
   const scrollRef = externalScrollRef ?? internalScrollRef;
+  const bottomInset = useBottomSafeInset();
+  const scrollBottomPadding = isWebPlatform()
+    ? spacing.xxl
+    : spacing.xxl + ATHLETE_TAB_BAR_HEIGHT + bottomInset;
 
   useFocusEffect(
     useCallback(() => {
@@ -37,7 +44,12 @@ export function ScreenWrapper({
   const content = scrollable ? (
     <ScrollView
       ref={scrollRef}
-      contentContainerStyle={[styles.scrollContent, padded && styles.padded, style]}
+      contentContainerStyle={[
+        styles.scrollContent,
+        padded && styles.padded,
+        !isWebPlatform() && { paddingBottom: scrollBottomPadding },
+        style,
+      ]}
       showsVerticalScrollIndicator={false}
     >
       {children}
@@ -48,7 +60,7 @@ export function ScreenWrapper({
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {content}
+      <AppBackgroundScaffold style={styles.scaffold}>{content}</AppBackgroundScaffold>
     </SafeAreaView>
   );
 }
@@ -58,9 +70,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  scaffold: {
+    zIndex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: Platform.OS === 'web' ? spacing.xl : spacing.xxl,
+    paddingBottom: spacing.xxl,
   },
   content: {
     flex: 1,

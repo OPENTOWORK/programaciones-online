@@ -12,6 +12,12 @@ import { goalLabels, levelColors, statusColors, colors, spacing, typography } fr
 import { startUserProgram, isProgramActiveForUser } from '@/lib/userProgramService';
 import type { Program, UserProfile, Workout } from '@/lib/types';
 
+function sessionModality(workout: Workout) {
+  if (workout.schedule?.modality) return workout.schedule.modality;
+  const prefix = workout.dayLabel?.split(' · ')[0]?.trim();
+  return prefix || null;
+}
+
 function formatSessionMeta(workout: Workout) {
   const label = workout.workoutDate?.startsWith('2000-')
     ? workout.dayLabel
@@ -107,7 +113,17 @@ export function ProgramInfoContent({
         {program.trainingDays.length > 0 ? (
           <InfoRow label="Días" value={program.trainingDays.join(', ')} />
         ) : null}
+        {program.catalogMonitor ? <InfoRow label="Profesional" value={program.catalogMonitor} /> : null}
       </Card>
+
+      {program.catalogDesignedFor ? (
+        <>
+          <SectionHeader title="Diseñado para" />
+          <Card>
+            <Text style={styles.listItem}>{program.catalogDesignedFor}</Text>
+          </Card>
+        </>
+      ) : null}
 
       {program.equipment.length > 0 ? (
         <>
@@ -142,11 +158,18 @@ export function ProgramInfoContent({
       ) : workouts.length > 0 ? (
         <>
           <SectionHeader title="Sesiones" subtitle={`${workouts.length} sesiones disponibles`} />
-          {workouts.map((workout) => (
+          {workouts.map((workout) => {
+            const modality = sessionModality(workout);
+            return (
             <Card key={workout.id} style={styles.sessionCard}>
               <View style={styles.sessionRow}>
                 <View style={styles.sessionCopy}>
-                  <Text style={styles.sessionName}>{workout.name}</Text>
+                  <View style={styles.sessionTitleRow}>
+                    <Text style={styles.sessionName} numberOfLines={1}>
+                      {workout.name}
+                    </Text>
+                    {modality ? <Badge label={modality} color={colors.metcon} /> : null}
+                  </View>
                   <Text style={styles.sessionMeta}>{formatSessionMeta(workout)}</Text>
                 </View>
                 <SessionCardActions
@@ -158,7 +181,8 @@ export function ProgramInfoContent({
                 />
               </View>
             </Card>
-          ))}
+            );
+          })}
         </>
       ) : (
         <Card style={styles.emptySessionsCard}>
@@ -244,7 +268,13 @@ const styles = StyleSheet.create({
   sessionCard: { marginBottom: spacing.sm },
   sessionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
   sessionCopy: { flex: 1, minWidth: 180 },
-  sessionName: { ...typography.body, color: colors.text, fontWeight: '600' },
+  sessionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  sessionName: { ...typography.body, color: colors.text, fontWeight: '600', flex: 1 },
   sessionMeta: { ...typography.caption, color: colors.textMuted, marginTop: 4 },
   emptySessionsCard: { marginBottom: spacing.md },
   emptySessionsTitle: { ...typography.body, color: colors.text, fontWeight: '600', marginBottom: spacing.xs },

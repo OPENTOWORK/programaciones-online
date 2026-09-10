@@ -7,8 +7,9 @@ import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useProgram } from '@/hooks/usePrograms';
-import { isTrainerRole } from '@/lib/athleteService';
-import { isTrainerEditableCategory } from '@/lib/programService';
+import { HypeCatalogAccessGate } from '@/components/program/HypeCatalogAccessGate';
+import { canEnterHypeCatalogProgram, isPaidHypeCatalogProgram } from '@/lib/hypeCatalog';
+import { canManageTrainerProgram } from '@/lib/programService';
 import { isMetconCatalogProgram } from '@/lib/standardVenueCatalog';
 
 export default function ProgramCalendarScreen() {
@@ -32,8 +33,12 @@ export default function ProgramCalendarScreen() {
     );
   }
 
-  const canEdit = isTrainerRole(user?.role) && isTrainerEditableCategory(program.category);
+  const canEdit = canManageTrainerProgram(user?.role, program.category, program);
   const useGrid = isMetconCatalogProgram(program);
+
+  if (isPaidHypeCatalogProgram(program) && !canEnterHypeCatalogProgram(user?.role)) {
+    return <HypeCatalogAccessGate program={program} />;
+  }
 
   if (useGrid) {
     return (

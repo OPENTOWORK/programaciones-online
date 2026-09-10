@@ -92,6 +92,8 @@ module.exports = ({ config }) => ({
 
   extra: {
 
+    ...appJson.expo.extra,
+
     ...config?.extra,
 
     supabaseUrl: sanitized.url,

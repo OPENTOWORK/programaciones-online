@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, TextInput, useWindowDimensions } from 'react-native';
 
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 
 const LINE_HEIGHT = 18;
 const VERTICAL_PADDING = spacing.sm * 2;
@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: `${colors.accent}44`,
+    borderColor: withAlpha(colors.accent, '44'),
     backgroundColor: colors.background,
     width: '100%',
   },

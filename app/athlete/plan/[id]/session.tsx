@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Text } from 'react-native';
 
+import { SessionPdfCard } from '@/components/workout/SessionPdfCard';
 import { SessionWorkoutView } from '@/components/workout/SessionWorkoutView';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, typography } from '@/constants/theme';
@@ -10,8 +11,9 @@ import { useExerciseVideos } from '@/hooks/useExerciseVideos';
 import { useAthletePlan } from '@/hooks/useAthletePlans';
 import { useSessionRunner } from '@/hooks/useSessionRunner';
 import { combineMainPartsForSave, extractExercisesFromSessionDraft } from '@/lib/sessionBlockSections';
-import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
+import { isPdfOnlyPlanSession, parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import { formatDayLabel } from '@/lib/programSchedulePreview';
+import { PDF_SESSION_DURATION, pdfSessionTitle } from '@/lib/trainerSessionDraft';
 import { allowsTrainerFeedbackVideos } from '@/lib/feedbackVideoAccess';
 import { safeGoBack } from '@/lib/navigation';
 
@@ -28,12 +30,17 @@ export default function AthletePlanSessionScreen() {
   const workout = useMemo(() => {
     if (!plan) return null;
     const draft = parsePersonalizedPlanContent(plan.content, (plan.sessionNumber ?? 1) - 1);
-    const sessionName = draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
+    /* El título de una sesión solo-PDF es el propio documento, igual que en el calendario. */
+    const isPdfOnly = isPdfOnlyPlanSession(plan, draft);
+    const sessionName =
+      isPdfOnly && plan.pdfFileName
+        ? pdfSessionTitle(plan.pdfFileName)
+        : draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
     return {
       name: sessionName,
       sessionNumber: plan.sessionNumber ?? 1,
       kind: draft.kind,
-      estimatedDuration: draft.estimatedDuration,
+      estimatedDuration: isPdfOnly ? PDF_SESSION_DURATION : draft.estimatedDuration,
       warmup: draft.warmup,
       main: combineMainPartsForSave(draft.main, draft.metcon),
       core: draft.core,
@@ -83,6 +90,11 @@ export default function AthletePlanSessionScreen() {
         workout={workout}
         meta={[draft.dayLabel, workout.estimatedDuration].filter(Boolean).join(' · ')}
         scheduledDateLabel={scheduledDateLabel}
+        attachment={
+          plan.pdfUrl ? (
+            <SessionPdfCard fileName={plan.pdfFileName} url={plan.pdfUrl} />
+          ) : null
+        }
         checklist={runner.checklist}
         completed={runner.completed}
         feelings={runner.feelings}

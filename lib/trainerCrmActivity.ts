@@ -17,7 +17,7 @@ export function buildPlanAssignedMessage(
 
   const typeLabel =
     planType === 'home_training'
-      ? 'Entrenamiento a domicilio'
+      ? 'Entrenamiento a domicilio en Madrid'
       : planType === 'gym_training'
         ? 'Programación para gimnasio'
         : 'Plan personalizado';

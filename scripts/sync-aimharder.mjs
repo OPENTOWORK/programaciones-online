@@ -12,6 +12,7 @@ import {
   fetchExerciseVideosForCatalog,
 } from './lib/aimharderVideoExtract.mjs';
 import { upsertExerciseVideos } from './lib/aimharderVideoUpsert.mjs';
+import { normalizeWorkoutToAnnual } from './lib/annualWorkoutImport.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -114,13 +115,26 @@ async function loadTrackPrograms(client) {
   return programIds;
 }
 
-async function upsertWorkout(client, programId, workout) {
+async function upsertWorkout(client, programId, workout, track) {
+  let normalizedWorkout = workout;
+  let scheduleConfig = null;
+
+  if (track) {
+    const annualWorkout = normalizeWorkoutToAnnual(workout, track.key);
+    if (!annualWorkout) {
+      return null;
+    }
+
+    normalizedWorkout = annualWorkout;
+    scheduleConfig = annualWorkout.scheduleConfig;
+  }
+
   const entrenoResult = await client.query(
     `insert into public.entrenos_diarios (
        program_id, workout_date, aimharder_rate_id, name, day_label,
-       estimated_duration, warmup, main_part, core_part, cooldown, synced_at
+       estimated_duration, warmup, main_part, core_part, cooldown, schedule_config, synced_at
      )
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, now())
      on conflict (workout_date, aimharder_rate_id)
      do update set
        program_id = excluded.program_id,
@@ -131,19 +145,21 @@ async function upsertWorkout(client, programId, workout) {
        main_part = excluded.main_part,
        core_part = excluded.core_part,
        cooldown = excluded.cooldown,
+       schedule_config = excluded.schedule_config,
        synced_at = now()
      returning id`,
     [
       programId,
-      workout.workoutDate,
-      workout.aimharderRateId,
-      workout.name,
-      workout.dayLabel,
-      workout.estimatedDuration,
-      workout.warmup,
-      workout.mainPart,
-      workout.corePart,
-      workout.cooldown,
+      normalizedWorkout.workoutDate,
+      normalizedWorkout.aimharderRateId,
+      normalizedWorkout.name,
+      normalizedWorkout.dayLabel,
+      normalizedWorkout.estimatedDuration,
+      normalizedWorkout.warmup,
+      normalizedWorkout.mainPart,
+      normalizedWorkout.corePart,
+      normalizedWorkout.cooldown,
+      scheduleConfig ? JSON.stringify(scheduleConfig) : null,
     ],
   );
 
@@ -151,7 +167,7 @@ async function upsertWorkout(client, programId, workout) {
 
   await client.query(`delete from public.entrenos_ejercicios where entreno_id = $1`, [entrenoId]);
 
-  for (const exercise of workout.exercises) {
+  for (const exercise of normalizedWorkout.exercises) {
     await client.query(
       `insert into public.entrenos_ejercicios (
          entreno_id, sort_order, name, sets, reps, rest, notes, aimharder_ejer_id
@@ -248,6 +264,7 @@ async function main() {
   try {
     await applySql(client, 'aimharder-sync.sql');
     await applySql(client, 'exercise-videos.sql');
+    await applySql(client, 'trainer-program-edit.sql');
     const programIds = await loadTrackPrograms(client);
     const totals = new Map();
     await syncExerciseVideos(client, raw, { videos: videos || fetch });
@@ -258,7 +275,12 @@ async function main() {
         throw new Error(`No hay programa configurado para ${workout.programName}`);
       }
 
-      await upsertWorkout(client, programId, workout);
+      const track = AIMHARDER_TRACKS.find(
+        (entry) => entry.programName.toLowerCase() === workout.programName.toLowerCase(),
+      );
+      const entrenoId = await upsertWorkout(client, programId, workout, track);
+      if (!entrenoId) continue;
+
       totals.set(workout.programName, (totals.get(workout.programName) ?? 0) + 1);
       console.log(
         `✓ [${workout.programName}] ${workout.workoutDate} · ${workout.name} (${workout.exercises.length} ejercicios)`,

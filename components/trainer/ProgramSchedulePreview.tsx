@@ -4,8 +4,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ScheduleCalendarGrid } from '@/components/trainer/ScheduleCalendarGrid';
 import { Card } from '@/components/ui/Card';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { buildScheduleCalendarItems } from '@/lib/scheduleCalendarItems';
+import { isHypeWeeklyChallengeProgram } from '@/lib/hypeCatalog';
 import type { SchedulePreviewItem, ScheduleViewMode } from '@/lib/programSchedulePreview';
 import type { Program, Workout, AthletePlan } from '@/lib/types';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
@@ -54,10 +55,16 @@ export function ProgramSchedulePreview({
   embedded = false,
 }: ProgramSchedulePreviewProps) {
   const isAthlete = variant === 'athlete';
+  const isWeeklyChallenge = isHypeWeeklyChallengeProgram(program);
   const [viewMode, setViewMode] = useState<ScheduleViewMode>(
-    initialViewMode ?? (isAthlete ? 'day' : 'week'),
+    initialViewMode ?? (isWeeklyChallenge ? 'week' : isAthlete ? 'day' : 'week'),
   );
   const [focusDate, setFocusDate] = useState(() => new Date());
+
+  const handleWeeklyChallengeWeekSelect = (monday: Date) => {
+    setFocusDate(monday);
+    setViewMode('week');
+  };
 
   const items = useMemo(
     () =>
@@ -120,33 +127,48 @@ export function ProgramSchedulePreview({
         <ScheduleCalendarGrid
           items={items}
           viewMode={viewMode}
-          onViewModeChange={setViewMode}
+          onViewModeChange={(mode) => {
+            if (isWeeklyChallenge && mode !== 'week' && mode !== 'month') return;
+            setViewMode(mode);
+          }}
           focusDate={focusDate}
           onFocusDateChange={setFocusDate}
           onDayPress={onDayPress}
           onSessionPress={onSessionPress}
           size="athlete"
+          layout={isWeeklyChallenge ? 'weeklyChallenge' : 'default'}
+          onWeeklyChallengeWeekSelect={isWeeklyChallenge ? handleWeeklyChallengeWeekSelect : undefined}
         />
       ) : embedded ? (
         <ScheduleCalendarGrid
           items={items}
           viewMode={viewMode}
-          onViewModeChange={setViewMode}
+          onViewModeChange={(mode) => {
+            if (isWeeklyChallenge && mode !== 'week' && mode !== 'month') return;
+            setViewMode(mode);
+          }}
           focusDate={focusDate}
           onFocusDateChange={setFocusDate}
           onDayPress={onDayPress}
           onSessionPress={onSessionPress}
+          layout={isWeeklyChallenge ? 'weeklyChallenge' : 'default'}
+          onWeeklyChallengeWeekSelect={isWeeklyChallenge ? handleWeeklyChallengeWeekSelect : undefined}
         />
       ) : (
         <ScrollView style={styles.body} nestedScrollEnabled showsVerticalScrollIndicator={false}>
           <ScheduleCalendarGrid
             items={items}
             viewMode={viewMode}
-            onViewModeChange={setViewMode}
+            onViewModeChange={(mode) => {
+              if (isWeeklyChallenge && mode !== 'week' && mode !== 'month') return;
+              setViewMode(mode);
+            }}
             focusDate={focusDate}
             onFocusDateChange={setFocusDate}
             onDayPress={onDayPress}
             onSessionPress={onSessionPress}
+            layout={isWeeklyChallenge ? 'weeklyChallenge' : 'default'}
+            onWeeklyChallengeWeekSelect={isWeeklyChallenge ? handleWeeklyChallengeWeekSelect : undefined}
           />
         </ScrollView>
       )}
@@ -200,7 +222,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     borderWidth: 1,
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}14`,
+    backgroundColor: withAlpha(colors.accent, '14'),
   },
   expandBtnPressed: {
     opacity: 0.8,

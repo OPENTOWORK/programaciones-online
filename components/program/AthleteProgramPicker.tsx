@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { ActionSheetModal } from '@/components/ui/ActionSheetModal';
-import { Card } from '@/components/ui/Card';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 
 export interface AthleteProgramOption {
@@ -15,62 +13,54 @@ interface AthleteProgramPickerProps {
   programs: AthleteProgramOption[];
   selectedId?: string;
   onSelect: (programId: string) => void;
+  defaultExpanded?: boolean;
 }
 
-export function AthleteProgramPicker({ programs, selectedId, onSelect }: AthleteProgramPickerProps) {
-  const [visible, setVisible] = useState(false);
+export function AthleteProgramPicker({
+  programs,
+  selectedId,
+  onSelect,
+  defaultExpanded = false,
+}: AthleteProgramPickerProps) {
   const selected = programs.find((program) => program.id === selectedId) ?? programs[0];
 
   if (programs.length === 0 || !selected) return null;
 
   return (
-    <>
-      <Card style={styles.card}>
-        <Text style={styles.label}>Programación actual</Text>
-        <Pressable
-          onPress={() => setVisible(true)}
-          style={({ pressed }) => [styles.trigger, pressed && styles.triggerPressed]}
-          accessibilityRole="button"
-          accessibilityLabel={`Programación actual: ${selected.name}. Cambiar programación.`}
-        >
-          <Text style={styles.value} numberOfLines={1}>
-            {selected.name}
-          </Text>
-          <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
-        </Pressable>
-      </Card>
-
-      <ActionSheetModal
-        visible={visible}
-        title="Tus programaciones"
-        subtitle="Elige la programación para ver su calendario"
-        actions={programs.map((program) => ({
-          key: program.id,
-          label: program.id === selected.id ? `✓ ${program.name}` : program.name,
-          onPress: () => {
-            onSelect(program.id);
-            setVisible(false);
-          },
-        }))}
-        onClose={() => setVisible(false)}
-      />
-    </>
+    <CollapsibleSection title="Programación actual" defaultExpanded={defaultExpanded}>
+      <View style={styles.options}>
+        {programs.map((program) => {
+          const active = program.id === selected.id;
+          return (
+            <Pressable
+              key={program.id}
+              onPress={() => onSelect(program.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={active ? `${program.name}, seleccionada` : `Elegir ${program.name}`}
+              style={({ pressed }) => [
+                styles.option,
+                active && styles.optionActive,
+                pressed && styles.optionPressed,
+              ]}
+            >
+              <Text style={[styles.optionText, active && styles.optionTextActive]} numberOfLines={2}>
+                {program.name}
+              </Text>
+              {active ? <Ionicons name="checkmark" size={18} color={colors.accent} /> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </CollapsibleSection>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
+  options: {
     gap: spacing.sm,
   },
-  label: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  trigger: {
+  option: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -82,12 +72,21 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surfaceLight,
   },
-  triggerPressed: {
+  optionActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.surface,
+  },
+  optionPressed: {
     opacity: 0.88,
   },
-  value: {
-    ...typography.h3,
-    color: colors.text,
+  optionText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontWeight: '600',
     flex: 1,
+  },
+  optionTextActive: {
+    color: colors.text,
+    fontWeight: '700',
   },
 });

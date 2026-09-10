@@ -13,8 +13,8 @@ import {
   serializeWorkoutBlocks,
 } from '@/lib/workoutBlockBuilder';
 
-/** Tipos de sesión del calendario: normal, activación, metcon o descanso. */
-export type SessionKind = 'session' | 'activation' | 'metcon' | 'rest';
+/** Tipos de sesión del calendario: normal, activación, metcon, descanso o PDF. */
+export type SessionKind = 'session' | 'activation' | 'metcon' | 'rest' | 'pdf';
 
 export const ACTIVATION_SESSION_NAME = 'Activación';
 export const METCON_SESSION_NAME = 'Metcon';
@@ -58,6 +58,18 @@ export function isMetconSessionDraft(draft: Pick<SessionDraft, 'kind'>) {
 
 export function isRestDaySessionDraft(draft: Pick<SessionDraft, 'kind'>) {
   return draft.kind === 'rest';
+}
+
+export function isPdfSessionDraft(draft: Pick<SessionDraft, 'kind' | 'schedule'>) {
+  return draft.kind === 'pdf' || draft.schedule.kind === 'pdf';
+}
+
+/** Etiqueta de duración de una sesión que solo lleva PDF. */
+export const PDF_SESSION_DURATION = 'PDF';
+
+/** Nombre de sesión a partir del nombre del archivo, sin la extensión. */
+export function pdfSessionTitle(fileName: string) {
+  return fileName.replace(/\.pdf$/i, '').trim() || 'PDF';
 }
 
 /** Una copia de sesión pasa a llevar el número siguiente; activación y metcon mantienen nombre. */

@@ -115,7 +115,7 @@ export default function TrainerPreviewSessionScreen() {
         saving={false}
         getVideoId={getVideoId}
         hasVideo={hasVideo}
-        readOnly
+        preview
       />
     </ScreenWrapper>
   );

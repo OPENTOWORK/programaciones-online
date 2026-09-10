@@ -9,7 +9,40 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.trainingprogline.app"
+      "bundleIdentifier": "com.trainingprogline.app",
+      "buildNumber": "1",
+      "icon": "./assets/ios-icon.png",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyTrackingDomains": [],
+        "NSPrivacyCollectedDataTypes": [],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "C617.1",
+              "0A2A.1",
+              "3B52.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "E174.1",
+              "85F4.1"
+            ]
+          }
+        ]
+      }
     },
     "android": {
       "package": "com.trainingprogline.app",
@@ -35,6 +68,9 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-asset",
+      "expo-font",
+      "expo-web-browser",
       "expo-router",
       [
         "expo-splash-screen",
@@ -48,7 +84,8 @@
         "expo-image-picker",
         {
           "photosPermission": "La app necesita acceder a tus fotos para registrar tu progreso físico.",
-          "cameraPermission": "La app necesita la cámara para grabar vídeos de tus ejercicios."
+          "cameraPermission": "La app necesita la cámara para grabar vídeos de tus ejercicios.",
+          "microphonePermission": "La app necesita el micrófono para grabar el audio de tus vídeos de ejercicios."
         }
       ],
       [
@@ -60,6 +97,15 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "supabaseUrl": "https://nsdurlikkuoxqobabixr.supabase.co",
+      "supabaseAnonKey": "sb_publishable_GZfJfr6RdAgbu9W9fy1O1Q_8DAgtf0k",
+      "router": {},
+      "eas": {
+        "projectId": "1f83e52b-5f08-4c43-a449-f8650dbdbf1e"
+      }
+    },
+    "owner": "trainingprogline"
   }
 }

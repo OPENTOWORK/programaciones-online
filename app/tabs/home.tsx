@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AthleteCurrentSchedule } from '@/components/home/AthleteCurrentSchedule';
+import { AthleteGymAccess } from '@/components/home/AthleteGymAccess';
 import { HomeBrandShowcase } from '@/components/home/HomeBrandShowcase';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
@@ -71,6 +72,7 @@ export default function HomeScreen() {
             calendarOffsetY.current = event.nativeEvent.layout.y;
           }}
         >
+          <AthleteGymAccess />
           <AthleteCurrentSchedule preferPersonalized={focusCalendar} forceExpanded={focusCalendar} />
         </View>
       ) : null}
@@ -110,5 +112,6 @@ const styles = StyleSheet.create({
   avatarText: { ...typography.body, color: colors.black, fontWeight: '700' },
   calendarWrap: {
     marginTop: spacing.lg,
+    gap: spacing.md,
   },
 });

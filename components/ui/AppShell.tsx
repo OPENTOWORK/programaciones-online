@@ -1,13 +1,21 @@
 import { View, StyleSheet } from 'react-native';
-import { useSegments } from 'expo-router';
+import { Redirect, usePathname, useSegments } from 'expo-router';
 
 import { AthleteTabBar } from '@/components/ui/AthleteTabBar';
 import { AuthWebShell } from '@/components/ui/AuthWebShell';
+import { GymShell } from '@/components/ui/GymShell';
 import { MobileShell } from '@/components/ui/MobileShell';
 import { TrainerDesktopShell } from '@/components/ui/TrainerDesktopShell';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
-import { isTrainerDesktopWeb, isWebPlatform } from '@/lib/platformAccess';
+import { isGymRole } from '@/lib/athleteService';
+import {
+  isGymRoleAthleteRouteAllowed,
+  isGymTvDisplayRoute,
+  isTrainerDesktopWeb,
+  isWebPlatform,
+  usesGymPanel,
+} from '@/lib/platformAccess';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -34,8 +42,36 @@ function withPersistentTabs(children: React.ReactNode) {
 export function AppShell({ children }: AppShellProps) {
   const { user, isLoading } = useAuth();
   const segments = useSegments();
+  const pathname = usePathname();
+  const isGymPanel = !isLoading && Boolean(user) && usesGymPanel(user?.role);
   const showAthleteTabs =
-    !isLoading && Boolean(user) && !isAuthRoute(segments) && !isLandingRoute(segments) && !isTrainerDesktopWeb(user?.role);
+    !isLoading &&
+    Boolean(user) &&
+    !isAuthRoute(segments) &&
+    !isLandingRoute(segments) &&
+    !isTrainerDesktopWeb(user?.role) &&
+    !isGymPanel;
+
+  const gymRoleBlockedRoute =
+    !isLoading &&
+    isGymRole(user?.role) &&
+    !pathname.startsWith('/gym') &&
+    !pathname.startsWith('/auth') &&
+    !isGymRoleAthleteRouteAllowed(pathname);
+
+  if (gymRoleBlockedRoute) {
+    return <Redirect href="/gym" />;
+  }
+
+  // El CRM de gimnasios usa el mismo panel en web y en la app.
+  // La vista de TV va a pantalla completa, sin el menú lateral.
+  if (isGymTvDisplayRoute([...segments])) {
+    return <>{children}</>;
+  }
+
+  if (isGymPanel && !isAuthRoute(segments)) {
+    return <GymShell>{children}</GymShell>;
+  }
 
   if (!isWebPlatform()) {
     return showAthleteTabs ? withPersistentTabs(children) : <>{children}</>;

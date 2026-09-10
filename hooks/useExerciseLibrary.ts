@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { buildExerciseLibrary, type ExerciseLibraryItem } from '@/lib/exerciseLibrary';
+import {
+  buildExerciseLibrary,
+  mergeExerciseLibrary,
+  type ExerciseLibraryItem,
+} from '@/lib/exerciseLibrary';
+import { fetchExerciseLibraryUploads } from '@/lib/exerciseLibraryUploads';
 
 export function useExerciseLibrary() {
   const [items, setItems] = useState<ExerciseLibraryItem[]>(() => buildExerciseLibrary());
@@ -12,7 +17,8 @@ export function useExerciseLibrary() {
     setError(null);
 
     try {
-      setItems(buildExerciseLibrary());
+      const uploads = await fetchExerciseLibraryUploads();
+      setItems(mergeExerciseLibrary(buildExerciseLibrary(), uploads));
     } catch (loadError) {
       setError(
         loadError instanceof Error

@@ -16,17 +16,20 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useSessionTemplates } from '@/hooks/useSessionTemplates';
 import { safeGoBack } from '@/lib/navigation';
-import { resolveTemplateDropTarget } from '@/lib/sessionTemplateDrag';
+import { resolveTemplateDropTarget, type TemplateGroupViewMode } from '@/lib/sessionTemplateDrag';
 import type { SessionTemplate } from '@/lib/sessionTemplateService';
 import {
   groupTemplatesByFormatTag,
+  groupTemplatesByModalityTag,
   groupTemplatesByTag,
   SESSION_TEMPLATE_FORMAT_TAGS,
+  SESSION_TEMPLATE_MODALITY_TAGS,
   SESSION_TEMPLATE_ZONE_TAGS,
   type SessionTemplateFormatTag,
+  type SessionTemplateModalityTag,
   type SessionTemplateTag,
 } from '@/lib/sessionTemplateTags';
 
@@ -41,7 +44,7 @@ function confirmDelete(name: string, onConfirm: () => void) {
   ]);
 }
 
-type GroupViewMode = 'zone' | 'format';
+type GroupViewMode = TemplateGroupViewMode;
 
 function GroupModeToggle({
   label,
@@ -70,21 +73,37 @@ function GroupModeToggle({
 
 export default function TrainerSessionTemplatesScreen() {
   const router = useRouter();
-  const { templates, isLoading, saving, persistent, error, isTrainer, remove, update } =
+  const { templates, isLoading, saving, persistent, error, isTrainer, isAdmin, remove, update } =
     useSessionTemplates();
   const [optionsFor, setOptionsFor] = useState<SessionTemplate | null>(null);
   const [groupMode, setGroupMode] = useState<GroupViewMode>('zone');
   const [zoneFilter, setZoneFilter] = useState<SessionTemplateTag | null>(null);
   const [formatFilter, setFormatFilter] = useState<SessionTemplateFormatTag | null>(null);
+  const [modalityFilter, setModalityFilter] = useState<SessionTemplateModalityTag | null>(null);
 
   const selectGroupMode = (mode: GroupViewMode) => {
     setGroupMode(mode);
     if (mode === 'zone') {
       setFormatFilter(null);
+      setModalityFilter(null);
       return;
     }
-    setZoneFilter(null);
+    if (mode === 'format') {
+      setZoneFilter(null);
+      setModalityFilter(null);
+      return;
+    }
+    setFormatFilter(null);
   };
+
+  const focusMetconModalities = () => {
+    setGroupMode('modality');
+    setZoneFilter('Metcon');
+    setFormatFilter(null);
+    setModalityFilter(null);
+  };
+
+  const metconModalityView = groupMode === 'modality' && zoneFilter === 'Metcon';
 
   const filteredTemplates = useMemo(() => {
     return templates.filter((template) => {
@@ -92,15 +111,20 @@ export default function TrainerSessionTemplatesScreen() {
         if (zoneFilter && template.tag !== zoneFilter) return false;
         return true;
       }
-      if (formatFilter && template.formatTag !== formatFilter) return false;
+      if (groupMode === 'format') {
+        if (formatFilter && template.formatTag !== formatFilter) return false;
+        return true;
+      }
+      if (zoneFilter === 'Metcon' && template.tag !== 'Metcon') return false;
+      if (modalityFilter && template.modalityTag !== modalityFilter) return false;
       return true;
     });
-  }, [templates, groupMode, zoneFilter, formatFilter]);
+  }, [templates, groupMode, zoneFilter, formatFilter, modalityFilter]);
 
   const groups = useMemo(() => {
-    return groupMode === 'zone'
-      ? groupTemplatesByTag(filteredTemplates)
-      : groupTemplatesByFormatTag(filteredTemplates);
+    if (groupMode === 'zone') return groupTemplatesByTag(filteredTemplates);
+    if (groupMode === 'format') return groupTemplatesByFormatTag(filteredTemplates);
+    return groupTemplatesByModalityTag(filteredTemplates);
   }, [filteredTemplates, groupMode]);
 
   const handleMoveTemplate = useCallback(
@@ -135,7 +159,11 @@ export default function TrainerSessionTemplatesScreen() {
     <ScreenWrapper>
       <SectionHeader
         title="Plantillas"
-        subtitle="Agrupa por zona o formato y arrastra una plantilla a otro grupo para reclasificarla."
+        subtitle={
+          isAdmin
+            ? 'Catálogo de administradores. Agrupa por zona, formato o modalidad y arrastra una plantilla a otro grupo para reclasificarla.'
+            : 'Solo ves las plantillas que creas tú. Agrupa por zona, formato o modalidad y arrastra una a otro grupo para reclasificarla.'
+        }
       />
 
       {!persistent ? (
@@ -161,11 +189,23 @@ export default function TrainerSessionTemplatesScreen() {
           />
           <View style={styles.tagRow}>
             {SESSION_TEMPLATE_ZONE_TAGS.map((option) => {
-              const selected = groupMode === 'zone' && zoneFilter === option;
+              const selected =
+                option === 'Metcon'
+                  ? metconModalityView || (groupMode === 'zone' && zoneFilter === option)
+                  : groupMode === 'zone' && zoneFilter === option;
               return (
                 <Pressable
                   key={option}
                   onPress={() => {
+                    if (option === 'Metcon') {
+                      if (metconModalityView) {
+                        setZoneFilter(null);
+                        setModalityFilter(null);
+                        return;
+                      }
+                      focusMetconModalities();
+                      return;
+                    }
                     if (groupMode !== 'zone') {
                       selectGroupMode('zone');
                       setZoneFilter(option);
@@ -219,6 +259,44 @@ export default function TrainerSessionTemplatesScreen() {
               );
             })}
           </View>
+
+          <GroupModeToggle
+            label="Modalidad"
+            active={groupMode === 'modality'}
+            onPress={() => selectGroupMode('modality')}
+          />
+          {metconModalityView ? (
+            <Text style={styles.metconHint}>
+              Metcon · agrupa por modalidad (Calistenia, ATHX, Hype…)
+            </Text>
+          ) : null}
+          <View style={styles.tagRow}>
+            {SESSION_TEMPLATE_MODALITY_TAGS.map((option) => {
+              const selected = groupMode === 'modality' && modalityFilter === option;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => {
+                    if (groupMode !== 'modality') {
+                      selectGroupMode('modality');
+                      setModalityFilter(option);
+                      return;
+                    }
+                    setModalityFilter(selected ? null : option);
+                  }}
+                  style={({ pressed }) => [
+                    styles.tagChip,
+                    selected && styles.tagChipSelected,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </Card>
       ) : null}
 
@@ -228,8 +306,9 @@ export default function TrainerSessionTemplatesScreen() {
         <Card style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Sin plantillas todavía</Text>
           <Text style={styles.emptyText}>
-            Crea plantillas desde el menú de una sesión y asígnales una etiqueta (All, Tren inferior,
-            Tren superior, Core, Metcon o Descanso).
+            {isAdmin
+              ? 'Crea plantillas desde el menú de una sesión y asígnales una etiqueta (All, Tren inferior, Tren superior, Core, Metcon o Descanso).'
+              : 'El catálogo general es solo de administradores. Crea las tuyas desde el menú de una sesión y asígnales una etiqueta (All, Tren inferior, Tren superior, Core, Metcon o Descanso).'}
           </Text>
         </Card>
       ) : filteredTemplates.length === 0 ? (
@@ -344,7 +423,7 @@ const styles = StyleSheet.create({
   },
   tagChipSelected: {
     borderColor: colors.accent,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
   },
   tagChipText: {
     ...typography.caption,
@@ -353,6 +432,11 @@ const styles = StyleSheet.create({
   },
   tagChipTextSelected: {
     color: colors.accent,
+  },
+  metconHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: -spacing.xs,
   },
   loader: {
     marginTop: spacing.xl,

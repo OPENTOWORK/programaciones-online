@@ -11,7 +11,12 @@ export type ProfileFetchResult =
   | { status: 'unknown'; message: string; code?: string };
 
 export function isValidRole(value: unknown): value is UserRole {
-  return value === 'atleta' || value === 'entrenador';
+  return (
+    value === 'atleta' ||
+    value === 'entrenador' ||
+    value === 'administrador' ||
+    value === 'gimnasio'
+  );
 }
 
 export function profileResultToUserMessage(result: ProfileFetchResult): string {

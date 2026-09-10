@@ -11,10 +11,9 @@ import { SessionCardActions } from '@/components/program/SessionCardActions';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useProgram } from '@/hooks/usePrograms';
-import { isTrainerRole } from '@/lib/athleteService';
 import { safeGoBack } from '@/lib/navigation';
 import { updateProgramCatalog } from '@/lib/programEditService';
-import { isTrainerEditableCategory } from '@/lib/programService';
+import { canManageTrainerProgram } from '@/lib/programService';
 import type { Workout } from '@/lib/types';
 
 function formatSessionMeta(workout: Workout) {
@@ -34,7 +33,7 @@ export default function EditProgramScreen() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const canEdit = isTrainerRole(user?.role) && isTrainerEditableCategory(program?.category);
+  const canEdit = canManageTrainerProgram(user?.role, program?.category, program);
 
   useEffect(() => {
     if (!program) return;
