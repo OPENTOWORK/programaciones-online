@@ -22,15 +22,15 @@ create policy "App release requirements are public"
   to anon, authenticated
   using (true);
 
--- Valores iniciales: no bloquean nada todavía (la versión publicada es la 1.0.13).
+-- Valores iniciales: no bloquean nada todavía (la versión publicada es la 1.0.14).
 insert into public.app_release_requirements (platform, min_supported_version, min_supported_build, latest_version, store_url)
 values
   (
     'android',
     '1.0.0',
     1,
-    '1.0.13',
+    '1.0.14',
     'https://play.google.com/store/apps/details?id=com.trainingprogline.app'
   ),
-  ('ios', '1.0.0', 1, '1.0.13', null)
+  ('ios', '1.0.0', 1, '1.0.14', null)
 on conflict (platform) do nothing;
