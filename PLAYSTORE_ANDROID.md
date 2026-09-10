@@ -6,7 +6,7 @@
 | --- | --- |
 | Nombre en Play Console | Training ProgLine |
 | Nombre del paquete | `com.trainingprogline.app` |
-| Versión | 1.0.14 (versionCode 15) |
+| Versión | 1.0.15 (versionCode 16) |
 | Política de privacidad (URL pública) | `https://carlosgarciacano87-dev.github.io/app-progras/privacy.html` |
 | Eliminación de cuenta (URL pública) | `https://carlosgarciacano87-dev.github.io/app-progras/account-deletion.html` |
 
@@ -58,6 +58,12 @@ npm run build:android
 3. Cuando termine, EAS te dará un enlace para **descargar el `.aab`**.
 
 4. Súbelo en Play Console → **Producción / Prueba interna** → **Crear nueva versión**.
+
+## Política de fotos y vídeos (Google Play)
+
+La app **no declara** `READ_MEDIA_IMAGES` ni `READ_MEDIA_VIDEO`. En Android se usa el selector del sistema (Photo Picker) y esos permisos están bloqueados en `app.json` → `android.blockedPermissions`.
+
+Si Play Console muestra un rechazo por permisos de medios, sube un nuevo `.aab` generado después de ese cambio.
 
 ## Optimización R8 (Google Play)
 

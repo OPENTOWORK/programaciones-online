@@ -1,20 +1,19 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { AppIcon } from '@/components/ui/AppIcon';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useProgressPhotos } from '@/hooks/useProgressPhotos';
+import { ensureMediaLibraryPickerAccess } from '@/lib/mediaLibraryPicker';
 import { formatMonthLabel, type PhotoTipo } from '@/lib/photoService';
 
 async function pickImage() {
-  if (Platform.OS !== 'web') {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      return { error: 'Necesitamos permiso para acceder a tus fotos' };
-    }
+  const permission = await ensureMediaLibraryPickerAccess();
+  if (!permission.granted) {
+    return { error: 'Necesitamos permiso para acceder a tus fotos' };
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -67,9 +66,20 @@ function PhotoSlot({
   );
 }
 
-export function ProgressPhotos({ dense = false }: { dense?: boolean }) {
-  const { photos, isLoading, isUploading, error, uploadPhoto, isDemoMode } = useProgressPhotos();
+export function ProgressPhotos({
+  dense = false,
+  userId,
+  readOnly = false,
+  embedded = false,
+}: {
+  dense?: boolean;
+  userId?: string;
+  readOnly?: boolean;
+  embedded?: boolean;
+}) {
+  const { photos, isLoading, isUploading, error, uploadPhoto, isDemoMode } = useProgressPhotos(userId);
   const [localError, setLocalError] = useState<string | null>(null);
+  const canUpload = !readOnly && !isDemoMode;
 
   const displayError = localError ?? error;
 
@@ -89,8 +99,10 @@ export function ProgressPhotos({ dense = false }: { dense?: boolean }) {
 
   if (isLoading) {
     return (
-      <View style={[styles.section, dense && styles.sectionDense]}>
-        <Text style={[styles.sectionTitle, dense && styles.sectionTitleDense]}>Fotos de progreso</Text>
+      <View style={[styles.section, dense && styles.sectionDense, embedded && styles.sectionEmbedded]}>
+        {embedded ? null : (
+          <Text style={[styles.sectionTitle, dense && styles.sectionTitleDense]}>Fotos de progreso</Text>
+        )}
         <Card style={dense ? styles.denseCard : undefined}>
           <Text style={[styles.loadingText, dense && styles.loadingTextDense]}>Cargando fotos…</Text>
         </Card>
@@ -99,10 +111,12 @@ export function ProgressPhotos({ dense = false }: { dense?: boolean }) {
   }
 
   return (
-    <View style={[styles.section, dense && styles.sectionDense]}>
-      <Text style={[styles.sectionTitle, dense && styles.sectionTitleDense]}>Fotos de progreso</Text>
+    <View style={[styles.section, dense && styles.sectionDense, embedded && styles.sectionEmbedded]}>
+      {embedded ? null : (
+        <Text style={[styles.sectionTitle, dense && styles.sectionTitleDense]}>Fotos de progreso</Text>
+      )}
 
-      {isDemoMode ? (
+      {isDemoMode && !readOnly ? (
         <Card style={dense ? styles.denseCard : undefined}>
           <Text style={[styles.infoText, dense && styles.infoTextDense]}>
             Inicia sesión con tu cuenta para guardar fotos de progreso.
@@ -110,7 +124,15 @@ export function ProgressPhotos({ dense = false }: { dense?: boolean }) {
         </Card>
       ) : null}
 
-      {photos.needsBeforePhoto ? (
+      {readOnly && photos.needsBeforePhoto ? (
+        <Card style={dense ? styles.denseCard : undefined}>
+          <Text style={[styles.infoText, dense && styles.infoTextDense]}>
+            Este atleta todavía no ha subido fotos de progreso.
+          </Text>
+        </Card>
+      ) : null}
+
+      {!readOnly && photos.needsBeforePhoto ? (
         <Card style={[styles.promptCard, dense && styles.promptCardDense]}>
           <View style={[styles.promptHeader, dense && styles.promptHeaderDense]}>
             <View style={[styles.promptIcon, dense && styles.promptIconDense]}>
@@ -127,14 +149,14 @@ export function ProgressPhotos({ dense = false }: { dense?: boolean }) {
             title="Subir foto de antes"
             onPress={() => handleUpload('antes')}
             loading={isUploading}
-            disabled={isDemoMode}
+            disabled={!canUpload}
             style={dense ? styles.denseButton : undefined}
             textStyle={dense ? styles.denseButtonText : undefined}
           />
         </Card>
       ) : null}
 
-      {!photos.needsBeforePhoto && photos.needsMonthlyPhoto ? (
+      {!readOnly && !photos.needsBeforePhoto && photos.needsMonthlyPhoto ? (
         <Card style={[styles.reminderCard, dense && styles.reminderCardDense]}>
           <View style={styles.reminderRow}>
             <AppIcon name="calendar" size={dense ? 16 : 20} color={colors.warning} outlined />
@@ -171,7 +193,7 @@ export function ProgressPhotos({ dense = false }: { dense?: boolean }) {
             />
           </View>
 
-          {!photos.needsMonthlyPhoto && photos.antesPhoto ? (
+          {!readOnly && !photos.needsMonthlyPhoto && photos.antesPhoto ? (
             <Button
               title="Actualizar foto del mes"
               onPress={() => handleUpload('mensual')}
@@ -212,6 +234,9 @@ const styles = StyleSheet.create({
   section: {
     marginTop: spacing.lg,
   },
+  sectionEmbedded: {
+    marginTop: 0,
+  },
   sectionTitle: {
     ...typography.h3,
     color: colors.text,
@@ -239,7 +264,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: borderRadius.full,
-    backgroundColor: `${colors.accent}18`,
+    backgroundColor: withAlpha(colors.accent, '18'),
     alignItems: 'center',
     justifyContent: 'center',
   },

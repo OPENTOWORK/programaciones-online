@@ -2,6 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
 
+import { ensureMediaLibraryPickerAccess } from '@/lib/mediaLibraryPicker';
 import type { ChatAttachmentKind } from '@/lib/types';
 
 export const MAX_CHAT_ATTACHMENTS = 6;
@@ -40,12 +41,17 @@ export async function pickChatImage(
   cancelled?: boolean;
 }> {
   const allowVideo = options?.allowVideo !== false;
-  if (Platform.OS !== 'web') {
-    const permission = fromCamera
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (fromCamera) {
+    if (Platform.OS !== 'web') {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        return { error: 'Necesitamos permiso para usar la cámara.' };
+      }
+    }
+  } else {
+    const permission = await ensureMediaLibraryPickerAccess();
     if (!permission.granted) {
-      return { error: fromCamera ? 'Necesitamos permiso para usar la cámara.' : 'Necesitamos permiso para acceder a tus fotos.' };
+      return { error: 'Necesitamos permiso para acceder a tus fotos.' };
     }
   }
 
@@ -85,11 +91,9 @@ export async function pickChatVideo(): Promise<{
   error?: string;
   cancelled?: boolean;
 }> {
-  if (Platform.OS !== 'web') {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      return { error: 'Necesitamos permiso para acceder a tus videos.' };
-    }
+  const permission = await ensureMediaLibraryPickerAccess();
+  if (!permission.granted) {
+    return { error: 'Necesitamos permiso para acceder a tus videos.' };
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -118,11 +122,9 @@ export async function pickChatGif(): Promise<{
   error?: string;
   cancelled?: boolean;
 }> {
-  if (Platform.OS !== 'web') {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      return { error: 'Necesitamos permiso para acceder a tus archivos.' };
-    }
+  const permission = await ensureMediaLibraryPickerAccess();
+  if (!permission.granted) {
+    return { error: 'Necesitamos permiso para acceder a tus archivos.' };
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
