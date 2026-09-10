@@ -8,8 +8,9 @@ workflows:
       app_store_connect: Codemagic Training ProgLine
 
     environment:
-      groups:
-        - code-signing
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.trainingprogline.app
       node: lts
       xcode: latest
       cocoapods: default
@@ -69,23 +70,6 @@ workflows:
           echo "XCODE_SCHEME=$SCHEME" >> "$CM_ENV"
           echo "Workspace: $WORKSPACE"
           echo "Scheme: $SCHEME"
-
-      - name: Set up keychain
-        script: |
-          set -e
-          keychain initialize
-
-      - name: Fetch or create App Store signing files
-        script: |
-          set -e
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create
-
-      - name: Add signing certificates to keychain
-        script: |
-          set -e
-          keychain add-certificates
 
       - name: Apply provisioning profiles
         script: |
