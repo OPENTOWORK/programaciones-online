@@ -22,7 +22,7 @@ function Sync-ProjectToShortPath {
   Write-Host "Sincronizando proyecto a ruta corta: $buildRoot"
   New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
 
-  $freshDirs = @("app", "components", "constants", "hooks", "lib", "assets", "scripts", "supabase")
+  $freshDirs = @("app", "components", "constants", "data", "hooks", "lib", "assets", "scripts", "supabase")
   foreach ($dir in $freshDirs) {
     $target = Join-Path $buildRoot $dir
     if (Test-Path $target) {

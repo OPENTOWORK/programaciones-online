@@ -2,7 +2,7 @@
   "expo": {
     "name": "Training ProgLine",
     "slug": "programaciones-online",
-    "version": "1.0.10",
+    "version": "1.0.13",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "programaciones-online",
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.trainingprogline.app",
-      "versionCode": 11,
+      "versionCode": 14,
       "adaptiveIcon": {
         "backgroundColor": "#0F1419",
         "backgroundImage": "./assets/android-icon-background.png",
@@ -43,7 +43,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "La app necesita acceder a tus fotos para registrar tu progreso físico."
+          "photosPermission": "La app necesita acceder a tus fotos para registrar tu progreso físico.",
+          "cameraPermission": "La app necesita la cámara para grabar vídeos de tus ejercicios."
         }
       ],
       [
