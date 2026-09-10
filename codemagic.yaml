@@ -75,35 +75,11 @@ workflows:
           set -e
           keychain initialize
 
-      - name: Normalize signing private key
-        script: |
-          set -e
-          if [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
-            echo "CERTIFICATE_PRIVATE_KEY is missing"
-            exit 1
-          fi
-
-          RAW_KEY=/tmp/ios_distribution_private_key.raw
-          NORMALIZED_KEY=/tmp/ios_distribution_private_key.pem
-
-          printf '%s\n' "$CERTIFICATE_PRIVATE_KEY" | tr -d '\r' > "$RAW_KEY"
-          chmod 600 "$RAW_KEY"
-
-          # Validate and rewrite the RSA key in canonical PEM/PKCS#1 format.
-          if ! openssl rsa -in "$RAW_KEY" -traditional -out "$NORMALIZED_KEY" >/dev/null 2>&1; then
-            echo "CERTIFICATE_PRIVATE_KEY is not a valid RSA private key. Re-copy the complete private key file, not the .pub file."
-            exit 1
-          fi
-          chmod 600 "$NORMALIZED_KEY"
-          echo "Signing private key validated and normalized."
-          echo "SIGNING_KEY_FILE=$NORMALIZED_KEY" >> "$CM_ENV"
-
       - name: Fetch or create App Store signing files
         script: |
           set -e
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --certificate-key @file:"$SIGNING_KEY_FILE" \
             --create
 
       - name: Add signing certificates to keychain
