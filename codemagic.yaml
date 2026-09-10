@@ -76,7 +76,7 @@ workflows:
           set -e
           xcode-project use-profiles
 
-      - name: Fix App Store export method for Xcode 26
+      - name: Prepare Xcode 26 export options
         script: |
           set -e
           EXPORT_PLIST="$HOME/export_options.plist"
@@ -84,20 +84,47 @@ workflows:
             echo "Export options plist not found at $EXPORT_PLIST"
             exit 1
           fi
-          echo "Current export method:"
-          /usr/libexec/PlistBuddy -c "Print :method" "$EXPORT_PLIST" || true
-          /usr/libexec/PlistBuddy -c "Set :method app-store-connect" "$EXPORT_PLIST"
-          /usr/bin/plutil -lint "$EXPORT_PLIST"
-          echo "Updated export method:"
-          /usr/libexec/PlistBuddy -c "Print :method" "$EXPORT_PLIST"
 
-      - name: Build IPA
+          # Codemagic generates the signing/profile mapping. Xcode 26 expects
+          # the modern App Store Connect export method name.
+          /usr/bin/plutil -replace method -string app-store-connect "$EXPORT_PLIST"
+          /usr/bin/plutil -lint "$EXPORT_PLIST"
+          echo "Export method: $(/usr/libexec/PlistBuddy -c 'Print :method' "$EXPORT_PLIST")"
+
+      - name: Archive iOS app
         script: |
           set -e
-          xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME" \
-            --export-options-plist "$HOME/export_options.plist"
+          ARCHIVE_PATH="$CM_BUILD_DIR/build/ios/xcarchive/TrainingProgLine.xcarchive"
+          mkdir -p "$(dirname "$ARCHIVE_PATH")"
+
+          xcodebuild \
+            -workspace "$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            archive \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            DEVELOPMENT_TEAM=YTW48FHX37 \
+            'CODE_SIGN_IDENTITY=Apple Distribution' \
+            CODE_SIGN_STYLE=Manual
+
+          echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$CM_ENV"
+
+      - name: Export IPA with Xcode 26
+        script: |
+          set -e
+          EXPORT_PATH="$CM_BUILD_DIR/build/ios/ipa"
+          mkdir -p "$EXPORT_PATH"
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist "$HOME/export_options.plist" \
+            COMPILER_INDEX_STORE_ENABLE=NO
+
+          echo "Generated IPA(s):"
+          find "$EXPORT_PATH" -maxdepth 1 -name '*.ipa' -print
 
     artifacts:
       - build/ios/ipa/*.ipa
