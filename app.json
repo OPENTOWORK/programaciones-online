@@ -8,7 +8,7 @@
     "scheme": "programaciones-online",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.trainingprogline.app",
       "buildNumber": "1",
       "icon": "./assets/ios-icon.png",
