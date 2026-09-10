@@ -18,18 +18,42 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
-          npm install
+          set -e
+          npm ci
+
+      - name: Set iOS version for App Store build
+        script: |
+          set -e
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'app.json';
+          const app = JSON.parse(fs.readFileSync(path, 'utf8'));
+          app.expo.version = process.env.APP_STORE_VERSION;
+          app.expo.ios = app.expo.ios || {};
+          app.expo.ios.bundleIdentifier = process.env.BUNDLE_ID;
+          app.expo.ios.buildNumber = String(process.env.PROJECT_BUILD_NUMBER || process.env.BUILD_NUMBER || '1');
+          fs.writeFileSync(path, JSON.stringify(app, null, 2) + '\n');
+          console.log(`iOS version: ${app.expo.version} (${app.expo.ios.buildNumber})`);
+          console.log(`Bundle ID: ${app.expo.ios.bundleIdentifier}`);
+          NODE
 
       - name: Generate native iOS project
         script: |
-          npx expo prebuild --platform ios --clean
+          set -e
+          npx expo prebuild --platform ios --clean --no-install
+
+      - name: Install CocoaPods dependencies
+        script: |
+          set -e
+          cd ios
+          pod install
 
       - name: Detect Xcode workspace and scheme
         script: |
           set -e
           WORKSPACE=$(find "$CM_BUILD_DIR/ios" -maxdepth 1 -name "*.xcworkspace" -print -quit)
           if [ -z "$WORKSPACE" ]; then
-            echo "No Xcode workspace found after Expo prebuild"
+            echo "No Xcode workspace found after pod install"
             exit 1
           fi
 
@@ -44,37 +68,31 @@ workflows:
           echo "Workspace: $WORKSPACE"
           echo "Scheme: $SCHEME"
 
-      - name: Install CocoaPods dependencies
-        script: |
-          cd ios
-          pod install
-
-      - name: Set iOS App Store version
-        script: |
-          cd ios
-          agvtool new-marketing-version "$APP_STORE_VERSION"
-          agvtool new-version -all "$BUILD_NUMBER"
-
       - name: Set up keychain
         script: |
+          set -e
           keychain initialize
 
       - name: Fetch or create App Store signing files
         script: |
+          set -e
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create
 
       - name: Add signing certificates to keychain
         script: |
+          set -e
           keychain add-certificates
 
       - name: Apply provisioning profiles
         script: |
+          set -e
           xcode-project use-profiles
 
       - name: Build IPA
         script: |
+          set -e
           xcode-project build-ipa \
             --workspace "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME"
