@@ -1,6 +1,7 @@
 import board from '@/data/hype-gym-training-board.json';
 
 import { addDays } from '@/hooks/useGymData';
+import { boardLinesToStructuredContent } from '@/lib/hypeBoardSessionDraft';
 import {
   HYPE_PROGRAM_COLORS,
   gymDateKey,
@@ -19,6 +20,11 @@ const BOARD_SESSIONS = board.sessions as HypeBoardSessionSeed[];
 const BOARD_PROGRAM_NAMES = board.programs as string[];
 const BOARD_FROM = typeof board.from === 'string' ? board.from : undefined;
 const BOARD_TO = typeof board.to === 'string' ? board.to : undefined;
+
+export function hypeBoardDateRange() {
+  if (!BOARD_FROM || !BOARD_TO) return undefined;
+  return { from: BOARD_FROM, to: BOARD_TO };
+}
 
 function weekdayIndex(date: Date) {
   return (date.getDay() + 6) % 7;
@@ -77,7 +83,7 @@ export function buildHypeBoardSessions(range: { from: string; to: string }): Gym
         programId: seed.program,
         programName: seed.program,
         name: seed.title,
-        body: seed.lines.join('\n'),
+        body: boardLinesToStructuredContent(seed.title, seed.lines, seed.program),
         dateKey,
         color: HYPE_PROGRAM_COLORS[seed.program] ?? '#C4C4C4',
       });

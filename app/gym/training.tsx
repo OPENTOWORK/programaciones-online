@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -16,96 +16,87 @@ import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SkeletonBlock } from '@/components/ui/SkeletonBlock';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useGym } from '@/hooks/useGym';
-import { useGymTrainingLinks } from '@/hooks/useGymData';
+import { useGymTrainingManage } from '@/hooks/useGymTrainingManage';
 import {
   deleteGymProgramLink,
   saveGymProgramLink,
   type GymProgramLinkInput,
 } from '@/lib/gymService';
+import { gymTrainingDateLabel, type GymProgramLink } from '@/lib/gymTypes';
 import {
-  GYM_WEEKDAY_LABELS,
-  gymTrainingDateLabel,
-  type GymProgramLink,
-} from '@/lib/gymTypes';
-import { fetchHypeTrainingPrograms, HYPE_PROGRAM_COLORS } from '@/lib/gymTraining';
-import type { Program } from '@/lib/types';
+  groupManageItemsByDate,
+  hiddenTrainingLinkInput,
+  manageItemPreview,
+  manageItemToEditLink,
+  trainingItemTvParams,
+  type GymTrainingManageItem,
+} from '@/lib/gymTrainingManage';
 
-function groupByScheduledDate(links: readonly GymProgramLink[]) {
-  const dated = links.filter((link) => link.scheduledDate);
-  const keys = [...new Set(dated.map((link) => link.scheduledDate as string))].sort();
-  return keys.map((dateKey) => ({
-    key: dateKey,
-    label: gymTrainingDateLabel(dateKey),
-    links: dated.filter((link) => link.scheduledDate === dateKey),
-  }));
-}
-
-function groupByWeekday(links: readonly GymProgramLink[]) {
-  return GYM_WEEKDAY_LABELS.map((label, weekday) => ({
-    weekday,
-    label,
-    links: links.filter((link) => !link.scheduledDate && link.weekday === weekday),
-  })).filter((group) => group.links.length > 0);
-}
-
-function TrainingLinkCard({
-  link,
+function TrainingManageCard({
+  item,
   canEdit,
   onEdit,
   onDelete,
+  onLaunchTv,
 }: {
-  link: GymProgramLink;
+  item: GymTrainingManageItem;
   canEdit: boolean;
   onEdit: () => void;
   onDelete?: () => void;
+  onLaunchTv: () => void;
 }) {
+  const preview = manageItemPreview(item);
+  const previewLines = preview.split('\n').filter(Boolean);
+  const headline = previewLines[0] ?? item.name;
+
   return (
     <View style={styles.card}>
-      <View
-        style={[
-          styles.programDot,
-          { backgroundColor: link.classTypeColor ?? HYPE_PROGRAM_COLORS[link.programName ?? ''] ?? colors.accent },
-        ]}
-      />
+      <View style={[styles.programDot, { backgroundColor: item.color }]} />
       <View style={styles.cardCopy}>
-        <Text style={styles.programName}>
-          {link.sessionDraft?.name ?? link.label ?? link.classTypeName ?? link.programName ?? 'Entrenamiento'}
-        </Text>
-        {link.classTypeName && (link.sessionDraft?.name || link.label) ? (
-          <Text style={styles.cardMeta}>{link.classTypeName}</Text>
-        ) : null}
-        {link.publishedDate ? (
+        <Text style={styles.programName}>{headline}</Text>
+        <Text style={styles.cardMeta}>{item.classTypeName ?? item.programName}</Text>
+        {item.publishedDate ? (
           <Text style={styles.cardMeta}>
-            Publicación · {gymTrainingDateLabel(link.publishedDate)}
-            {link.publishedTime ? ` · ${link.publishedTime}` : ''}
+            Publicación · {gymTrainingDateLabel(item.publishedDate)}
+            {item.publishedTime ? ` · ${item.publishedTime}` : ''}
           </Text>
         ) : null}
-        {link.scheduledDate || link.weekday != null ? (
-          <Text style={styles.cardMeta}>
-            Entrenamiento · {gymTrainingDateLabel(link.scheduledDate, link.weekday)}
+        <Text style={styles.cardMeta}>Entrenamiento · {gymTrainingDateLabel(item.dateKey)}</Text>
+        {previewLines.length > 1 ? (
+          <Text style={styles.cardPreview} numberOfLines={3}>
+            {previewLines.slice(1).join('\n')}
           </Text>
         ) : null}
       </View>
-      {canEdit ? (
-        <View style={styles.cardActions}>
-          <Pressable
-            onPress={onEdit}
-            accessibilityLabel="Editar"
-            style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
-          >
-            <AppIcon name="edit" size={16} color={colors.textSecondary} />
-          </Pressable>
-          {onDelete ? (
+      <View style={styles.cardActions}>
+        <Pressable
+          onPress={onLaunchTv}
+          accessibilityLabel="Lanzar a TV"
+          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+        >
+          <AppIcon name="tv" size={16} color={colors.accent} />
+        </Pressable>
+        {canEdit ? (
+          <>
             <Pressable
-              onPress={onDelete}
-              accessibilityLabel="Quitar"
+              onPress={onEdit}
+              accessibilityLabel="Editar"
               style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
             >
-              <AppIcon name="trash" size={16} color={colors.danger} />
+              <AppIcon name="edit" size={16} color={colors.textSecondary} />
             </Pressable>
-          ) : null}
-        </View>
-      ) : null}
+            {onDelete ? (
+              <Pressable
+                onPress={onDelete}
+                accessibilityLabel="Quitar"
+                style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+              >
+                <AppIcon name="trash" size={16} color={colors.danger} />
+              </Pressable>
+            ) : null}
+          </>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -113,23 +104,14 @@ function TrainingLinkCard({
 export default function GymTrainingScreen() {
   const router = useRouter();
   const { gym, permissions } = useGym();
-  const { links, classTypes, isLoading, error, refresh } = useGymTrainingLinks();
-  const [programs, setPrograms] = useState<Program[]>([]);
+  const { items, classTypes, programs, isLoading, error, refresh } = useGymTrainingManage();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<GymProgramLink | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<GymProgramLink | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<GymTrainingManageItem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void fetchHypeTrainingPrograms().then(setPrograms);
-  }, []);
-
-  const dateGroups = useMemo(() => groupByScheduledDate(links), [links]);
-  const weekdayGroups = useMemo(() => groupByWeekday(links), [links]);
-  const unscheduled = useMemo(
-    () => links.filter((link) => !link.scheduledDate && link.weekday == null),
-    [links],
-  );
+  const dateGroups = useMemo(() => groupManageItemsByDate(items), [items]);
   const canEdit = permissions.canManage;
 
   const handleSubmit = async (input: GymProgramLinkInput) => {
@@ -140,13 +122,53 @@ export default function GymTrainingScreen() {
   };
 
   const handleDelete = async () => {
-    if (!pendingDelete) return;
+    if (!pendingDelete || !gym) return;
     setBusy(true);
-    const result = await deleteGymProgramLink(pendingDelete.id);
+    setActionError(null);
+
+    let result: { error?: string } = { error: undefined };
+    if (pendingDelete.link?.id) {
+      result = await deleteGymProgramLink(pendingDelete.link.id);
+    } else {
+      const hiddenInput = hiddenTrainingLinkInput(pendingDelete, classTypes, programs);
+      if (!hiddenInput) {
+        result = { error: 'No se pudo identificar la modalidad de este entrenamiento.' };
+      } else {
+        result = await saveGymProgramLink(gym.id, hiddenInput);
+      }
+    }
+
     setBusy(false);
     setPendingDelete(null);
-    if (!result.error) refresh();
+    if (result.error) {
+      setActionError(result.error);
+      return;
+    }
+    refresh();
   };
+
+  const launchToTv = (item: GymTrainingManageItem) => {
+    router.push({
+      pathname: '/gym/tv/[workoutId]',
+      params: trainingItemTvParams(item),
+    });
+  };
+
+  const openEditor = (item: GymTrainingManageItem) => {
+    if (!gym) return;
+    const link = manageItemToEditLink(item, gym.id, classTypes, programs);
+    if (!link) {
+      setActionError('No se pudo abrir este entrenamiento para editar.');
+      return;
+    }
+    setActionError(null);
+    setEditing(link);
+    setFormOpen(true);
+  };
+
+  const deleteLabel = pendingDelete
+    ? `${pendingDelete.classTypeName ?? pendingDelete.programName} · ${gymTrainingDateLabel(pendingDelete.dateKey)}`
+    : '';
 
   return (
     <GymScreen>
@@ -169,9 +191,11 @@ export default function GymTrainingScreen() {
         />
 
         {error ? <GymErrorBanner message={error} onRetry={refresh} /> : null}
+        {actionError ? <GymErrorBanner message={actionError} onRetry={() => setActionError(null)} /> : null}
 
         {isLoading ? (
           <View style={styles.skeleton}>
+            <SkeletonBlock height={88} />
             <SkeletonBlock height={88} />
             <SkeletonBlock height={88} />
           </View>
@@ -189,11 +213,11 @@ export default function GymTrainingScreen() {
               />
             }
           />
-        ) : links.length === 0 ? (
+        ) : items.length === 0 ? (
           <GymEmptyState
             icon="strength"
-            title="Todavía no hay entrenamientos asignados"
-            text="Elige la modalidad, la fecha de publicación y la fecha del entrenamiento."
+            title="Todavía no hay entrenamientos en el calendario"
+            text="Cuando haya entrenos publicados en el calendario, aparecerán aquí para editarlos o cambiar sus fechas."
             action={
               canEdit ? (
                 <Button
@@ -212,54 +236,19 @@ export default function GymTrainingScreen() {
           <View style={styles.list}>
             {dateGroups.map((group) => (
               <View key={group.key} style={styles.dayGroup}>
-                <Text style={styles.dayTitle}>{group.label}</Text>
-                {group.links.map((link) => (
-                  <TrainingLinkCard
-                    key={link.id}
-                    link={link}
+                <Text style={styles.dayTitle}>{gymTrainingDateLabel(group.key)}</Text>
+                {group.items.map((item) => (
+                  <TrainingManageCard
+                    key={item.id}
+                    item={item}
                     canEdit={canEdit}
-                    onEdit={() => {
-                      setEditing(link);
-                      setFormOpen(true);
-                    }}
-                    onDelete={() => setPendingDelete(link)}
+                    onEdit={() => openEditor(item)}
+                    onDelete={() => setPendingDelete(item)}
+                    onLaunchTv={() => launchToTv(item)}
                   />
                 ))}
               </View>
             ))}
-            {weekdayGroups.map((group) => (
-              <View key={`weekday-${group.weekday}`} style={styles.dayGroup}>
-                <Text style={styles.dayTitle}>{group.label}</Text>
-                {group.links.map((link) => (
-                  <TrainingLinkCard
-                    key={link.id}
-                    link={link}
-                    canEdit={canEdit}
-                    onEdit={() => {
-                      setEditing(link);
-                      setFormOpen(true);
-                    }}
-                    onDelete={() => setPendingDelete(link)}
-                  />
-                ))}
-              </View>
-            ))}
-            {unscheduled.length > 0 ? (
-              <View style={styles.dayGroup}>
-                <Text style={styles.dayTitle}>Sin día</Text>
-                {unscheduled.map((link) => (
-                  <TrainingLinkCard
-                    key={link.id}
-                    link={link}
-                    canEdit={canEdit}
-                    onEdit={() => {
-                      setEditing(link);
-                      setFormOpen(true);
-                    }}
-                  />
-                ))}
-              </View>
-            ) : null}
           </View>
         )}
 
@@ -278,7 +267,7 @@ export default function GymTrainingScreen() {
         <ConfirmModal
           visible={pendingDelete !== null}
           title="Quitar entrenamiento"
-          message={`Se dejará de asignar ${pendingDelete?.programName ?? 'esta programación'} a ${pendingDelete?.classTypeName ?? 'esa modalidad'}.`}
+          message={`Se quitará del calendario: ${deleteLabel}.`}
           confirmLabel="Quitar"
           destructive
           busy={busy}
@@ -311,7 +300,7 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     padding: spacing.md,
     borderWidth: 1,
@@ -324,6 +313,7 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     flexShrink: 0,
+    marginTop: 4,
   },
   cardCopy: {
     flex: 1,
@@ -338,6 +328,12 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  cardPreview: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    lineHeight: 16,
   },
   cardActions: {
     flexDirection: 'row',

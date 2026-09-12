@@ -63,9 +63,11 @@ interface ExerciseVideoEmbedProps {
   youtubeVideoId: string;
   title: string;
   style?: ViewStyle;
+  /** Ocupa el contenedor padre (p. ej. reproductor TV 16:9). */
+  fill?: boolean;
 }
 
-export function ExerciseVideoEmbed({ youtubeVideoId, title, style }: ExerciseVideoEmbedProps) {
+export function ExerciseVideoEmbed({ youtubeVideoId, title, style, fill = false }: ExerciseVideoEmbedProps) {
   const [loading, setLoading] = useState(true);
   const isAppActive = useAppActive();
   const embedUrl = getYoutubeEmbedUrl(youtubeVideoId);
@@ -73,7 +75,7 @@ export function ExerciseVideoEmbed({ youtubeVideoId, title, style }: ExerciseVid
 
   if (Platform.OS === 'web') {
     return (
-      <View style={[styles.container, style]}>
+      <View style={[fill ? styles.fillContainer : styles.container, style]}>
         {/* eslint-disable-next-line react/no-unknown-property */}
         <iframe
           src={embedUrl}
@@ -83,7 +85,8 @@ export function ExerciseVideoEmbed({ youtubeVideoId, title, style }: ExerciseVid
           style={{
             border: 'none',
             backgroundColor: colors.black,
-            minHeight: 220,
+            minHeight: fill ? undefined : 220,
+            display: 'block',
           }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
           allowFullScreen
@@ -93,7 +96,7 @@ export function ExerciseVideoEmbed({ youtubeVideoId, title, style }: ExerciseVid
   }
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={[fill ? styles.fillContainer : styles.container, style]}>
       {loading ? (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={colors.accent} />
@@ -128,6 +131,12 @@ const styles = StyleSheet.create({
     minHeight: 220,
     aspectRatio: 16 / 9,
     borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.black,
+  },
+  fillContainer: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 0,
     overflow: 'hidden',
     backgroundColor: colors.black,
   },

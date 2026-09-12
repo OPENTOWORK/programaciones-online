@@ -3,6 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDays, startOfWeek } from '@/hooks/useGymData';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useGym } from '@/hooks/useGym';
+import { getCachedExerciseVideoCatalog } from '@/lib/exerciseVideoCatalogCache';
+import { fetchGymProgramLinks } from '@/lib/gymService';
+import { mergeSessionsWithProgramLinks } from '@/lib/gymTrainingManage';
 import {
   fetchGymTrainingSessions,
   fetchHypeTrainingPrograms,
@@ -15,6 +18,7 @@ import {
 import { isHypeGym } from '@/lib/hypeGymSchedule';
 import { buildHypeBoardSessions, hypeBoardPrograms } from '@/lib/hypeGymTrainingBoard';
 import { formatMonthLabel, getMonthGrid, shiftMonth } from '@/lib/programSchedulePreview';
+import type { GymProgramLink } from '@/lib/gymTypes';
 import type { Program } from '@/lib/types';
 
 export type GymTrainingView = 'week' | 'month';
@@ -26,6 +30,7 @@ export function useGymTrainingWeek() {
   const [view, setView] = useState<GymTrainingView>('week');
   const [programs, setPrograms] = useState<Program[]>([]);
   const [sessions, setSessions] = useState<GymTrainingSession[]>([]);
+  const [programLinks, setProgramLinks] = useState<GymProgramLink[]>([]);
   const [programFilters, setProgramFilters] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,30 +79,39 @@ export function useGymTrainingWeek() {
     async ({ silent = false }: { silent?: boolean } = {}) => {
       if (gymLoading) return;
 
-      if (hypeOnly) {
-        setSessions(buildHypeBoardSessions(range));
-        setError(null);
-        setIsLoading(false);
-        return;
-      }
-
-      if (programs.length === 0) return;
       if (!silent) setIsLoading(true);
       try {
+        const linksResult = gym ? await fetchGymProgramLinks(gym.id) : { data: [] as GymProgramLink[] };
+        setProgramLinks(linksResult.data ?? []);
+
+        if (hypeOnly) {
+          setSessions(buildHypeBoardSessions(range));
+          setError(linksResult.error ?? null);
+          return;
+        }
+
+        if (programs.length === 0) return;
+
         const loadedSessions = await fetchGymTrainingSessions(programs, range);
         setSessions(loadedSessions);
-        setError(null);
+        setError(linksResult.error ?? null);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'No se pudieron cargar los entrenos.');
       } finally {
         setIsLoading(false);
       }
     },
-    [gymLoading, hypeOnly, programs, range],
+    [gym, gymLoading, hypeOnly, programs, range],
   );
 
   useEffect(() => {
     void loadSessions();
+  }, [loadSessions]);
+
+  useEffect(() => {
+    void getCachedExerciseVideoCatalog().finally(() => {
+      void loadSessions({ silent: true });
+    });
   }, [loadSessions]);
 
   useFocusRefresh(() => loadSessions({ silent: true }));
@@ -107,9 +121,14 @@ export function useGymTrainingWeek() {
     [weekStart],
   );
 
+  const mergedSessions = useMemo(
+    () => mergeSessionsWithProgramLinks(sessions, programLinks),
+    [programLinks, sessions],
+  );
+
   const weekSessions = useMemo(
-    () => sessionsForWeek(sessions, weekStart, programFilters),
-    [programFilters, sessions, weekStart],
+    () => sessionsForWeek(mergedSessions, weekStart, programFilters),
+    [mergedSessions, programFilters, weekStart],
   );
 
   const sessionsByDay = useMemo(() => {
@@ -117,12 +136,12 @@ export function useGymTrainingWeek() {
       const selected = new Set(programFilters);
       const filtered =
         selected.size === 0
-          ? sessions
-          : sessions.filter((session) => selected.has(session.programId));
+          ? mergedSessions
+          : mergedSessions.filter((session) => selected.has(session.programId));
       return groupSessionsByDay(monthDays, filtered);
     }
     return groupSessionsByDay(days, weekSessions);
-  }, [days, monthDays, programFilters, sessions, view, weekSessions]);
+  }, [days, mergedSessions, monthDays, programFilters, view, weekSessions]);
 
   const toggleProgramFilter = useCallback((programId: string) => {
     setProgramFilters((current) =>

@@ -11,13 +11,15 @@ import { withTimeout } from '@/lib/withTimeout';
 /** Si la comprobación tarda más que esto, se arranca sin bloquear y se reintenta después. */
 const CHECK_TIMEOUT_MS = 4000;
 
+let updateGateReady = false;
+
 /**
  * Comprueba al arrancar (y cada vez que la app vuelve al primer plano) si la versión
  * instalada sigue soportada. Nunca bloquea el arranque: si la consulta falla, se sigue.
  */
 export function useAppUpdateGate() {
   const [status, setStatus] = useState<AppUpdateStatus>(NO_UPDATE_REQUIRED);
-  const [isChecking, setIsChecking] = useState(true);
+  const [isChecking, setIsChecking] = useState(!updateGateReady);
   const isActive = useAppActive();
   const wasActiveRef = useRef(isActive);
 
@@ -27,6 +29,7 @@ export function useAppUpdateGate() {
     } catch {
       setStatus(NO_UPDATE_REQUIRED);
     } finally {
+      updateGateReady = true;
       setIsChecking(false);
     }
   }, []);

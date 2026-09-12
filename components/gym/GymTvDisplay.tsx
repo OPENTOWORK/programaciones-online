@@ -1,9 +1,21 @@
-import { useEffect } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
+import { GymTvVideoPanel } from '@/components/gym/GymTvVideoPanel';
+import {
+  GymTvBodyLines,
+  GymTvStructuredBlocks,
+  GymTvWorkoutBlocks,
+} from '@/components/gym/GymTvWorkoutBlocks';
+import { isHyroxProgram } from '@/lib/hypeBoardSessionDraft';
+import { isStructuredWorkoutContent } from '@/lib/workoutContentParser';
 import { AppLogo } from '@/components/ui/AppLogo';
-import { GymTvWorkoutBlocks } from '@/components/gym/GymTvWorkoutBlocks';
 import { AppIcon } from '@/components/ui/AppIcon';
+import {
+  collectGymTvExerciseLines,
+  collectGymTvExerciseVideos,
+  parseGymTvContentLines,
+} from '@/lib/gymTvWorkout';
 import { HYPE_PROGRAM_COLORS } from '@/lib/gymTraining';
 import type { Workout } from '@/lib/types';
 
@@ -39,7 +51,39 @@ export function GymTvDisplay({
   body?: string;
   onClose: () => void;
 }) {
+  const { width } = useWindowDimensions();
   const accent = HYPE_PROGRAM_COLORS[programName] ?? '#FF3B30';
+  const wide = width >= 1100;
+
+  const bodyLines = useMemo(
+    () => (body ? parseGymTvContentLines(body, programName) : []),
+    [body, programName],
+  );
+  const workoutLines = useMemo(
+    () => (workout ? collectGymTvExerciseLines(workout) : []),
+    [workout],
+  );
+  const usesStructuredBody = Boolean(
+    body && !isHyroxProgram(programName) && (isStructuredWorkoutContent(body) || body.includes('•')),
+  );
+  const tvVideos = useMemo(
+    () => collectGymTvExerciseVideos([...workoutLines, ...bodyLines]),
+    [bodyLines, workoutLines],
+  );
+
+  const tvVideosKey = useMemo(
+    () => tvVideos.map((video) => `${video.key}:${video.youtubeVideoId}`).join('|'),
+    [tvVideos],
+  );
+  const [activeVideoKey, setActiveVideoKey] = useState<string | undefined>(tvVideos[0]?.key);
+
+  useEffect(() => {
+    setActiveVideoKey(tvVideos[0]?.key);
+  }, [tvVideosKey, tvVideos]);
+
+  const handleActiveVideoChange = useCallback((video: { key: string }) => {
+    setActiveVideoKey(video.key);
+  }, []);
 
   useEffect(() => {
     enterFullscreen();
@@ -55,12 +99,14 @@ export function GymTvDisplay({
     };
   }, [onClose]);
 
+  const sessionTitle = title ?? workout?.name;
+
   return (
     <View style={styles.page}>
       <View style={styles.header}>
         <View style={styles.brand}>
           <AppLogo size={52} />
-          <View>
+          <View style={styles.brandCopy}>
             <Text style={styles.gymName}>{gymName}</Text>
             <Text style={[styles.program, { color: accent }]}>{programName}</Text>
           </View>
@@ -77,20 +123,40 @@ export function GymTvDisplay({
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} contentInsetAdjustmentBehavior="automatic">
-        {body ? (
-          <Text style={styles.boardBody}>{body}</Text>
-        ) : workout ? (
-          <>
-            {title || workout.name ? (
-              <Text style={styles.title}>{title ?? workout.name}</Text>
-            ) : null}
-            <GymTvWorkoutBlocks workout={workout} size="tv" />
-          </>
-        ) : (
-          <Text style={styles.boardEmpty}>Esta sesión todavía no tiene bloques.</Text>
-        )}
-      </ScrollView>
+      <View style={[styles.main, wide ? styles.mainWide : styles.mainStacked]}>
+        <ScrollView
+          style={styles.workoutColumn}
+          contentContainerStyle={styles.workoutContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {sessionTitle ? <Text style={styles.title}>{sessionTitle}</Text> : null}
+
+          {body ? (
+            usesStructuredBody ? (
+              <GymTvStructuredBlocks content={body} accent={accent} activeVideoKey={activeVideoKey} />
+            ) : (
+              <GymTvBodyLines lines={bodyLines} accent={accent} />
+            )
+          ) : workout ? (
+            <GymTvWorkoutBlocks
+              workout={workout}
+              size="tv"
+              accent={accent}
+              activeVideoKey={activeVideoKey}
+            />
+          ) : (
+            <Text style={styles.boardEmpty}>Esta sesión todavía no tiene bloques.</Text>
+          )}
+        </ScrollView>
+
+        <View style={[styles.videoColumn, wide ? styles.videoColumnWide : styles.videoColumnStacked]}>
+          <GymTvVideoPanel
+            accent={accent}
+            videos={tvVideos}
+            onActiveChange={handleActiveVideoChange}
+          />
+        </View>
+      </View>
     </View>
   );
 }
@@ -117,6 +183,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     flex: 1,
+    minWidth: 0,
+  },
+  brandCopy: {
     minWidth: 0,
   },
   gymName: {
@@ -156,27 +225,56 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.8,
   },
-  body: {
-    paddingHorizontal: 36,
-    paddingVertical: 32,
-    gap: 28,
+  main: {
+    flex: 1,
+    minHeight: 0,
+  },
+  mainWide: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 24,
+    paddingLeft: 28,
+    paddingRight: 20,
+    paddingVertical: 20,
+  },
+  mainStacked: {
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    gap: 24,
+  },
+  workoutColumn: {
+    flex: 0.38,
+    minWidth: 0,
+    maxWidth: '40%',
+  },
+  workoutContent: {
+    gap: 24,
+    paddingBottom: 24,
+    alignItems: 'flex-start',
+  },
+  videoColumn: {
+    minWidth: 0,
+  },
+  videoColumnWide: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: 'stretch',
+    paddingTop: 0,
+  },
+  videoColumnStacked: {
+    width: '100%',
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 42,
+    fontSize: 40,
     fontWeight: '800',
-    textAlign: 'center',
-  },
-  boardBody: {
-    color: '#E8EEF4',
-    fontSize: 28,
-    lineHeight: 36,
-    fontWeight: '700',
-    textAlign: 'center',
+    textAlign: 'left',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   boardEmpty: {
     color: '#9AA3AD',
     fontSize: 24,
-    textAlign: 'center',
+    textAlign: 'left',
   },
 });

@@ -5,8 +5,9 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { GymTvDisplay } from '@/components/gym/GymTvDisplay';
 import { Button } from '@/components/ui/Button';
 import { useGym } from '@/hooks/useGym';
+import { fetchGymProgramLinkById } from '@/lib/gymService';
+import { linkToTrainingSession } from '@/lib/gymTrainingManage';
 import { findHypeBoardSessionById } from '@/lib/hypeGymTrainingBoard';
-import { gymSessionBoardText } from '@/lib/gymTraining';
 import { normalizeRouteParam } from '@/lib/routeParams';
 import { fetchWorkoutById } from '@/lib/workoutService';
 import type { Workout } from '@/lib/types';
@@ -34,6 +35,8 @@ export default function GymTvDisplayScreen() {
   const dateKey = normalizeRouteParam(params.dateKey);
 
   const [workout, setWorkout] = useState<Workout | null>(null);
+  const [linkBody, setLinkBody] = useState<string | undefined>();
+  const [linkTitle, setLinkTitle] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +56,8 @@ export default function GymTvDisplayScreen() {
 
     if (boardSession) {
       setWorkout(null);
+      setLinkBody(undefined);
+      setLinkTitle(undefined);
       setError(null);
       setIsLoading(false);
       return;
@@ -60,10 +65,33 @@ export default function GymTvDisplayScreen() {
 
     let cancelled = false;
     setIsLoading(true);
-    void fetchWorkoutById(workoutId).then((loaded) => {
+    setLinkBody(undefined);
+    setLinkTitle(undefined);
+
+    void fetchWorkoutById(workoutId).then(async (loaded) => {
       if (cancelled) return;
-      setWorkout(loaded);
-      setError(loaded ? null : 'No se pudo cargar esta sesión.');
+      if (loaded) {
+        setWorkout(loaded);
+        setError(null);
+        setIsLoading(false);
+        return;
+      }
+
+      const linkResult = await fetchGymProgramLinkById(workoutId);
+      if (cancelled) return;
+
+      if (linkResult.data) {
+        const session = linkToTrainingSession(linkResult.data);
+        setWorkout(null);
+        setLinkBody(session.body);
+        setLinkTitle(session.name);
+        setError(null);
+        setIsLoading(false);
+        return;
+      }
+
+      setWorkout(null);
+      setError(linkResult.error ?? 'No se pudo cargar esta sesión.');
       setIsLoading(false);
     });
 
@@ -81,7 +109,7 @@ export default function GymTvDisplayScreen() {
     );
   }
 
-  if (!workout && !boardSession) {
+  if (!workout && !boardSession && !linkBody) {
     return (
       <View style={styles.fallback}>
         <Text style={styles.fallbackTitle}>{error ?? 'Sesión no disponible'}</Text>
@@ -96,8 +124,8 @@ export default function GymTvDisplayScreen() {
       programName={programName || boardSession?.programName || 'Entrenamiento'}
       dateLabel={formatTvDate(dateKey || workout?.workoutDate || boardSession?.dateKey)}
       workout={workout ?? undefined}
-      title={boardSession ? undefined : workout?.name}
-      body={boardSession ? gymSessionBoardText(boardSession) : undefined}
+      title={boardSession ? undefined : linkTitle ?? workout?.name}
+      body={boardSession?.body ?? linkBody}
       onClose={close}
     />
   );

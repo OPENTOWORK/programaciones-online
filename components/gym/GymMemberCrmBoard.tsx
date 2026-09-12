@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { DraggableGymMemberCard } from '@/components/gym/DraggableGymMemberCard';
+import { GymMemberCrmCard } from '@/components/gym/GymMemberCrmCard';
 import { GymEmptyState, GymErrorBanner } from '@/components/gym/GymScreen';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/SkeletonBlock';
@@ -19,6 +20,15 @@ const COLUMN_WIDTH = 260;
 const EDGE_ZONE = 56;
 
 type ColumnBounds = { stageKey: GymMemberPipelineStage; x: number; width: number };
+
+type DragOverlay = {
+  member: GymMember;
+  pageX: number;
+  pageY: number;
+  width: number;
+  offsetX: number;
+  offsetY: number;
+};
 
 export function GymMemberCrmBoard({
   members,
@@ -40,15 +50,21 @@ export function GymMemberCrmBoard({
   const [movingId, setMovingId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropStageKey, setDropStageKey] = useState<GymMemberPipelineStage | null>(null);
+  const [dragOverlay, setDragOverlay] = useState<DragOverlay | null>(null);
 
   const boardScrollRef = useRef<ScrollView | null>(null);
   const scrollXRef = useRef(0);
   const columnNodesRef = useRef(new Map<GymMemberPipelineStage, View | null>());
+  const cardNodesRef = useRef(new Map<string, View | null>());
   const columnBoundsRef = useRef<ColumnBounds[]>([]);
   const autoScrollDirRef = useRef<'left' | 'right' | null>(null);
   const autoScrollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const boardBoundsRef = useRef<{ x: number; width: number } | null>(null);
   const boardWrapperRef = useRef<View | null>(null);
+  const dropStageRef = useRef<GymMemberPipelineStage | null>(null);
+  const dragOverlayRef = useRef<DragOverlay | null>(null);
+  const dropRafRef = useRef<number | null>(null);
+  const overlayRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!draggingId) setLocalMembers(members);
@@ -118,6 +134,58 @@ export function GymMemberCrmBoard({
     return match?.stageKey ?? null;
   }, []);
 
+  const scheduleInFrame = useCallback((slotRef: { current: number | null }, task: () => void) => {
+    if (slotRef.current !== null) return;
+    const run = () => {
+      slotRef.current = null;
+      task();
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      slotRef.current = requestAnimationFrame(run);
+    } else {
+      slotRef.current = setTimeout(run, 16) as unknown as number;
+    }
+  }, []);
+
+  const cancelFrame = useCallback((slotRef: { current: number | null }) => {
+    if (slotRef.current === null) return;
+    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(slotRef.current);
+    else clearTimeout(slotRef.current);
+    slotRef.current = null;
+  }, []);
+
+  const scheduleDropStage = useCallback(
+    (stageKey: GymMemberPipelineStage | null) => {
+      if (dropStageRef.current === stageKey) return;
+      dropStageRef.current = stageKey;
+      scheduleInFrame(dropRafRef, () => setDropStageKey(dropStageRef.current));
+    },
+    [scheduleInFrame],
+  );
+
+  const scheduleOverlayMove = useCallback(
+    (pageX: number, pageY: number) => {
+      const current = dragOverlayRef.current;
+      if (!current) return;
+      dragOverlayRef.current = { ...current, pageX, pageY };
+      scheduleInFrame(overlayRafRef, () => {
+        if (dragOverlayRef.current) setDragOverlay(dragOverlayRef.current);
+      });
+    },
+    [scheduleInFrame],
+  );
+
+  const clearDrag = useCallback(() => {
+    stopAutoScroll();
+    setDraggingId(null);
+    setDropStageKey(null);
+    dropStageRef.current = null;
+    dragOverlayRef.current = null;
+    setDragOverlay(null);
+    cancelFrame(dropRafRef);
+    cancelFrame(overlayRafRef);
+  }, [cancelFrame, stopAutoScroll]);
+
   const moveMemberToStage = useCallback(
     async (memberId: string, stageKey: GymMemberPipelineStage) => {
       const member = localMembers.find((item) => item.id === memberId);
@@ -136,7 +204,8 @@ export function GymMemberCrmBoard({
         return;
       }
 
-      onRetry();
+      // Sincroniza en segundo plano sin vaciar el tablero ni forzar recarga visual.
+      setTimeout(() => onRetry(), 0);
     },
     [localMembers, members, onRetry],
   );
@@ -151,21 +220,40 @@ export function GymMemberCrmBoard({
   };
 
   const handleDragStart = useCallback(
-    (memberId: string) => {
+    (memberId: string, pageX: number, pageY: number) => {
       measureColumns();
       boardWrapperRef.current?.measureInWindow((x, _y, width) => {
         boardBoundsRef.current = { x, width };
       });
+
+      const member = localMembers.find((item) => item.id === memberId);
+      if (!member) return;
+
+      const cardNode = cardNodesRef.current.get(memberId);
+      if (Platform.OS === 'web' && cardNode) {
+        cardNode.measureInWindow((x, y, width) => {
+          const overlay: DragOverlay = {
+            member,
+            pageX,
+            pageY,
+            width,
+            offsetX: pageX - x,
+            offsetY: pageY - y,
+          };
+          dragOverlayRef.current = overlay;
+          setDragOverlay(overlay);
+        });
+      }
+
       setDraggingId(memberId);
     },
-    [measureColumns],
+    [localMembers, measureColumns],
   );
 
   const handleDragMove = useCallback(
-    (_memberId: string, pageX: number, _pageY: number) => {
-      measureColumns();
-      const stageKey = findStageAtPageX(pageX);
-      setDropStageKey((current) => (current === stageKey ? current : stageKey));
+    (_memberId: string, pageX: number, pageY: number) => {
+      scheduleDropStage(findStageAtPageX(pageX));
+      scheduleOverlayMove(pageX, pageY);
 
       const boardBounds = boardBoundsRef.current;
       if (!boardBounds) return;
@@ -178,25 +266,26 @@ export function GymMemberCrmBoard({
         stopAutoScroll();
       }
     },
-    [findStageAtPageX, measureColumns, startAutoScroll, stopAutoScroll],
+    [findStageAtPageX, scheduleDropStage, scheduleOverlayMove, startAutoScroll, stopAutoScroll],
   );
 
   const handleDragEnd = useCallback(
-    (memberId: string, pageX: number) => {
-      stopAutoScroll();
-      measureColumns();
+    (memberId: string, pageX: number): boolean => {
       const targetStage = findStageAtPageX(pageX);
-      setDraggingId(null);
-      setDropStageKey(null);
-
-      if (!targetStage) return;
-
       const member = localMembers.find((item) => item.id === memberId);
-      if (!member || gymMemberCrmColumn(member) === targetStage) return;
+      const relocated = Boolean(
+        targetStage && member && gymMemberCrmColumn(member) !== targetStage,
+      );
 
-      void moveMemberToStage(memberId, targetStage);
+      clearDrag();
+
+      if (relocated && targetStage) {
+        void moveMemberToStage(memberId, targetStage);
+      }
+
+      return relocated;
     },
-    [findStageAtPageX, localMembers, measureColumns, moveMemberToStage, stopAutoScroll],
+    [clearDrag, findStageAtPageX, localMembers, moveMemberToStage],
   );
 
   const registerColumnRef = useCallback(
@@ -206,11 +295,27 @@ export function GymMemberCrmBoard({
     [],
   );
 
+  const registerCardRef = useCallback(
+    (memberId: string) => (node: View | null) => {
+      cardNodesRef.current.set(memberId, node);
+    },
+    [],
+  );
+
   const openMember = useCallback(
     (memberId: string) => {
       router.push({ pathname: '/gym/members/[id]', params: { id: memberId } });
     },
     [router],
+  );
+
+  useEffect(
+    () => () => {
+      stopAutoScroll();
+      cancelFrame(dropRafRef);
+      cancelFrame(overlayRafRef);
+    },
+    [cancelFrame, stopAutoScroll],
   );
 
   if (error) return <GymErrorBanner message={error} onRetry={onRetry} />;
@@ -297,8 +402,10 @@ export function GymMemberCrmBoard({
                       member={member}
                       canOperate={canOperate}
                       isMoving={movingId === member.id}
+                      isPlaceholder={draggingId === member.id}
                       canMovePrev={stageIndex > 0}
                       canMoveNext={stageIndex < GYM_MEMBER_PIPELINE_STAGES.length - 1}
+                      cardRef={registerCardRef(member.id)}
                       onPress={() => openMember(member.id)}
                       onMovePrev={() => void moveMember(member, -1)}
                       onMoveNext={() => void moveMember(member, 1)}
@@ -313,6 +420,26 @@ export function GymMemberCrmBoard({
           );
         })}
       </ScrollView>
+
+      {dragOverlay ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.dragOverlay,
+            {
+              left: dragOverlay.pageX - dragOverlay.offsetX,
+              top: dragOverlay.pageY - dragOverlay.offsetY,
+              width: dragOverlay.width,
+            },
+          ]}
+        >
+          <GymMemberCrmCard
+            member={dragOverlay.member}
+            canOperate={canOperate}
+            variant="overlay"
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -328,6 +455,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
     marginTop: spacing.sm,
     overflow: 'visible',
+    position: 'relative',
   },
   board: {
     flex: 1,
@@ -409,5 +537,10 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '700',
     fontStyle: 'normal',
+  },
+  dragOverlay: {
+    position: Platform.OS === 'web' ? ('fixed' as const) : ('absolute' as const),
+    zIndex: 200,
+    elevation: 24,
   },
 });

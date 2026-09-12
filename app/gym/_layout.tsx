@@ -10,7 +10,15 @@ import { isAdminRole, isGymRole } from '@/lib/athleteService';
  * también puede entrar para dar soporte. La RLS protege los datos aparte de esto.
  */
 export default function GymLayout() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
 
   if (!user) {
     return <Redirect href="/auth/login" />;
@@ -22,3 +30,12 @@ export default function GymLayout() {
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }
+
+const styles = StyleSheet.create({
+  loading: {
+    flex: 1,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

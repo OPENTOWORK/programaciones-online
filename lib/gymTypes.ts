@@ -33,6 +33,32 @@ export const GYM_USER_ROLE_LABELS: Record<GymUserRole, string> = {
   reception: 'Recepción',
 };
 
+/** Nivel de acceso mostrado en configuración del gimnasio (tabla de equipo). */
+export type GymStaffAccessTier = 'administrador' | 'comercial';
+
+export const GYM_STAFF_ACCESS_TIER_LABELS: Record<GymStaffAccessTier, string> = {
+  administrador: 'Administrador',
+  comercial: 'Comercial',
+};
+
+export function gymStaffAccessTier(role: GymUserRole): GymStaffAccessTier {
+  return role === 'owner' || role === 'manager' ? 'administrador' : 'comercial';
+}
+
+export function gymRoleForAccessTier(
+  tier: GymStaffAccessTier,
+  currentRole: GymUserRole,
+): GymUserRole {
+  if (tier === 'administrador') {
+    return currentRole === 'owner' ? 'owner' : 'manager';
+  }
+  return currentRole === 'reception' ? 'reception' : 'coach';
+}
+
+export function canChangeGymStaffRole(role: GymUserRole) {
+  return role !== 'owner';
+}
+
 export const GYM_MEMBER_STATUS_LABELS: Record<GymMemberStatus, string> = {
   active: 'Activo',
   inactive: 'Inactivo',
@@ -414,6 +440,8 @@ export const GYM_TASK_STATUS_LABELS: Record<GymTaskStatus, string> = {
   in_progress: 'En curso',
   completed: 'Hecha',
 };
+
+export const GYM_TASK_STATUS_ORDER: GymTaskStatus[] = ['pending', 'in_progress', 'completed'];
 
 export const GYM_TASK_PRIORITY_LABELS: Record<GymTaskPriority, string> = {
   low: 'Baja',

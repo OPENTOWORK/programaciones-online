@@ -56,6 +56,11 @@ const AUTH_INIT_TIMEOUT_MS = 20_000;
 const PROFILE_LOAD_TIMEOUT_MS = 15_000;
 const SIGN_IN_TIMEOUT_MS = 25_000;
 
+/** Sobrevive a Fast Refresh en desarrollo para no perder sesión al guardar cambios. */
+let cachedAuthUser: UserProfile | null = null;
+let authBootstrapComplete = false;
+let sharedAuthSubscription: { unsubscribe: () => void } | null = null;
+
 interface AuthContextValue {
   user: UserProfile | null;
   isLoading: boolean;
@@ -83,15 +88,18 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUserState] = useState<UserProfile | null>(cachedAuthUser);
+  const [isLoading, setIsLoading] = useState(() => !authBootstrapComplete && !cachedAuthUser);
   const [initError, setInitError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [initAttempt, setInitAttempt] = useState(0);
   const [pendingAuthCallbackUrl, setPendingAuthCallbackUrl] = useState<string | null>(null);
   const isDemoMode = isAuthDemoMode;
-  const bootstrappedRef = useRef(false);
-  const authListenerRef = useRef<{ unsubscribe: () => void } | null>(null);
+
+  const setUser = useCallback((profile: UserProfile | null) => {
+    cachedAuthUser = profile;
+    setUserState(profile);
+  }, []);
 
   const loadUserFromSupabase = useCallback(async (authUser: User) => {
     const result = await withTimeout(
@@ -198,11 +206,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function init() {
       const isRetry = initAttempt > 0;
-      if (!isRetry && bootstrappedRef.current) {
+      if (!isRetry && authBootstrapComplete) {
+        setIsLoading(false);
         return;
       }
 
-      if (!bootstrappedRef.current || isRetry) {
+      if (!authBootstrapComplete || isRetry) {
         setIsLoading(true);
       }
       setInitError(null);
@@ -256,7 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (cancelled) return;
 
-        if (!authListenerRef.current) {
+        if (!sharedAuthSubscription) {
           const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
             logAuthEvent('state_change', { event, hasSession: Boolean(session?.user) });
 
@@ -264,8 +273,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (event === 'PASSWORD_RECOVERY' || hasRecoveryUrlParams()) {
                 return;
               }
-              setUser(null);
-              setProfileError(null);
+              if (event === 'SIGNED_OUT') {
+                setUser(null);
+                setProfileError(null);
+              }
               return;
             }
 
@@ -273,7 +284,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               return;
             }
 
-            if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+            if (event === 'TOKEN_REFRESHED') {
+              return;
+            }
+
+            if (event === 'INITIAL_SESSION') {
+              if (!cachedAuthUser) {
+                try {
+                  await loadUserFromSupabase(session.user);
+                } catch (error) {
+                  logReleaseError('auth_state_profile_failed', error, { event });
+                }
+              }
               return;
             }
 
@@ -283,10 +305,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               logReleaseError('auth_state_profile_failed', error, { event });
             }
           });
-          authListenerRef.current = listener.subscription;
+          sharedAuthSubscription = listener.subscription;
         }
 
-        bootstrappedRef.current = true;
+        authBootstrapComplete = true;
         logAuthEvent('init_done');
       } catch (error) {
         const message =
@@ -313,18 +335,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [isDemoMode, loadUserFromSupabase, initAttempt]);
 
-  useEffect(() => {
-    return () => {
-      authListenerRef.current?.unsubscribe();
-      authListenerRef.current = null;
-      bootstrappedRef.current = false;
-    };
-  }, []);
-
   const retryInit = useCallback(() => {
-    bootstrappedRef.current = false;
-    authListenerRef.current?.unsubscribe();
-    authListenerRef.current = null;
+    authBootstrapComplete = false;
+    sharedAuthSubscription?.unsubscribe();
+    sharedAuthSubscription = null;
     setInitAttempt((attempt) => attempt + 1);
   }, []);
 
@@ -538,9 +552,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfileError(null);
     setPendingAuthCallbackUrl(null);
-    bootstrappedRef.current = false;
-    authListenerRef.current?.unsubscribe();
-    authListenerRef.current = null;
+    authBootstrapComplete = false;
+    sharedAuthSubscription?.unsubscribe();
+    sharedAuthSubscription = null;
     resetAuthCallbackCoordinator();
   }, [isDemoMode]);
 

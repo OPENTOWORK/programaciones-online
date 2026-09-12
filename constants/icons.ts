@@ -52,6 +52,7 @@ export type AppIconName =
   | 'video'
   | 'camera'
   | 'templates'
+  | 'kanban'
   | 'support'
   | 'settings'
   | 'gym'
@@ -120,6 +121,7 @@ const ICONS: Record<AppIconName, { default: IoniconName; outline?: IoniconName }
   video: { default: 'videocam', outline: 'videocam-outline' },
   camera: { default: 'camera', outline: 'camera-outline' },
   templates: { default: 'albums', outline: 'albums-outline' },
+  kanban: { default: 'grid', outline: 'grid-outline' },
   support: { default: 'help-buoy', outline: 'help-buoy-outline' },
   settings: { default: 'settings', outline: 'settings-outline' },
   gym: { default: 'business', outline: 'business-outline' },

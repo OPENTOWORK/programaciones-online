@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { GymCrmPermissionsPanel } from '@/components/gym/GymCrmPermissionsPanel';
+import { GymStaffRolesTable } from '@/components/gym/GymStaffRolesTable';
 import {
   GymErrorBanner,
   GymScreen,
@@ -12,11 +14,18 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { useAuth } from '@/hooks/useAuth';
 import { useGym } from '@/hooks/useGym';
-import { fetchGymStaff, updateGym } from '@/lib/gymService';
-import { GYM_USER_ROLE_LABELS, type GymUser } from '@/lib/gymTypes';
+import { fetchGymStaff, updateGym, updateGymStaffRole } from '@/lib/gymService';
+import {
+  gymRoleForAccessTier,
+  GYM_STAFF_ACCESS_TIER_LABELS,
+  type GymStaffAccessTier,
+  type GymUser,
+} from '@/lib/gymTypes';
 
 export default function GymSettingsScreen() {
+  const { user } = useAuth();
   const { gym, permissions, patchGym } = useGym();
 
   const [form, setForm] = useState({
@@ -31,7 +40,9 @@ export default function GymSettingsScreen() {
   });
   const [staff, setStaff] = useState<GymUser[]>([]);
   const [saving, setSaving] = useState(false);
+  const [roleBusy, setRoleBusy] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [roleSuccess, setRoleSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -67,6 +78,12 @@ export default function GymSettingsScreen() {
     return () => clearTimeout(timer);
   }, [saveSuccess]);
 
+  useEffect(() => {
+    if (!roleSuccess) return;
+    const timer = setTimeout(() => setRoleSuccess(null), 4000);
+    return () => clearTimeout(timer);
+  }, [roleSuccess]);
+
   const patch = (changes: Partial<typeof form>) =>
     setForm((current) => ({ ...current, ...changes }));
 
@@ -93,6 +110,37 @@ export default function GymSettingsScreen() {
     setSaveSuccess(true);
   };
 
+  const handleRoleChange = useCallback(
+    async (member: GymUser, tier: GymStaffAccessTier) => {
+      const nextRole = gymRoleForAccessTier(tier, member.role);
+      if (nextRole === member.role) return true;
+
+      setRoleBusy(true);
+      setError(null);
+      setRoleSuccess(null);
+
+      const result = await updateGymStaffRole(member.id, nextRole);
+      setRoleBusy(false);
+
+      if (result.error) {
+        setError(result.error);
+        return false;
+      }
+
+      if (result.data) {
+        setStaff((current) =>
+          current.map((entry) => (entry.id === member.id ? { ...entry, ...result.data } : entry)),
+        );
+      }
+
+      setRoleSuccess(
+        `${member.email ?? member.name ?? 'Usuario'} ahora es ${GYM_STAFF_ACCESS_TIER_LABELS[tier].toLowerCase()}.`,
+      );
+      return true;
+    },
+    [],
+  );
+
   if (!permissions.canManage) {
     return (
       <GymScreen>
@@ -112,6 +160,9 @@ export default function GymSettingsScreen() {
         <GymScreenHeader title="Configuración" subtitle="Datos del gimnasio y equipo" />
 
         {error ? <GymErrorBanner message={error} /> : null}
+        {roleSuccess ? (
+          <GymSuccessBanner message={roleSuccess} onDismiss={() => setRoleSuccess(null)} />
+        ) : null}
 
         <GymSectionTitle title="Datos generales" />
         <Input label="Nombre" value={form.name} onChangeText={(value) => patch({ name: value })} />
@@ -167,25 +218,14 @@ export default function GymSettingsScreen() {
         ) : null}
 
         <GymSectionTitle title="Usuarios y permisos" count={staff.length} />
-        <View style={styles.list}>
-          {staff.length === 0 ? (
-            <Text style={styles.emptyRow}>Todavía no hay usuarios en este gimnasio.</Text>
-          ) : (
-            staff.map((member, index) => (
-              <View
-                key={member.id}
-                style={[styles.row, index === staff.length - 1 && styles.rowLast]}
-              >
-                <View style={styles.rowCopy}>
-                  <Text style={styles.rowTitle} numberOfLines={1}>
-                    {member.name ?? 'Usuario'}
-                  </Text>
-                  <Text style={styles.rowMeta}>{GYM_USER_ROLE_LABELS[member.role]}</Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
+        <GymStaffRolesTable
+          staff={staff}
+          currentUserId={user?.id}
+          busy={roleBusy}
+          onChangeRole={handleRoleChange}
+        />
+
+        <GymCrmPermissionsPanel />
       </ScreenWrapper>
     </GymScreen>
   );
@@ -200,36 +240,5 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: spacing.sm,
-  },
-  list: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-  },
-  row: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  rowLast: { borderBottomWidth: 0 },
-  rowCopy: { minWidth: 0 },
-  rowTitle: {
-    ...typography.bodySmall,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  rowMeta: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 1,
-  },
-  emptyRow: {
-    ...typography.caption,
-    color: colors.textMuted,
-    padding: spacing.md,
-    fontStyle: 'italic',
   },
 });

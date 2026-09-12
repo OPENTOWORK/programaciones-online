@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
@@ -17,7 +17,9 @@ import {
   GYM_TASK_RECURRENCE_LABELS,
   GYM_TASK_RECURRENCE_ORDER,
   GYM_TASK_STATUS_LABELS,
+  GYM_TASK_STATUS_ORDER,
   type GymTask,
+  type GymTaskStatus,
 } from '@/lib/gymTypes';
 import {
   formatMonthLabel,
@@ -291,6 +293,75 @@ export function GymTasksCalendarView({
   );
 }
 
+const KANBAN_COLUMN_WIDTH = 280;
+
+function statusColumnColor(status: GymTaskStatus) {
+  if (status === 'pending') return colors.textMuted;
+  if (status === 'in_progress') return colors.warning;
+  return colors.success;
+}
+
+export function GymTasksKanbanView({
+  tasks,
+  canWrite,
+  onEdit,
+  onMove,
+  onDelete,
+}: {
+  tasks: readonly GymTask[];
+  canWrite: boolean;
+  onEdit: (task: GymTask) => void;
+  onMove: (task: GymTask) => void;
+  onDelete: (task: GymTask) => void;
+}) {
+  const grouped = useMemo(() => {
+    const columns = new Map<GymTaskStatus, GymTask[]>();
+    for (const status of GYM_TASK_STATUS_ORDER) columns.set(status, []);
+    for (const task of tasks) {
+      columns.get(task.status)?.push(task);
+    }
+    return columns;
+  }, [tasks]);
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={Platform.OS === 'web'}
+      contentContainerStyle={styles.kanbanBoard}
+    >
+      {GYM_TASK_STATUS_ORDER.map((status) => {
+        const columnTasks = grouped.get(status) ?? [];
+        const accent = statusColumnColor(status);
+
+        return (
+          <View key={status} style={styles.kanbanColumn}>
+            <View style={[styles.kanbanColumnHead, { borderTopColor: accent }]}>
+              <Text style={styles.kanbanColumnTitle}>{GYM_TASK_STATUS_LABELS[status]}</Text>
+              <Text style={styles.kanbanColumnCount}>{columnTasks.length}</Text>
+            </View>
+            <View style={styles.kanbanCards}>
+              {columnTasks.length === 0 ? (
+                <Text style={styles.kanbanEmpty}>Sin tareas</Text>
+              ) : (
+                columnTasks.map((task) => (
+                  <GymTaskCard
+                    key={task.id}
+                    task={task}
+                    canWrite={canWrite}
+                    onPress={() => onEdit(task)}
+                    onMove={() => onMove(task)}
+                    onDelete={() => onDelete(task)}
+                  />
+                ))
+              )}
+            </View>
+          </View>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 export function GymTasksListView({
   tasks,
   canWrite,
@@ -422,7 +493,7 @@ function GymTaskListRow({
   );
 }
 
-export type GymTasksViewMode = 'list' | 'grid' | 'calendar';
+export type GymTasksViewMode = 'list' | 'kanban' | 'grid' | 'calendar';
 
 export function GymTasksViewToggle({
   mode,
@@ -436,6 +507,7 @@ export function GymTasksViewToggle({
       {(
         [
           { id: 'list' as const, label: 'Lista', icon: 'programs' as const },
+          { id: 'kanban' as const, label: 'Kanban', icon: 'kanban' as const },
           { id: 'grid' as const, label: 'Cuadrícula', icon: 'templates' as const },
           { id: 'calendar' as const, label: 'Calendario', icon: 'calendar' as const },
         ] as const
@@ -763,5 +835,51 @@ const styles = StyleSheet.create({
   },
   dayList: {
     gap: spacing.sm,
+  },
+  kanbanBoard: {
+    gap: spacing.sm,
+    paddingBottom: spacing.xl,
+    ...(Platform.OS === 'web' ? ({ minHeight: 420 } as object) : null),
+  },
+  kanbanColumn: {
+    width: KANBAN_COLUMN_WIDTH,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    backgroundColor: withAlpha(colors.surface, 'F2'),
+    overflow: 'hidden',
+  },
+  kanbanColumnHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 10,
+    borderTopWidth: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  kanbanColumnTitle: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontWeight: '800',
+  },
+  kanbanColumnCount: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '800',
+  },
+  kanbanCards: {
+    gap: spacing.sm,
+    padding: spacing.sm,
+    minHeight: 120,
+  },
+  kanbanEmpty: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: spacing.md,
   },
 });

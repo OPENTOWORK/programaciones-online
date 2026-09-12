@@ -11,6 +11,7 @@ import { GymTaskFormModal } from '@/components/gym/GymTaskFormModal';
 import {
   GymTasksCalendarView,
   GymTasksGridView,
+  GymTasksKanbanView,
   GymTasksListView,
   GymTasksViewToggle,
   type GymTasksViewMode,
@@ -175,6 +176,8 @@ export default function GymTasksScreen() {
           <GymTasksCalendarView {...sharedTaskProps} />
         ) : viewMode === 'grid' ? (
           <GymTasksGridView {...sharedTaskProps} />
+        ) : viewMode === 'kanban' ? (
+          <GymTasksKanbanView {...sharedTaskProps} />
         ) : (
           <GymTasksListView {...sharedTaskProps} />
         )}

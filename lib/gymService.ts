@@ -431,6 +431,53 @@ export async function fetchGymStaff(gymId: string): Promise<GymResult<GymUser[]>
   };
 }
 
+export async function updateGymStaffRole(
+  gymUserId: string,
+  role: GymUserRole,
+): Promise<GymResult<GymUser>> {
+  const supabase = getSupabase();
+  if (!supabase) return { error: 'Supabase no está disponible.' };
+
+  const { data, error } = await supabase
+    .from(GYM_USERS)
+    .update({ role })
+    .eq('id', gymUserId)
+    .select('id, gym_id, user_id, role, created_at')
+    .single();
+
+  if (error) {
+    return { error: friendlyError(error, 'No se pudo cambiar el rol del usuario.') };
+  }
+
+  const row = data as Row;
+  const userId = row.user_id as string;
+  let name: string | undefined;
+  let email: string | undefined;
+
+  const { data: profile } = await supabase
+    .from('Perfil')
+    .select('name, email')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profile) {
+    name = typeof profile.name === 'string' ? profile.name.trim() : undefined;
+    email = typeof profile.email === 'string' ? profile.email.trim() : undefined;
+  }
+
+  return {
+    data: {
+      id: row.id as string,
+      gymId: row.gym_id as string,
+      userId,
+      role: row.role as GymUserRole,
+      createdAt: row.created_at as string,
+      name,
+      email,
+    },
+  };
+}
+
 export async function fetchGymDashboardStats(
   gymId: string,
 ): Promise<GymResult<GymDashboardStats>> {
@@ -1788,6 +1835,46 @@ export async function fetchGymProgramLinks(gymId: string): Promise<GymResult<Gym
 
   const links = (rows ?? []).map(mapProgramLink);
   return { data: await decorateProgramLinks(gymId, links) };
+}
+
+export async function fetchGymProgramLinkById(linkId: string): Promise<GymResult<GymProgramLink>> {
+  const supabase = getSupabase();
+  if (!supabase) return { error: 'Supabase no está disponible.' };
+
+  const selects = [
+    PROGRAM_LINK_SELECT,
+    PROGRAM_LINK_SELECT_TIMES,
+    PROGRAM_LINK_SELECT_DATES,
+    PROGRAM_LINK_SELECT_SCHEDULED,
+    PROGRAM_LINK_SELECT_WEEKDAY,
+    PROGRAM_LINK_SELECT_FALLBACK,
+  ];
+
+  for (const select of selects) {
+    const { data, error } = await supabase
+      .from(PROGRAM_LINKS)
+      .select(select)
+      .eq('id', linkId)
+      .maybeSingle();
+
+    if (!error && data) {
+      const link = mapProgramLink(data as Row);
+      const [decorated] = await decorateProgramLinks(link.gymId, [link]);
+      return { data: decorated };
+    }
+
+    const missingColumn =
+      isMissingSessionDraftColumn(error) ||
+      isMissingPublishedTimeColumn(error) ||
+      isMissingPublishedDateColumn(error) ||
+      isMissingScheduledDateColumn(error) ||
+      isMissingWeekdayColumn(error);
+    if (!missingColumn) {
+      return { error: friendlyError(error, 'No se pudo cargar el entrenamiento.') };
+    }
+  }
+
+  return { error: 'No se encontró el entrenamiento.' };
 }
 
 export interface GymProgramLinkInput {
