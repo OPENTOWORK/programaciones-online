@@ -8,6 +8,9 @@ workflows:
       app_store_connect: Codemagic Training ProgLine
 
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.trainingprogline.app
       node: lts
       xcode: latest
       cocoapods: default
@@ -18,63 +21,72 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
-          npm install
+          set -e
+          npm ci
+
+      - name: Set iOS version for App Store build
+        script: |
+          set -e
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'app.json';
+          const app = JSON.parse(fs.readFileSync(path, 'utf8'));
+          app.expo.version = process.env.APP_STORE_VERSION;
+          app.expo.ios = app.expo.ios || {};
+          app.expo.ios.bundleIdentifier = process.env.BUNDLE_ID;
+          app.expo.ios.buildNumber = String(process.env.PROJECT_BUILD_NUMBER || process.env.BUILD_NUMBER || '1');
+          fs.writeFileSync(path, JSON.stringify(app, null, 2) + '\n');
+          console.log(`iOS version: ${app.expo.version} (${app.expo.ios.buildNumber})`);
+          console.log(`Bundle ID: ${app.expo.ios.bundleIdentifier}`);
+          NODE
 
       - name: Generate native iOS project
         script: |
-          npx expo prebuild --platform ios --clean
+          set -e
+          npx expo prebuild --platform ios --clean --no-install
 
-      - name: Detect Xcode workspace and scheme
+      - name: Install CocoaPods dependencies
+        script: |
+          set -e
+          cd ios
+          pod install
+
+      - name: Detect the application Xcode workspace and scheme
         script: |
           set -e
           WORKSPACE=$(find "$CM_BUILD_DIR/ios" -maxdepth 1 -name "*.xcworkspace" -print -quit)
           if [ -z "$WORKSPACE" ]; then
-            echo "No Xcode workspace found after Expo prebuild"
+            echo "No Xcode workspace found after pod install"
             exit 1
           fi
 
-          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json | python3 -c 'import json,sys; d=json.load(sys.stdin); schemes=d.get("workspace",{}).get("schemes",[]); print(schemes[0] if schemes else "")')
-          if [ -z "$SCHEME" ]; then
-            echo "No Xcode scheme found"
+          # Expo names the application scheme after the generated workspace/project.
+          # Do NOT take the first workspace scheme: CocoaPods schemes such as
+          # EXApplication can appear first and produce a non-distributable archive.
+          APP_SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+
+          AVAILABLE_SCHEMES=$(xcodebuild -workspace "$WORKSPACE" -list -json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join(d.get("workspace",{}).get("schemes",[])))')
+          echo "Available schemes:"
+          printf '%s\n' "$AVAILABLE_SCHEMES"
+
+          if ! printf '%s\n' "$AVAILABLE_SCHEMES" | grep -Fxq "$APP_SCHEME"; then
+            echo "Expected application scheme '$APP_SCHEME' was not found."
             exit 1
           fi
 
           echo "XCODE_WORKSPACE=$WORKSPACE" >> "$CM_ENV"
-          echo "XCODE_SCHEME=$SCHEME" >> "$CM_ENV"
+          echo "XCODE_SCHEME=$APP_SCHEME" >> "$CM_ENV"
           echo "Workspace: $WORKSPACE"
-          echo "Scheme: $SCHEME"
+          echo "Application scheme: $APP_SCHEME"
 
-      - name: Install CocoaPods dependencies
+      - name: Apply App Store provisioning profile
         script: |
-          cd ios
-          pod install
-
-      - name: Set iOS App Store version
-        script: |
-          cd ios
-          agvtool new-marketing-version "$APP_STORE_VERSION"
-          agvtool new-version -all "$CM_BUILD_NUMBER"
-
-      - name: Set up keychain
-        script: |
-          keychain initialize
-
-      - name: Fetch or create App Store signing files
-        script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create
-
-      - name: Add signing certificates to keychain
-        script: |
-          keychain add-certificates
-
-      - name: Apply provisioning profiles
-        script: |
-          xcode-project use-profiles
+          set -e
+          xcode-project use-profiles --archive-method=app-store
 
       - name: Build IPA
         script: |
+          set -e
           xcode-project build-ipa \
             --workspace "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME"
