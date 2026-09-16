@@ -67,6 +67,7 @@
     "supabase:session-logs": "node scripts/apply-session-logs.mjs",
     "supabase:workout-log-favorites": "node scripts/apply-workout-log-favorites.mjs",
     "supabase:trainer-professional-profile": "node scripts/apply-trainer-professional-profile.mjs",
+    "supabase:trainer-library-settings": "node scripts/apply-trainer-library-settings.mjs",
     "supabase:support": "node scripts/apply-support-tickets.mjs",
     "supabase:support:verify": "node scripts/verify-support-rls.mjs",
     "supabase:gym-crm": "node scripts/apply-gym-crm.mjs",

@@ -174,19 +174,24 @@ function parseStrengthSegment(segment) {
 export function isCalisthenicsPlanText(text) {
   const normalized = text.trim();
   if (!normalized) return false;
-  return (
-    /→\s*.+\bSERIES\b/i.test(normalized) &&
-    /\b(Front Hold|Plancha Hold|Plancha)\b/i.test(normalized) &&
-    /\bRIR\b/i.test(normalized)
+  const hasStrengthMarkers = /\b(Front Hold|Plancha Hold|Plancha|Front|Tirón|Empuje)\b/i.test(
+    normalized,
   );
+  const hasRir = /\bRIR\b/i.test(normalized);
+  const legacySeries = /→\s*.+\bSERIES\b/i.test(normalized);
+  const arrowSession = /\b[A-ZÁÉÍÓÚÑ]+\s*→\s*.+\bBalance\b/i.test(normalized);
+  return hasStrengthMarkers && hasRir && (legacySeries || arrowSession);
 }
 
 export function serializeCalisthenicsPlanMain(text) {
-  let body = text.trim().replace(/^→\s*/, '').trim();
+  let body = text.trim().replace(/^[A-ZÁÉÍÓÚÑ]+\s*→\s*/i, '').replace(/^→\s*/, '').trim();
   const seriesMatch = body.match(/^([A-ZÁÉÍÓÚÑ() Y]+SERIES)\s*/i);
-  const seriesTitle = seriesMatch?.[1]?.trim() ?? '';
+  const titleBeforeBalance = body.match(/^([A-ZÁÉÍÓÚÑ() Y]+)\s+(?=Balance\b)/i);
+  const seriesTitle = seriesMatch?.[1]?.trim() ?? titleBeforeBalance?.[1]?.trim() ?? '';
   if (seriesMatch) {
     body = body.slice(seriesMatch[0].length).trim();
+  } else if (titleBeforeBalance) {
+    body = body.slice(titleBeforeBalance[0].length).trim();
   }
 
   const segments = splitSegments(body);

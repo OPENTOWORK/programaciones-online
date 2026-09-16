@@ -84,6 +84,28 @@ export function filterExerciseLibraryByOrigin(
   return items;
 }
 
+/** Restringe la biblioteca según la configuración del entrenador del atleta. */
+export function filterExerciseLibraryForAthleteAccess(
+  items: ExerciseLibraryItem[],
+  access: { trainerId?: string | null; athletesCanSeePageLibrary: boolean },
+) {
+  const trainerId = access.trainerId?.trim();
+
+  if (access.athletesCanSeePageLibrary) {
+    if (!trainerId) return items;
+    return items.filter(
+      (item) =>
+        item.source === 'channel' || (item.source === 'user' && item.createdBy === trainerId),
+    );
+  }
+
+  if (!trainerId) {
+    return items.filter((item) => item.source === 'channel');
+  }
+
+  return items.filter((item) => item.source === 'user' && item.createdBy === trainerId);
+}
+
 export function getYoutubeThumbnailUrl(videoId: string) {
   // maxres (~1280px) para rejillas retina; si no existe, el componente cae a hq/sd.
   return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;

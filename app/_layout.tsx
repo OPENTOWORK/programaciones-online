@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
@@ -73,7 +74,7 @@ function RootNavigator() {
             headerStyle: { backgroundColor: colors.surface },
             headerTintColor: colors.text,
             headerTitleStyle: { fontWeight: '600' },
-            contentStyle: { backgroundColor: colors.background },
+            contentStyle: { backgroundColor: colors.background, flex: 1 },
             animation: 'slide_from_right',
           }}
         >
@@ -133,17 +134,30 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <AuthProvider>
-        <TrainerNotificationsProvider>
-          <AppThemeProvider>
-            <GymProvider>
-              <ProgramsProvider>
-                <RootNavigator />
-              </ProgramsProvider>
-            </GymProvider>
-          </AppThemeProvider>
-        </TrainerNotificationsProvider>
-      </AuthProvider>
+      <View style={Platform.OS === 'web' ? styles.webRoot : styles.nativeRoot}>
+        <AuthProvider>
+          <TrainerNotificationsProvider>
+            <AppThemeProvider>
+              <GymProvider>
+                <ProgramsProvider>
+                  <RootNavigator />
+                </ProgramsProvider>
+              </GymProvider>
+            </AppThemeProvider>
+          </TrainerNotificationsProvider>
+        </AuthProvider>
+      </View>
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  webRoot: {
+    flex: 1,
+    height: '100%',
+    minHeight: 0,
+  },
+  nativeRoot: {
+    flex: 1,
+  },
+});

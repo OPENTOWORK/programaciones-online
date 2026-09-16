@@ -71,6 +71,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     zIndex: 1,
+    ...(Platform.OS === 'web'
+      ? ({ height: '100%', overflow: 'hidden' } as const)
+      : null),
   },
   layer: {
     ...StyleSheet.absoluteFillObject,

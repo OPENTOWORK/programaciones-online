@@ -73,6 +73,17 @@ export const PERSONALIZED_GYM_PLAN_CONTENT = {
   prefill: PERSONALIZED_GYM_PLAN_REQUEST_MESSAGE,
 };
 
+export const TRAINER_NUTRITION_FOR_ATHLETE_MESSAGE =
+  'Hola, me gustaría solicitar un plan nutricional personalizado para uno de mis atletas. ¿Podemos empezar?';
+
+export const TRAINER_NUTRITION_STAFF_CONTENT = {
+  title: 'Nutrición para tus atletas',
+  text: 'Pide un plan nutricional personalizado para tu atleta o crea uno tú mismo.',
+  requestButton: 'Pide un plan nutricional personalizado para tu atleta',
+  createButton: 'Crea uno para tu atleta',
+  prefill: TRAINER_NUTRITION_FOR_ATHLETE_MESSAGE,
+};
+
 const GYM_ROLE_SERVICE_PLAN_CONTENT: Partial<
   Record<ServicePlanCategory, { title: string; text: string; button: string; prefill: string }>
 > = {

@@ -34,6 +34,7 @@ import {
   HOME_TRAINING_STAFF_JOIN,
   getServicePlanContent,
   PERSONALIZED_GYM_PLAN_CONTENT,
+  TRAINER_NUTRITION_STAFF_CONTENT,
   usesAthleteServiceView,
   type AthletePlanType,
 } from '@/lib/trainerConstants';
@@ -158,6 +159,14 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
     });
   };
 
+  const openTrainerNutritionRequest = () => {
+    queueChatPrefill(TRAINER_NUTRITION_STAFF_CONTENT.prefill);
+    router.push('/trainer/client-chat');
+  };
+
+  const showTrainerNutritionStaffCard =
+    isTrainerOnlyRole(user?.role) && serviceCategory === 'nutrition' && showServiceEmptyCard;
+
   const openServicePlanRequest = (prefill: string, subject: string) => {
     if (isGymRole(user?.role)) {
       if (serviceCategory === 'personalized') {
@@ -238,14 +247,34 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
           />
         </View>
       ) : catalogPrograms.length === 0 ? (
-        showServiceEmptyCard && servicePlanContent && serviceCategory ? (
+        showServiceEmptyCard && serviceCategory && (showTrainerNutritionStaffCard || servicePlanContent) ? (
           <View style={styles.serviceCards}>
             <ServicePlanEmptyCard
               category={serviceCategory}
-              title={servicePlanContent.title}
-              text={servicePlanContent.text}
-              button={servicePlanContent.button}
-              onRequest={() => openServicePlanRequest(servicePlanContent.prefill, servicePlanContent.title)}
+              title={
+                showTrainerNutritionStaffCard
+                  ? TRAINER_NUTRITION_STAFF_CONTENT.title
+                  : servicePlanContent!.title
+              }
+              text={
+                showTrainerNutritionStaffCard
+                  ? TRAINER_NUTRITION_STAFF_CONTENT.text
+                  : servicePlanContent!.text
+              }
+              button={
+                showTrainerNutritionStaffCard
+                  ? TRAINER_NUTRITION_STAFF_CONTENT.requestButton
+                  : servicePlanContent!.button
+              }
+              onRequest={
+                showTrainerNutritionStaffCard
+                  ? openTrainerNutritionRequest
+                  : () => openServicePlanRequest(servicePlanContent!.prefill, servicePlanContent!.title)
+              }
+              createButton={
+                showTrainerNutritionStaffCard ? TRAINER_NUTRITION_STAFF_CONTENT.createButton : undefined
+              }
+              onCreate={showTrainerNutritionStaffCard ? openGymAthletePlanCreate : undefined}
             />
             {showPersonalizedGymCard ? (
               <ServicePlanEmptyCard

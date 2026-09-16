@@ -26,6 +26,8 @@ interface ServicePlanEmptyCardProps {
   text: string;
   button: string;
   onRequest: () => void;
+  createButton?: string;
+  onCreate?: () => void;
   icon?: AppIconName;
 }
 
@@ -44,6 +46,8 @@ export function ServicePlanEmptyCard({
   text,
   button,
   onRequest,
+  createButton,
+  onCreate,
   icon,
 }: ServicePlanEmptyCardProps) {
   const badgeIcon = icon ?? SERVICE_PLAN_ICONS[category];
@@ -64,13 +68,32 @@ export function ServicePlanEmptyCard({
           <MetaItem icon="goal" text={text} />
         </View>
 
-        <Button
-          title={button}
-          variant="outline"
-          onPress={onRequest}
-          style={{ ...styles.button, ...planBrandActionButtonStyle }}
-          textStyle={planBrandActionButtonTextStyle}
-        />
+        {createButton && onCreate ? (
+          <View style={styles.actions}>
+            <Button
+              title={button}
+              variant="outline"
+              onPress={onRequest}
+              style={{ ...styles.actionButton, ...planBrandActionButtonStyle }}
+              textStyle={planBrandActionButtonTextStyle}
+            />
+            <Button
+              title={createButton}
+              variant="outline"
+              onPress={onCreate}
+              style={{ ...styles.actionButton, ...planBrandActionButtonStyle }}
+              textStyle={planBrandActionButtonTextStyle}
+            />
+          </View>
+        ) : (
+          <Button
+            title={button}
+            variant="outline"
+            onPress={onRequest}
+            style={{ ...styles.button, ...planBrandActionButtonStyle }}
+            textStyle={planBrandActionButtonTextStyle}
+          />
+        )}
       </View>
     </View>
   );
@@ -99,6 +122,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
   },
+  actions: {
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  actionButton: {},
   button: {
     marginTop: spacing.xs,
   },

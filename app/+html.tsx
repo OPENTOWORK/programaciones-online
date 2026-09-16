@@ -17,6 +17,15 @@ export default function Root({ children }: PropsWithChildren) {
               ${rootThemeCss('dark')}
               html, body, #root { height: 100%; margin: 0; background: var(--app-background); color: var(--app-text); }
               body { overflow-x: hidden; }
+              [data-hide-scrollbar="true"] {
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+                touch-action: pan-y;
+                -webkit-overflow-scrolling: touch;
+              }
+              [data-hide-scrollbar="true"]::-webkit-scrollbar {
+                display: none;
+              }
               input:-webkit-autofill,
               input:-webkit-autofill:hover,
               input:-webkit-autofill:focus {

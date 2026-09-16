@@ -60,5 +60,7 @@ const styles = StyleSheet.create({
   },
   scene: {
     flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
   },
 });

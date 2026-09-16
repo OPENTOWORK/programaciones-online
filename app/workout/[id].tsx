@@ -8,7 +8,7 @@ import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { Card } from '@/components/ui/Card';
 import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
-import { useExerciseVideos } from '@/hooks/useExerciseVideos';
+import { useAthleteSessionExerciseVideos } from '@/hooks/useAthleteSessionExerciseVideos';
 import { useProgram, useWorkout } from '@/hooks/usePrograms';
 import { useSessionRunner } from '@/hooks/useSessionRunner';
 import { signedUrlForCatalogWorkoutPdf } from '@/lib/catalogWorkoutPdfService';
@@ -38,7 +38,7 @@ export default function WorkoutDetailScreen() {
   const { user, isDemoMode } = useAuth();
   const { workout, isLoading } = useWorkout(id ?? '');
   const { program: parentProgram } = useProgram(workout?.programId ?? '');
-  const { getVideoId, hasVideo } = useExerciseVideos();
+  const { getVideoId, hasVideo } = useAthleteSessionExerciseVideos({ athleteId: user?.id });
 
   const scheduledDate = date ?? new Date().toISOString().slice(0, 10);
   const scheduledDateLabel = formatDayLabel(new Date(`${scheduledDate}T12:00:00`));

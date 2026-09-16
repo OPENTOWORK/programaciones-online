@@ -17,6 +17,11 @@ const DAY_HEADER_PATTERN = new RegExp(
 
 const NUMBERED_DAY_PATTERN = /(?:^|[\n\r]|\s)((?:D[IÍ]A|DAY)\s*\d+)(?=\s|:|$)/gi;
 
+const ARROW_DAY_PATTERN = new RegExp(
+  `(?:^|[\\n\\r]|\\s)(${WEEKDAY_ENTRIES.flatMap((entry) => entry.names.map((name) => name.toUpperCase())).join('|')})\\s*→`,
+  'gi',
+);
+
 function normalizePdfText(text) {
   return text
     .replace(/\r\n/g, '\n')
@@ -76,9 +81,40 @@ export function assignParsedDaysToWeekdays(days, targetWeekdays = []) {
   });
 }
 
+function parseArrowDaySessions(normalized) {
+  const chunks = splitByPattern(normalized, ARROW_DAY_PATTERN);
+  const byWeekday = new Map();
+
+  for (const { header, body } of chunks) {
+    const weekday = weekdayFromName(header);
+    if (weekday == null) continue;
+
+    const sessionText = `${header}→ ${body}`.trim();
+    if (!/\bBalance\b/i.test(sessionText) || sessionText.length < 120) continue;
+
+    const day = {
+      weekday,
+      label: WEEKDAY_LABELS[weekday] ?? capitalizeDay(header),
+      text: sessionText,
+    };
+    const previous = byWeekday.get(weekday);
+    if (!previous || day.text.length > previous.text.length) {
+      byWeekday.set(weekday, day);
+    }
+  }
+
+  return [...byWeekday.values()].sort((left, right) => left.weekday - right.weekday);
+}
+
 export function parseWeeklyPdfText(text, { pageTexts = [], targetWeekdays = [] } = {}) {
   const normalized = normalizePdfText(text);
   if (!normalized && pageTexts.length === 0) return [];
+
+  const arrowDays = parseArrowDaySessions(normalized);
+  if (arrowDays.length > 0) {
+    const weekdays = targetWeekdays.length > 0 ? targetWeekdays : arrowDays.map((day) => day.weekday);
+    return assignParsedDaysToWeekdays(arrowDays, weekdays);
+  }
 
   const weekdayDays = splitByPattern(normalized, DAY_HEADER_PATTERN).flatMap(({ header, body }) => {
     const weekday = weekdayFromName(header);

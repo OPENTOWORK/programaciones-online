@@ -127,6 +127,7 @@ export function SessionLogVideos({
                   compact={compact || subtle}
                   title={title}
                   subtitle={formatVideoDate(video.createdAt)}
+                  showPlaybackSpeeds={Boolean(onAnnotatedVideo)}
                   onAnnotate={onAnnotatedVideo ? () => setAnnotateVideo(video) : undefined}
                 />
                 {!readOnly ? (

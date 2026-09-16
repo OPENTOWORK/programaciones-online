@@ -7,7 +7,7 @@ import { SessionWorkoutView } from '@/components/workout/SessionWorkoutView';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
-import { useExerciseVideos } from '@/hooks/useExerciseVideos';
+import { useAthleteSessionExerciseVideos } from '@/hooks/useAthleteSessionExerciseVideos';
 import { useAthletePlan } from '@/hooks/useAthletePlans';
 import { useSessionRunner } from '@/hooks/useSessionRunner';
 import { combineMainPartsForSave, extractExercisesFromSessionDraft } from '@/lib/sessionBlockSections';
@@ -22,7 +22,10 @@ export default function AthletePlanSessionScreen() {
   const router = useRouter();
   const { user, isDemoMode } = useAuth();
   const { plan, isLoading } = useAthletePlan(id ?? '');
-  const { getVideoId, hasVideo } = useExerciseVideos();
+  const { getVideoId, hasVideo } = useAthleteSessionExerciseVideos({
+    athleteId: user?.id,
+    trainerId: plan?.trainerId,
+  });
 
   const scheduledDate = date ?? new Date().toISOString().slice(0, 10);
   const scheduledDateLabel = formatDayLabel(new Date(`${scheduledDate}T12:00:00`));

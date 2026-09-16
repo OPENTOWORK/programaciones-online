@@ -468,12 +468,13 @@ const styles = StyleSheet.create({
   main: {
     flex: 1,
     minWidth: 0,
+    minHeight: 0,
     backgroundColor: colors.background,
     paddingHorizontal: spacing.xl,
   },
   content: {
     flex: 1,
-    minHeight: '100vh' as unknown as number,
+    minHeight: 0,
     width: '100%',
   },
 });

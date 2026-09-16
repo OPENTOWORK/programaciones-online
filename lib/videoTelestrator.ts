@@ -195,9 +195,17 @@ export function extensionForRecorderMime(mimeType: string) {
 
 export const TELESTRATOR_PLAYBACK_RATES = [0.1, 0.25, 0.5, 0.75, 1] as const;
 
+/** Velocidades para revisar vídeos de sesión: 3 lentas, normal y 3 rápidas. */
+export const SESSION_VIDEO_PLAYBACK_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+
 export function formatPlaybackRate(rate: number) {
   if (rate === 1) return '1x';
   return `${rate.toString().replace('.', ',')}x`;
+}
+
+export function formatPlaybackRateLabel(rate: number) {
+  if (rate === 1) return 'Normal';
+  return formatPlaybackRate(rate);
 }
 
 export function drawTrainerPip(

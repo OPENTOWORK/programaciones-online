@@ -27,20 +27,23 @@ export const mobileShellStyles = {
 const styles = StyleSheet.create({
   outer: {
     flex: 1,
+    height: '100%',
+    maxHeight: '100vh' as unknown as number,
     backgroundColor: colors.background,
     alignItems: 'center',
-    minHeight: '100vh' as unknown as number,
+    overflow: 'hidden',
   },
   frame: {
     flex: 1,
     width: '100%',
     maxWidth: MOBILE_MAX_WIDTH,
+    height: '100%',
+    minHeight: 0,
     backgroundColor: colors.surface,
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
-    minHeight: '100vh' as unknown as number,
     position: 'relative',
     flexDirection: 'column',
     ...(Platform.OS === 'web'

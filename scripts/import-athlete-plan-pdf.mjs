@@ -39,7 +39,7 @@ function buildDraftForDay(day, weekMonday, sessionNumber) {
   const scheduleDate = dateForWeekday(weekMonday, day.weekday);
   const schedule = {
     weekdays: [day.weekday],
-    recurrence: 'once',
+    recurrence: 'weekly',
     startDate: toLocalDateString(scheduleDate),
   };
 

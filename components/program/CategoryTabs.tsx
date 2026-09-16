@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { colors, spacing, typography } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
-import { isGymRole } from '@/lib/athleteService';
+import { isGymRole, isTrainerRole } from '@/lib/athleteService';
 import { getPlanDisplaySubtitle, type Plan } from '@/lib/programService';
 import type { ProgramCategory, UserRole } from '@/lib/types';
 import { isServicePlanCategory } from '@/lib/trainerConstants';
@@ -49,9 +49,15 @@ export function CategoryTabs({ plans, userRole, showSectionLabel = true }: Categ
     router.push(`/plan/${planId}`);
   };
 
+  const isStaff = isTrainerRole(userRole) || isGymRole(userRole);
+
   const renderPlan = (plan: Plan) => {
     const icon = PLAN_ICONS[plan.category] ?? 'programs';
-    const actionLabel = isServicePlanCategory(plan.category) ? 'Solicitar plan' : 'Entrar';
+    const actionLabel = isServicePlanCategory(plan.category)
+      ? isStaff
+        ? 'Crear plan'
+        : 'Solicitar plan'
+      : 'Entrar';
 
     return (
       <PlanCoverCard

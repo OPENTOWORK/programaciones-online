@@ -1,6 +1,6 @@
 import { enrichProgramFromHypeCatalog, isHypeWeeklyChallengePlaceholder, isHypeWeeklyChallengeProgram, sortHypePrograms } from '@/lib/hypeCatalog';
 import { isJwtClockSkewError, jwtClockSkewUserMessage, recoverJwtClockSkew } from '@/lib/authSessionRecovery';
-import { isAdminRole, isGymRole, isTrainerRole } from '@/lib/athleteService';
+import { isAdminRole, isGymRole, isTrainerOnlyRole, isTrainerRole } from '@/lib/athleteService';
 import { enrichProgramFromVenueCatalog, parseStandardVenueFromDescription } from '@/lib/standardVenueCatalog';
 import type { AppIconName } from '@/constants/icons';
 import type { Program, ProgramCategory, ProgramGoal, UserRole } from '@/lib/types';
@@ -87,11 +87,16 @@ export const GYM_ROLE_PLAN_CATEGORIES: ProgramCategory[] = [
   'gym_training',
 ];
 
-const GYM_ROLE_PLAN_ORDER: ProgramCategory[] = GYM_ROLE_PLAN_CATEGORIES;
-
 const GYM_ROLE_PLAN_STUBS: Plan[] = [
   { id: 'personalized', label: PLAN_DISPLAY_LABELS.personalized, category: 'personalized' },
   { id: 'hype', label: PLAN_DISPLAY_LABELS.hype, category: 'hype' },
+];
+
+/** Programaciones visibles en el panel del entrenador (rol `entrenador`). */
+export const TRAINER_ROLE_PLAN_CATEGORIES: ProgramCategory[] = ['personalized', 'nutrition'];
+
+const TRAINER_ROLE_PLAN_STUBS: Plan[] = [
+  { id: 'personalized', label: PLAN_DISPLAY_LABELS.personalized, category: 'personalized' },
 ];
 
 function sortPlansByCategory(plans: Plan[], order: ProgramCategory[]) {
@@ -100,13 +105,15 @@ function sortPlansByCategory(plans: Plan[], order: ProgramCategory[]) {
   );
 }
 
-export function filterPlansForUserRole(plans: Plan[], role?: UserRole) {
-  if (!isGymRole(role)) return plans;
-
+function filterPlansForRole(
+  plans: Plan[],
+  allowedCategories: ProgramCategory[],
+  stubs: Plan[],
+) {
   const byCategory = new Map<ProgramCategory, Plan>();
 
   for (const plan of plans) {
-    if (!GYM_ROLE_PLAN_CATEGORIES.includes(plan.category)) continue;
+    if (!allowedCategories.includes(plan.category)) continue;
     byCategory.set(plan.category, {
       ...plan,
       label: PLAN_DISPLAY_LABELS[plan.category] ?? plan.label,
@@ -114,24 +121,36 @@ export function filterPlansForUserRole(plans: Plan[], role?: UserRole) {
   }
 
   for (const servicePlan of APP_SERVICE_PLANS) {
-    if (!GYM_ROLE_PLAN_CATEGORIES.includes(servicePlan.category)) continue;
+    if (!allowedCategories.includes(servicePlan.category)) continue;
     if (!byCategory.has(servicePlan.category)) {
       byCategory.set(servicePlan.category, servicePlan);
     }
   }
 
-  for (const stub of GYM_ROLE_PLAN_STUBS) {
+  for (const stub of stubs) {
     if (!byCategory.has(stub.category)) {
       byCategory.set(stub.category, stub);
     }
   }
 
   return sortPlansByCategory(
-    GYM_ROLE_PLAN_CATEGORIES.map((category) => byCategory.get(category)).filter(
+    allowedCategories.map((category) => byCategory.get(category)).filter(
       (plan): plan is Plan => Boolean(plan),
     ),
-    GYM_ROLE_PLAN_ORDER,
+    allowedCategories,
   );
+}
+
+export function filterPlansForUserRole(plans: Plan[], role?: UserRole) {
+  if (isGymRole(role)) {
+    return filterPlansForRole(plans, GYM_ROLE_PLAN_CATEGORIES, GYM_ROLE_PLAN_STUBS);
+  }
+
+  if (isTrainerOnlyRole(role)) {
+    return filterPlansForRole(plans, TRAINER_ROLE_PLAN_CATEGORIES, TRAINER_ROLE_PLAN_STUBS);
+  }
+
+  return plans;
 }
 
 export function filterVisiblePrograms(programs: Program[]) {

@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { colors, spacing, typography, withAlpha } from '@/constants/theme';
-import { formatPlayerClock } from '@/lib/videoTelestrator';
+import {
+  formatPlaybackRateLabel,
+  formatPlayerClock,
+  SESSION_VIDEO_PLAYBACK_RATES,
+} from '@/lib/videoTelestrator';
 
 const DEFAULT_PORTRAIT_ASPECT = 9 / 16;
 const CLIP_WIDTH = 248;
@@ -23,6 +27,7 @@ interface SessionVideoPlayerProps {
   title?: string;
   subtitle?: string;
   onAnnotate?: () => void;
+  showPlaybackSpeeds?: boolean;
 }
 
 export function SessionVideoPlayer({
@@ -31,21 +36,33 @@ export function SessionVideoPlayer({
   title,
   subtitle,
   onAnnotate,
+  showPlaybackSpeeds = false,
 }: SessionVideoPlayerProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [aspect, setAspect] = useState(DEFAULT_PORTRAIT_ASPECT);
   const [duration, setDuration] = useState<number | null>(null);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const portrait = aspect <= 0.92;
   const metaLine = [subtitle, duration ? formatPlayerClock(duration) : null].filter(Boolean).join(' · ');
+
+  const applyPlaybackRate = useCallback((rate: number) => {
+    setPlaybackRate(rate);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = rate;
+    }
+  }, []);
 
   const handleMeta = (event: { target: EventTarget | null }) => {
     const video = event.target as HTMLVideoElement | null;
     if (!video) return;
+    videoRef.current = video;
     if (video.videoWidth > 0 && video.videoHeight > 0) {
       setAspect(video.videoWidth / video.videoHeight);
     }
     if (Number.isFinite(video.duration) && video.duration > 0) {
       setDuration(video.duration);
     }
+    video.playbackRate = playbackRate;
   };
 
   const info = title ? (
@@ -79,6 +96,9 @@ export function SessionVideoPlayer({
     <View style={[styles.clip, compact && styles.clipCompact, !portrait && styles.clipLandscape]}>
       <View style={[styles.stage, { aspectRatio: aspect }]}>
         <video
+          ref={(node) => {
+            videoRef.current = node;
+          }}
           src={url}
           controls
           playsInline
@@ -95,6 +115,34 @@ export function SessionVideoPlayer({
           <track kind="captions" />
         </video>
       </View>
+
+      {showPlaybackSpeeds ? (
+        <View style={styles.speedRow}>
+          <Text style={styles.speedLabel}>Velocidad</Text>
+          <View style={styles.speedChips}>
+            {SESSION_VIDEO_PLAYBACK_RATES.map((rate) => {
+              const active = playbackRate === rate;
+              return (
+                <Pressable
+                  key={rate}
+                  onPress={() => applyPlaybackRate(rate)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Velocidad ${formatPlaybackRateLabel(rate)}`}
+                  style={({ pressed }) => [
+                    styles.speedChip,
+                    active && styles.speedChipActive,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.speedChipText, active && styles.speedChipTextActive]}>
+                    {formatPlaybackRateLabel(rate)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
 
       {info}
 
@@ -133,6 +181,46 @@ const styles = StyleSheet.create({
   stage: {
     width: '100%',
     backgroundColor: '#07090C',
+  },
+  speedRow: {
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: '#0C1118',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  speedLabel: {
+    ...typography.caption,
+    color: 'rgba(255,255,255,0.55)',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  speedChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  speedChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+  },
+  speedChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  speedChipText: {
+    ...typography.caption,
+    color: 'rgba(255,255,255,0.72)',
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  speedChipTextActive: {
+    color: colors.white,
   },
   infoBar: {
     paddingHorizontal: 12,

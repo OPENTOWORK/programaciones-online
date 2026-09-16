@@ -99,7 +99,8 @@ type PendingDelete = {
 };
 
 export default function AthleteDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const router = useRouter();
   const { user } = useAuth();
   const canOpenAthleteCalendar = isAdminRole(user?.role);
@@ -555,8 +556,14 @@ export default function AthleteDetailScreen() {
 
   if (!athlete) {
     return (
-      <ScreenWrapper>
-        <Text style={styles.error}>Atleta no encontrado</Text>
+      <ScreenWrapper scrollable={false}>
+        <View style={styles.missingState}>
+          <Text style={styles.error}>No se pudo cargar la ficha de este atleta.</Text>
+          <Text style={styles.errorHint}>
+            Comprueba que sigue asignado a tu tablero y vuelve a intentarlo.
+          </Text>
+          <Button title="Reintentar" onPress={() => refreshAthlete()} style={styles.retryBtn} />
+        </View>
       </ScreenWrapper>
     );
   }
@@ -922,7 +929,22 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   loader: { marginTop: spacing.xl },
+  missingState: {
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
   error: { ...typography.body, color: colors.danger, textAlign: 'center' },
+  errorHint: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  retryBtn: {
+    minWidth: 160,
+  },
   header: { alignItems: 'center', marginBottom: spacing.lg },
   avatar: {
     width: 88,

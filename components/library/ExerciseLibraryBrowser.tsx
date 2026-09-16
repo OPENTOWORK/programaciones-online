@@ -12,16 +12,19 @@ import {
 } from 'react-native';
 
 import { AddYoutubeVideoModal } from '@/components/library/AddYoutubeVideoModal';
+import { ExerciseLibrarySettingsModal } from '@/components/library/ExerciseLibrarySettingsModal';
 import { AlphabetFilter } from '@/components/library/AlphabetFilter';
 import { Card } from '@/components/ui/Card';
 import { ExerciseVideoEmbed } from '@/components/workout/ExerciseVideoEmbed';
 import { YoutubeThumbnail } from '@/components/workout/YoutubeThumbnail';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { useExerciseLibraryAccess } from '@/hooks/useExerciseLibraryAccess';
 import { useExerciseLibrary } from '@/hooks/useExerciseLibrary';
 import {
   filterExerciseLibrary,
   filterExerciseLibraryByOrigin,
+  filterExerciseLibraryForAthleteAccess,
   type ExerciseLibraryItem,
   type ExerciseLibraryOriginFilter,
 } from '@/lib/exerciseLibrary';
@@ -49,19 +52,29 @@ export function ExerciseLibraryBrowser({
   const { width } = useWindowDimensions();
   const { user } = useAuth();
   const { items, isLoading, error, refresh } = useExerciseLibrary();
+  const {
+    access,
+    canManageSettings,
+    isSaving: isSavingSettings,
+    error: settingsError,
+    setAthletesCanSeePageLibrary,
+  } = useExerciseLibraryAccess();
 
   const [query, setQuery] = useState('');
   const [letter, setLetter] = useState<string | null>(null);
   const [origin, setOrigin] = useState<ExerciseLibraryOriginFilter>('all');
   const [selected, setSelected] = useState<ExerciseLibraryItem | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const filteredItems = useMemo(() => {
-    const byOrigin = canManage ? filterExerciseLibraryByOrigin(items, origin, user?.id) : items;
-    return filterExerciseLibrary(byOrigin, query);
-  }, [canManage, items, origin, query, user?.id]);
+    const visibleItems = canManage
+      ? filterExerciseLibraryByOrigin(items, origin, user?.id)
+      : filterExerciseLibraryForAthleteAccess(items, access);
+    return filterExerciseLibrary(visibleItems, query);
+  }, [access, canManage, items, origin, query, user?.id]);
 
   const availableLetters = useMemo(
     () => buildAvailableFirstLetters(filteredItems.map((item) => item.name)),
@@ -190,6 +203,16 @@ export function ExerciseLibraryBrowser({
 
         {canManage ? (
           <View style={styles.resultsActions}>
+            {canManageSettings ? (
+              <Pressable
+                onPress={() => setSettingsOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Configuración de biblioteca para atletas"
+                style={({ pressed }) => [styles.settingsBtn, pressed && styles.settingsBtnPressed]}
+              >
+                <Ionicons name="settings-outline" size={18} color={colors.textSecondary} />
+              </Pressable>
+            ) : null}
             <View style={styles.filterRow}>
               {ORIGIN_FILTERS.map((filter) => {
                 const active = origin === filter.id;
@@ -301,17 +324,27 @@ export function ExerciseLibraryBrowser({
       )}
 
       {canManage ? (
-        <AddYoutubeVideoModal
-          visible={addOpen}
-          saving={saving}
-          error={saveError}
-          onClose={() => {
-            if (saving) return;
-            setAddOpen(false);
-            setSaveError(null);
-          }}
-          onSave={(input) => void handleAddVideo(input)}
-        />
+        <>
+          <ExerciseLibrarySettingsModal
+            visible={settingsOpen}
+            athletesCanSeePageLibrary={access.athletesCanSeePageLibrary}
+            saving={isSavingSettings}
+            error={settingsError}
+            onClose={() => setSettingsOpen(false)}
+            onChange={(next) => void setAthletesCanSeePageLibrary(next)}
+          />
+          <AddYoutubeVideoModal
+            visible={addOpen}
+            saving={saving}
+            error={saveError}
+            onClose={() => {
+              if (saving) return;
+              setAddOpen(false);
+              setSaveError(null);
+            }}
+            onSave={(input) => void handleAddVideo(input)}
+          />
+        </>
       ) : null}
     </View>
   );
@@ -421,6 +454,19 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  settingsBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  settingsBtnPressed: {
+    opacity: 0.85,
   },
   filterRow: {
     flexDirection: 'row',

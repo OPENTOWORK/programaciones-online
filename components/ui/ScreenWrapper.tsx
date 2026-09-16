@@ -29,7 +29,8 @@ export function ScreenWrapper({
   const internalScrollRef = useRef<ScrollView>(null);
   const scrollRef = externalScrollRef ?? internalScrollRef;
   const bottomInset = useBottomSafeInset();
-  const scrollBottomPadding = isWebPlatform() ? spacing.xxl : spacing.lg + bottomInset;
+  const isWeb = isWebPlatform();
+  const scrollBottomPadding = isWeb ? spacing.xxl : spacing.lg + bottomInset;
 
   useFocusEffect(
     useCallback(() => {
@@ -42,14 +43,18 @@ export function ScreenWrapper({
   const content = scrollable ? (
     <ScrollView
       ref={scrollRef}
+      {...(isWeb ? ({ dataSet: { hideScrollbar: 'true' } } as object) : null)}
+      style={[styles.scrollView, isWeb && styles.scrollViewWeb]}
       contentContainerStyle={[
         styles.scrollContent,
         padded && styles.padded,
-        padded && !isWebPlatform() && styles.paddedNative,
-        !isWebPlatform() && { paddingBottom: scrollBottomPadding },
+        padded && !isWeb && styles.paddedNative,
+        !isWeb && { paddingBottom: scrollBottomPadding },
         style,
       ]}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled
     >
       {children}
     </ScrollView>
@@ -59,7 +64,9 @@ export function ScreenWrapper({
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <AppBackgroundScaffold style={styles.scaffold}>{content}</AppBackgroundScaffold>
+      <AppBackgroundScaffold style={styles.scaffold}>
+        <View style={styles.scrollViewport}>{content}</View>
+      </AppBackgroundScaffold>
     </SafeAreaView>
   );
 }
@@ -67,11 +74,33 @@ export function ScreenWrapper({
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
+    minHeight: 0,
     backgroundColor: colors.background,
+    ...(Platform.OS === 'web' ? ({ height: '100%' } as ViewStyle) : null),
   },
   scaffold: {
     zIndex: 1,
+    flex: 1,
+    minHeight: 0,
   },
+  scrollViewport: {
+    flex: 1,
+    minHeight: 0,
+  },
+  scrollView: {
+    flex: 1,
+    minHeight: 0,
+  },
+  scrollViewWeb: Platform.select({
+    web: {
+      overflowY: 'auto',
+      overflowX: 'hidden',
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
+      WebkitOverflowScrolling: 'touch',
+    } as ViewStyle,
+    default: {},
+  }),
   scrollContent: {
     flexGrow: 1,
     paddingBottom: spacing.xxl,
