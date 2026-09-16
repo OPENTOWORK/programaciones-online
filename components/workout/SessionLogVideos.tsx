@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { ActionSheetModal } from '@/components/ui/ActionSheetModal';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
 import { SessionVideoSendModal } from '@/components/workout/SessionVideoSendModal';
 import { VideoTelestratorModal } from '@/components/trainer/VideoTelestratorModal';
+import { SessionVideoCarouselModal } from '@/components/workout/SessionVideoCarousel';
 import { SessionVideoPlayer } from '@/components/workout/SessionVideoPlayer';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useSessionVideos } from '@/hooks/useSessionVideos';
@@ -59,6 +61,7 @@ export function SessionLogVideos({
   const internal = useSessionVideos(controlled ? undefined : logId, controlled ? undefined : userId);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [annotateVideo, setAnnotateVideo] = useState<SessionLogVideo | null>(null);
+  const [continuousPlayback, setContinuousPlayback] = useState(false);
 
   const videos = videosProp ?? internal.videos;
   const isLoading = isLoadingProp ?? internal.isLoading;
@@ -69,6 +72,7 @@ export function SessionLogVideos({
     canUploadProp ?? (!readOnly && Boolean(logId && userId) && !requiresSavedLog);
   const needsSaveFirst = requiresSavedLog && !logId && !canUploadProp;
   const subtle = tone === 'subtle';
+  const canUseCarousel = Platform.OS === 'web' && videos.length > 1;
 
   const handleUploadPress = () => {
     if (onUpload) {
@@ -82,8 +86,41 @@ export function SessionLogVideos({
     <View style={[styles.wrap, compact && styles.wrapCompact, subtle && styles.wrapSubtle]}>
       {!subtle ? (
         <View style={styles.header}>
-          <Text style={styles.label}>Videos del entreno</Text>
-          {videos.length > 0 ? <Text style={styles.count}>{videos.length}</Text> : null}
+          <View style={styles.headerMain}>
+            <Text style={styles.label}>Videos del entreno</Text>
+            {videos.length > 0 ? <Text style={styles.count}>{videos.length}</Text> : null}
+          </View>
+          {canUseCarousel ? (
+            <Pressable
+              onPress={() => setContinuousPlayback((current) => !current)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: continuousPlayback }}
+              accessibilityLabel={
+                continuousPlayback
+                  ? 'Desactivar reproducción continua'
+                  : 'Activar reproducción continua en carrusel'
+              }
+              style={({ pressed }) => [
+                styles.carouselToggle,
+                continuousPlayback && styles.carouselToggleActive,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name={continuousPlayback ? 'play-circle' : 'play-circle-outline'}
+                size={15}
+                color={continuousPlayback ? colors.white : colors.accent}
+              />
+              <Text
+                style={[
+                  styles.carouselToggleText,
+                  continuousPlayback && styles.carouselToggleTextActive,
+                ]}
+              >
+                Reproducción continua
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -152,6 +189,17 @@ export function SessionLogVideos({
       )}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {canUseCarousel ? (
+        <SessionVideoCarouselModal
+          visible={continuousPlayback}
+          videos={videos}
+          formatVideoDate={formatVideoDate}
+          showPlaybackSpeeds={Boolean(onAnnotatedVideo)}
+          onClose={() => setContinuousPlayback(false)}
+          onAnnotate={onAnnotatedVideo ? (video) => setAnnotateVideo(video) : undefined}
+        />
+      ) : null}
 
       <ActionSheetModal
         visible={pickerOpen}
@@ -224,8 +272,38 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    justifyContent: 'space-between',
+    gap: spacing.sm,
     marginBottom: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  headerMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  carouselToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.surface,
+  },
+  carouselToggleActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  carouselToggleText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  carouselToggleTextActive: {
+    color: colors.white,
   },
   label: {
     ...typography.caption,

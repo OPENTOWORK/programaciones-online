@@ -11,14 +11,16 @@ import {
   View,
 } from 'react-native';
 
+import { TrainerBroadcastModal } from '@/components/trainer/TrainerBroadcastModal';
 import { TrainerChatPanel } from '@/components/trainer/TrainerChatPanel';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Card } from '@/components/ui/Card';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
-import { useAthlete } from '@/hooks/useAthletes';
+import { useAthlete, useAthletes } from '@/hooks/useAthletes';
 import { useChatComposer } from '@/hooks/useChatComposer';
 import { useCanManageAthleteChat } from '@/hooks/useCanManageAthleteChat';
+import { useTrainerBroadcast } from '@/hooks/useTrainerBroadcast';
 import { useTrainerChatInbox, type TrainerChatConversation } from '@/hooks/useTrainerChatInbox';
 import { useTrainerMessages } from '@/hooks/useTrainerMessages';
 import { getFeedbackChatHref } from '@/lib/navigation';
@@ -165,7 +167,10 @@ export default function TrainerChatsScreen() {
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
   const selectedId = Array.isArray(id) ? id[0] : id;
   const { conversations, isLoading, error, refresh } = useTrainerChatInbox();
+  const { athletes } = useAthletes();
   const [query, setQuery] = useState('');
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const broadcast = useTrainerBroadcast();
   const { width } = useWindowDimensions();
   const split = width >= 960;
 
@@ -186,13 +191,30 @@ export default function TrainerChatsScreen() {
     router.push({ pathname: '/trainer/chat/[id]', params: { id: athleteId } });
   };
 
+  const openBroadcast = () => {
+    broadcast.reset();
+    setBroadcastOpen(true);
+    void broadcast.loadGroups(athletes);
+  };
+
   return (
     <ScreenWrapper scrollable={false} padded={false}>
       <View style={[styles.page, split && styles.pageSplit]}>
         <View style={[styles.inbox, split && styles.inboxSplit]}>
           <View style={styles.header}>
-            <Text style={styles.title}>Chats</Text>
-            <Text style={styles.subtitle}>Conversaciones con tus atletas</Text>
+            <View style={styles.headerCopy}>
+              <Text style={styles.title}>Chats</Text>
+              <Text style={styles.subtitle}>Conversaciones con tus atletas</Text>
+            </View>
+            <Pressable
+              onPress={openBroadcast}
+              accessibilityRole="button"
+              accessibilityLabel="Envío masivo"
+              style={({ pressed }) => [styles.broadcastBtn, pressed && styles.rowPressed]}
+            >
+              <AppIcon name="trainer" size={15} color={colors.accent} outlined />
+              <Text style={styles.broadcastBtnText}>Envío masivo</Text>
+            </Pressable>
           </View>
 
           <View style={styles.searchWrap}>
@@ -251,6 +273,21 @@ export default function TrainerChatsScreen() {
           </View>
         ) : null}
       </View>
+
+      <TrainerBroadcastModal
+        visible={broadcastOpen}
+        groups={broadcast.groups}
+        loading={broadcast.isLoading}
+        progress={broadcast.progress}
+        outcome={broadcast.outcome}
+        error={broadcast.error}
+        onClose={() => setBroadcastOpen(false)}
+        onSend={(recipients, template) => {
+          void broadcast.send(recipients, template).then((result) => {
+            if (result && result.failed.length === 0) void refresh();
+          });
+        }}
+      />
     </ScreenWrapper>
   );
 }
@@ -276,7 +313,31 @@ const styles = StyleSheet.create({
     borderRightColor: colors.border,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
     marginBottom: spacing.xs,
+  },
+  headerCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  broadcastBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '12'),
+  },
+  broadcastBtnText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
   },
   title: {
     ...typography.h2,

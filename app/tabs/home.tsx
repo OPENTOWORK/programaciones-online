@@ -69,6 +69,7 @@ export default function HomeScreen() {
           <View style={styles.athleteBody}>
             <HomeBrandShowcase />
             <View
+              style={styles.modules}
               onLayout={(event) => {
                 calendarOffsetY.current = event.nativeEvent.layout.y;
               }}
@@ -92,6 +93,9 @@ const styles = StyleSheet.create({
   },
   athleteBody: {
     gap: spacing.lg,
+  },
+  modules: {
+    gap: spacing.md,
   },
   header: {
     flexDirection: 'row',

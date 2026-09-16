@@ -186,6 +186,6 @@ export function AthleteCurrentSchedule({
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
 });

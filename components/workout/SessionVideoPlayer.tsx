@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
@@ -24,33 +24,58 @@ interface SessionVideoPlayerProps {
   url: string;
   mimeType?: string;
   compact?: boolean;
+  expanded?: boolean;
   title?: string;
   subtitle?: string;
   onAnnotate?: () => void;
   showPlaybackSpeeds?: boolean;
+  autoPlay?: boolean;
+  onEnded?: () => void;
+  playbackRate?: number;
+  onPlaybackRateChange?: (rate: number) => void;
 }
 
 export function SessionVideoPlayer({
   url,
   compact = false,
+  expanded = false,
   title,
   subtitle,
   onAnnotate,
   showPlaybackSpeeds = false,
+  autoPlay = false,
+  onEnded,
+  playbackRate: playbackRateProp,
+  onPlaybackRateChange,
 }: SessionVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [aspect, setAspect] = useState(DEFAULT_PORTRAIT_ASPECT);
   const [duration, setDuration] = useState<number | null>(null);
-  const [playbackRate, setPlaybackRate] = useState(1);
+  const [internalPlaybackRate, setInternalPlaybackRate] = useState(1);
+  const playbackRate = playbackRateProp ?? internalPlaybackRate;
   const portrait = aspect <= 0.92;
   const metaLine = [subtitle, duration ? formatPlayerClock(duration) : null].filter(Boolean).join(' · ');
 
-  const applyPlaybackRate = useCallback((rate: number) => {
-    setPlaybackRate(rate);
-    if (videoRef.current) {
-      videoRef.current.playbackRate = rate;
-    }
-  }, []);
+  const applyPlaybackRate = useCallback(
+    (rate: number) => {
+      if (onPlaybackRateChange) {
+        onPlaybackRateChange(rate);
+      } else {
+        setInternalPlaybackRate(rate);
+      }
+      if (videoRef.current) {
+        videoRef.current.playbackRate = rate;
+      }
+    },
+    [onPlaybackRateChange],
+  );
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !autoPlay) return;
+    const video = videoRef.current;
+    if (!video) return;
+    void video.play().catch(() => undefined);
+  }, [autoPlay, url]);
 
   const handleMeta = (event: { target: EventTarget | null }) => {
     const video = event.target as HTMLVideoElement | null;
@@ -63,16 +88,20 @@ export function SessionVideoPlayer({
       setDuration(video.duration);
     }
     video.playbackRate = playbackRate;
+    if (autoPlay) {
+      void video.play().catch(() => undefined);
+    }
   };
 
-  const info = title ? (
-    <View style={styles.infoBar}>
-      <Text style={styles.infoTitle} numberOfLines={2}>
-        {title}
-      </Text>
-      {metaLine ? <Text style={styles.infoMeta}>{metaLine}</Text> : null}
-    </View>
-  ) : null;
+  const info =
+    title && !expanded ? (
+      <View style={styles.infoBar}>
+        <Text style={styles.infoTitle} numberOfLines={2}>
+          {title}
+        </Text>
+        {metaLine ? <Text style={styles.infoMeta}>{metaLine}</Text> : null}
+      </View>
+    ) : null;
 
   if (Platform.OS !== 'web') {
     return (
@@ -93,8 +122,20 @@ export function SessionVideoPlayer({
   }
 
   return (
-    <View style={[styles.clip, compact && styles.clipCompact, !portrait && styles.clipLandscape]}>
-      <View style={[styles.stage, { aspectRatio: aspect }]}>
+    <View
+      style={[
+        styles.clip,
+        compact && styles.clipCompact,
+        !portrait && !expanded && styles.clipLandscape,
+        expanded && styles.clipExpanded,
+      ]}
+    >
+      <View
+        style={[
+          styles.stage,
+          expanded ? styles.stageExpanded : { aspectRatio: aspect },
+        ]}
+      >
         <video
           ref={(node) => {
             videoRef.current = node;
@@ -104,6 +145,7 @@ export function SessionVideoPlayer({
           playsInline
           preload="metadata"
           onLoadedMetadata={handleMeta}
+          onEnded={() => onEnded?.()}
           style={{
             width: '100%',
             height: '100%',
@@ -178,10 +220,25 @@ const styles = StyleSheet.create({
     width: 340,
     maxWidth: '100%',
   },
+  clipExpanded: {
+    width: '100%',
+    maxWidth: '100%',
+    borderRadius: 18,
+  },
   stage: {
     width: '100%',
     backgroundColor: '#07090C',
   },
+  stageExpanded: Platform.select({
+    web: {
+      width: '100%',
+      height: 'min(72vh, 760px)' as unknown as number,
+      maxHeight: '72vh' as unknown as number,
+    } as const,
+    default: {
+      minHeight: 420,
+    },
+  }),
   speedRow: {
     gap: 6,
     paddingHorizontal: 10,
