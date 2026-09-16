@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { AthleteFeedbackComposer } from '@/components/trainer/AthleteFeedbackComposer';
@@ -15,6 +15,8 @@ import {
 import { formatDayLabel } from '@/lib/programSchedulePreview';
 import { loadWorkoutForSessionLog } from '@/lib/sessionLogDetail';
 import { fetchSessionLogById, type SessionLogRecord } from '@/lib/sessionLogService';
+import type { SessionLogVideo } from '@/lib/sessionVideoService';
+import type { FeedbackAttachmentDraft } from '@/lib/trainerFeedbackMediaService';
 
 export default function TrainerSessionLogDetailScreen() {
   const { id: athleteId, logId } = useLocalSearchParams<{ id: string; logId: string }>();
@@ -114,6 +116,25 @@ export default function TrainerSessionLogDetailScreen() {
     [feedback.entries, logId],
   );
 
+  const [queuedDrafts, setQueuedDrafts] = useState<FeedbackAttachmentDraft[] | undefined>();
+  const [queuedMessage, setQueuedMessage] = useState<string | undefined>();
+
+  const handleAnnotatedVideo = useCallback(
+    (draft: FeedbackAttachmentDraft, video: SessionLogVideo) => {
+      const exerciseName = video.exerciseName?.trim();
+      setQueuedDrafts([draft]);
+      setQueuedMessage(
+        exerciseName ? `Corrección sobre ${exerciseName}` : 'Corrección en vídeo del entreno',
+      );
+    },
+    [],
+  );
+
+  const clearQueuedFeedback = useCallback(() => {
+    setQueuedDrafts(undefined);
+    setQueuedMessage(undefined);
+  }, []);
+
   if (loading || workoutLoading) {
     return (
       <ScreenWrapper scrollable={false}>
@@ -152,6 +173,7 @@ export default function TrainerSessionLogDetailScreen() {
         readOnly
         readOnlySubtitle="Registro del atleta · qué hizo y qué ejercicios tenía la sesión"
         logId={log.id}
+        onAnnotatedVideo={handleAnnotatedVideo}
       />
 
       <View style={styles.feedbackSection}>
@@ -173,6 +195,9 @@ export default function TrainerSessionLogDetailScreen() {
           showHistory={sessionEntries.length > 0}
           historyTitle="Feedback enviado"
           emptyHistoryText=""
+          queuedDrafts={queuedDrafts}
+          queuedMessage={queuedMessage}
+          onQueuedDraftsConsumed={clearQueuedFeedback}
         />
       </View>
     </ScreenWrapper>

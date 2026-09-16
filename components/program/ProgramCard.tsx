@@ -6,6 +6,8 @@ import {
   PlanBrandSilverIcon,
   planBrandActionButtonStyle,
   planBrandActionButtonTextStyle,
+  planBrandCatalogStyles,
+  PLAN_BRAND_CATALOG_ICON_SIZE,
   planBrandStyles,
 } from '@/components/program/planBrandUi';
 import { AppIcon } from '@/components/ui/AppIcon';
@@ -13,6 +15,7 @@ import { borderRadius, spacing, typography, colors, brandColors, withAlpha } fro
 import { useAuth } from '@/hooks/useAuth';
 import { usePrograms } from '@/hooks/usePrograms';
 import { isAdminRole, isTrainerRole } from '@/lib/athleteService';
+import { pickCatalogExampleWorkout } from '@/lib/catalogExampleDay';
 import { getCatalogPriceOffer } from '@/lib/catalogPricing';
 import { ensureHypeWeeklyChallengeProgram, ensureVenueCatalogProgram } from '@/lib/programEditService';
 import {
@@ -24,18 +27,22 @@ import {
   isPaidHypeCatalogProgram,
 } from '@/lib/hypeCatalog';
 import { isMetconCatalogProgram, isVenuePlaceholderProgram } from '@/lib/standardVenueCatalog';
+import { CATALOG_ACCESS_REQUEST_MESSAGE, SHOW_CATALOG_PRICING } from '@/lib/storeCompliance';
 import type { Program } from '@/lib/types';
+import { fetchWorkoutsByProgram } from '@/lib/workoutService';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 interface ProgramCardProps {
   program: Program;
+  /** Reparte la altura disponible en listas de catálogo a pantalla completa. */
+  fillHeight?: boolean;
 }
 
-export function ProgramCard({ program }: ProgramCardProps) {
+export function ProgramCard({ program, fillHeight = false }: ProgramCardProps) {
   const router = useRouter();
-  const { user } = useAuth();
-  const { refresh } = usePrograms();
+  const { user, isDemoMode } = useAuth();
+  const { refresh, workouts: catalogWorkouts } = usePrograms();
   const isAdmin = isAdminRole(user?.role);
   const isStaff = isTrainerRole(user?.role);
   const isPaidCatalog = isPaidHypeCatalogProgram(program);
@@ -45,24 +52,29 @@ export function ProgramCard({ program }: ProgramCardProps) {
   const isPlaceholder = isComingSoon || isWeeklyChallengePlaceholder;
   const canManagePlaceholder = isPlaceholder && (isPaidCatalog ? isAdmin : isStaff);
   const canEnter = !isPaidCatalog || canEnterHypeCatalogProgram(user?.role);
-  const showBuy = isPaidCatalog && !isAdmin;
+  // En iOS no se ofrece compra de contenido digital: lo asigna el entrenador.
+  const showBuy = isPaidCatalog && !isAdmin && SHOW_CATALOG_PRICING;
+  const showRequestAccess = isPaidCatalog && !canEnter && !SHOW_CATALOG_PRICING;
   const isLocked = !isPaidCatalog && program.status === 'bloqueada' && !canManagePlaceholder;
   const isMetcon = isMetconCatalogProgram(program);
   const useBlueTheme = isMetcon || isWeeklyChallenge;
   const [creating, setCreating] = useState(false);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [exampleLoading, setExampleLoading] = useState(false);
   const hasDetails = Boolean(
     program.description || program.catalogDesignedFor || program.catalogMonitor || program.equipment.length > 0,
   );
-  const priceOffer = isPaidCatalog
-    ? getCatalogPriceOffer(program.catalogPrice, user?.role)
-    : program.catalogPrice
-      ? { current: program.catalogPrice }
-      : null;
+  const priceOffer = !SHOW_CATALOG_PRICING
+    ? null
+    : isPaidCatalog
+      ? getCatalogPriceOffer(program.catalogPrice, user?.role)
+      : program.catalogPrice
+        ? { current: program.catalogPrice }
+        : null;
 
   const handlePress = async () => {
-    if (showBuy) {
+    if (showBuy || showRequestAccess) {
       setPurchaseOpen(true);
       return;
     }
@@ -92,23 +104,63 @@ export function ProgramCard({ program }: ProgramCardProps) {
     ? 'Crear programación'
     : showBuy
       ? 'Comprar'
-      : isPlaceholder
-        ? 'Próximamente'
-        : isLocked
-          ? 'Bloqueada'
-          : 'Ver programación';
+      : showRequestAccess
+        ? 'Cómo conseguir acceso'
+        : isPlaceholder
+          ? 'Próximamente'
+          : isLocked
+            ? 'Bloqueada'
+            : 'Ver programación';
 
   const actionDisabled =
     creating ||
-    (!showBuy && (isLocked || (isPlaceholder && !canManagePlaceholder)));
+    (!showBuy &&
+      !showRequestAccess &&
+      (isLocked || (isPlaceholder && !canManagePlaceholder)));
   const useBlueButton = useBlueTheme && !actionDisabled;
 
-  const leadStyle = useBlueTheme ? styles.leadBlue : planBrandStyles.lead;
-  const tagStyle = useBlueTheme ? styles.tagBlue : planBrandStyles.tag;
+  const leadStyle = useBlueTheme ? styles.leadBlue : planBrandCatalogStyles.lead;
+  const tagStyle = useBlueTheme ? styles.tagBlue : planBrandCatalogStyles.tag;
+  const showExampleDay = !isPlaceholder;
+  const linkIconColor = useBlueTheme ? colors.metcon : withAlpha(brandColors.orangeSecondary, 'CC');
+  const linkTextStyle = [planBrandCatalogStyles.metaText, useBlueTheme && styles.moreInfoBlue];
+
+  const openExampleDay = async () => {
+    setExampleLoading(true);
+    try {
+      let programWorkouts = catalogWorkouts.filter((workout) => workout.programId === program.id);
+      if (!isDemoMode && programWorkouts.length === 0) {
+        programWorkouts = await fetchWorkoutsByProgram(program.id);
+      }
+
+      const example = pickCatalogExampleWorkout(programWorkouts);
+      if (!example) {
+        Alert.alert(
+          'Ejemplo no disponible',
+          'Todavía no hay una sesión de muestra publicada en esta programación.',
+        );
+        return;
+      }
+
+      router.push({
+        pathname: '/workout/[id]',
+        params: { id: example.id, preview: '1' },
+      });
+    } finally {
+      setExampleLoading(false);
+    }
+  };
 
   return (
-    <View style={[planBrandStyles.card, styles.card, useBlueTheme && styles.cardBlue]}>
-      <View style={planBrandStyles.inner}>
+    <View
+      style={[
+        planBrandStyles.card,
+        styles.card,
+        fillHeight && styles.cardFill,
+        useBlueTheme && styles.cardBlue,
+      ]}
+    >
+      <View style={[planBrandStyles.inner, planBrandCatalogStyles.inner, fillHeight && styles.innerFill]}>
         {priceOffer ? (
           <View
             style={[
@@ -128,34 +180,57 @@ export function ProgramCard({ program }: ProgramCardProps) {
         ) : null}
 
         <View style={styles.header}>
-          <PlanBrandSilverIcon name={program.icon} iconSize={22} />
+          <PlanBrandSilverIcon
+            name={program.icon}
+            size={fillHeight ? PLAN_BRAND_CATALOG_ICON_SIZE : PLAN_BRAND_CATALOG_ICON_SIZE - 4}
+            iconSize={fillHeight ? 22 : 20}
+          />
           <View style={[styles.headerText, priceOffer?.original && styles.headerTextWithDiscount]}>
             <View style={styles.titleRow}>
               <Text style={leadStyle}>{program.name}</Text>
               {program.catalogNameTag ? <Text style={tagStyle}>{program.catalogNameTag}</Text> : null}
             </View>
-            {hasDetails ? (
-              <Pressable
-                onPress={() => setInfoOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Más información sobre ${program.name}`}
-                style={({ pressed }) => [styles.moreInfoBtn, pressed && styles.moreInfoBtnPressed]}
-              >
-                <AppIcon
-                  name="info"
-                  size={15}
-                  color={useBlueTheme ? colors.metcon : withAlpha(brandColors.orangeSecondary, 'CC')}
-                />
-                <Text style={[planBrandStyles.metaText, useBlueTheme && styles.moreInfoBlue]}>
-                  Más información
-                </Text>
-              </Pressable>
+            {hasDetails || showExampleDay ? (
+              <View style={styles.metaLinks}>
+                {hasDetails ? (
+                  <Pressable
+                    onPress={() => setInfoOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Más información sobre ${program.name}`}
+                    style={({ pressed }) => [styles.moreInfoBtn, pressed && styles.moreInfoBtnPressed]}
+                  >
+                    <AppIcon name="info" size={14} color={linkIconColor} />
+                    <Text style={linkTextStyle}>Más información</Text>
+                  </Pressable>
+                ) : null}
+                {showExampleDay ? (
+                  <Pressable
+                    onPress={() => void openExampleDay()}
+                    disabled={exampleLoading}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ver un día de ejemplo de ${program.name}`}
+                    style={({ pressed }) => [
+                      styles.moreInfoBtn,
+                      pressed && !exampleLoading && styles.moreInfoBtnPressed,
+                      exampleLoading && styles.moreInfoBtnDisabled,
+                    ]}
+                  >
+                    {exampleLoading ? (
+                      <AppIcon name="time" size={14} color={linkIconColor} />
+                    ) : (
+                      <AppIcon name="calendar" size={14} color={linkIconColor} />
+                    )}
+                    <Text style={linkTextStyle}>Un día de ejemplo</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
           </View>
         </View>
 
         <Button
           title={buttonTitle}
+          size={fillHeight ? 'default' : 'compact'}
           onPress={() => void handlePress()}
           variant={actionDisabled ? 'secondary' : useBlueButton ? 'primary' : 'outline'}
           disabled={actionDisabled}
@@ -174,8 +249,10 @@ export function ProgramCard({ program }: ProgramCardProps) {
       <ProgramDetailsModal visible={infoOpen} program={program} onClose={() => setInfoOpen(false)} />
       <ConfirmModal
         visible={purchaseOpen}
-        title={HYPE_CATALOG_PURCHASE_PENDING_TITLE}
-        message={HYPE_CATALOG_PURCHASE_PENDING_MESSAGE}
+        title={showRequestAccess ? 'Acceso a la programación' : HYPE_CATALOG_PURCHASE_PENDING_TITLE}
+        message={
+          showRequestAccess ? CATALOG_ACCESS_REQUEST_MESSAGE : HYPE_CATALOG_PURCHASE_PENDING_MESSAGE
+        }
         confirmLabel="Entendido"
         cancelLabel="Cerrar"
         onCancel={() => setPurchaseOpen(false)}
@@ -239,20 +316,29 @@ const PRICE_GREEN = '#4ADE80';
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     position: 'relative',
+  },
+  cardFill: {
+    flex: 1,
+    height: '100%',
+    marginBottom: 0,
+  },
+  innerFill: {
+    flex: 1,
+    justifyContent: 'space-between',
   },
   cardBlue: {
     borderColor: withAlpha(colors.metcon, '66'),
   },
   priceBadge: {
     position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
+    top: spacing.sm,
+    right: spacing.sm,
     backgroundColor: 'rgba(15,20,25,0.72)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     zIndex: 2,
     alignItems: 'flex-end',
     gap: 1,
@@ -269,6 +355,7 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: PRICE_GREEN,
     fontWeight: '700',
+    fontSize: 11,
   },
   priceOld: {
     ...typography.caption,
@@ -285,47 +372,56 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: spacing.md,
-    gap: spacing.md,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
   },
   headerText: {
     flex: 1,
-    paddingRight: 92,
+    paddingRight: 84,
   },
   headerTextWithDiscount: {
-    paddingRight: 118,
+    paddingRight: 104,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   leadBlue: {
-    ...planBrandStyles.lead,
+    ...planBrandCatalogStyles.lead,
     color: colors.metcon,
     textShadowColor: withAlpha(colors.metcon, '55'),
   },
   tagBlue: {
-    ...planBrandStyles.tag,
+    ...planBrandCatalogStyles.tag,
     color: colors.metcon,
+  },
+  metaLinks: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: 4,
   },
   moreInfoBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    gap: 6,
-    marginTop: spacing.sm,
+    gap: 4,
     cursor: 'pointer',
   },
   moreInfoBtnPressed: {
     opacity: 0.8,
   },
+  moreInfoBtnDisabled: {
+    opacity: 0.55,
+  },
   moreInfoBlue: {
     color: withAlpha(colors.metcon, 'CC'),
   },
   button: {
-    marginTop: spacing.xs,
+    marginTop: 2,
   },
   buttonBlue: {
     backgroundColor: '#3B7DD8',

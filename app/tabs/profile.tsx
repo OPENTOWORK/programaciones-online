@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
+import { ACCOUNT_DELETION_ROUTE } from '@/constants/legal';
 import { colors, goalLabels, levelColors, spacing, typography } from '@/constants/theme';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAthleteIntakeForms } from '@/hooks/useAthleteIntakeForms';
@@ -386,6 +387,14 @@ export default function ProfileScreen() {
         <Button title="Cerrar sesión" onPress={handleLogout} variant="ghost" style={styles.btn} />
       )}
 
+      <Button
+        title="Eliminar cuenta"
+        onPress={() => router.push(ACCOUNT_DELETION_ROUTE)}
+        variant="ghost"
+        style={styles.btn}
+        textStyle={styles.deleteAccountText}
+      />
+
       <ProfileFooterLinks />
     </ScreenWrapper>
   );
@@ -456,6 +465,7 @@ const styles = StyleSheet.create({
   rowHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
   rowValue: { ...typography.body, color: colors.text, fontWeight: '500', textAlign: 'right' },
   btn: { marginTop: spacing.md },
+  deleteAccountText: { color: colors.danger },
   confirmBox: {
     marginTop: spacing.md,
     padding: spacing.md,

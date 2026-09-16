@@ -7,6 +7,7 @@ import { AppIcon } from '@/components/ui/AppIcon';
 import { AppLogo } from '@/components/ui/AppLogo';
 import { Button } from '@/components/ui/Button';
 import { ThemePicker } from '@/components/ui/ThemePicker';
+import { ACCOUNT_DELETION_ROUTE } from '@/constants/legal';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import { useAuth } from '@/hooks/useAuth';
@@ -295,6 +296,17 @@ export function GymShell({ children }: { children: React.ReactNode }) {
           onPress={() => void signOut()}
           style={styles.footerButton}
         />
+        <Button
+          title="Eliminar cuenta"
+          variant="ghost"
+          size="compact"
+          onPress={() => {
+            setDrawerOpen(false);
+            router.push(ACCOUNT_DELETION_ROUTE);
+          }}
+          style={styles.footerButton}
+          textStyle={styles.footerDangerText}
+        />
       </View>
     </>
   );
@@ -552,6 +564,9 @@ const styles = StyleSheet.create({
   footerButton: {
     marginTop: spacing.xs,
     alignSelf: 'flex-start',
+  },
+  footerDangerText: {
+    color: colors.danger,
   },
   main: {
     flex: 1,

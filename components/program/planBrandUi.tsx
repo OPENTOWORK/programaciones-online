@@ -123,3 +123,30 @@ export const planBrandStyles = StyleSheet.create({
     lineHeight: 20,
   },
 });
+
+/** Variante para tarjetas de catálogo (ProgramCard). */
+export const planBrandCatalogStyles = StyleSheet.create({
+  inner: {
+    paddingVertical: 12,
+    paddingHorizontal: spacing.sm,
+  },
+  lead: {
+    ...planBrandStyles.lead,
+    fontSize: 21,
+    letterSpacing: 0.25,
+    textShadowRadius: 10,
+  },
+  tag: {
+    ...planBrandStyles.tag,
+    fontSize: 10,
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
+  metaText: {
+    ...planBrandStyles.metaText,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+});
+
+export const PLAN_BRAND_CATALOG_ICON_SIZE = 46;

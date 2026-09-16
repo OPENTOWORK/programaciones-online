@@ -36,9 +36,7 @@ export default function PlanCategoryScreen() {
   return (
     <>
       <Stack.Screen options={{ title: plan.label }} />
-      <ScreenWrapper>
-        <PlanCategoryContent planId={planId} plan={plan} />
-      </ScreenWrapper>
+      <PlanCategoryContent planId={planId} plan={plan} />
     </>
   );
 }

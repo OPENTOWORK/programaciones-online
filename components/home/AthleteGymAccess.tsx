@@ -1,5 +1,5 @@
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -8,12 +8,15 @@ import { borderRadius, colors, spacing, typography, withAlpha } from '@/constant
 import { useAthleteLinkedGyms } from '@/hooks/useAthleteLinkedGyms';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import type { AthleteLinkedGym } from '@/lib/athleteGymService';
-import { resolveGymLogoSource } from '@/lib/gymBranding';
+import { hypeGymLogo, isHypeBrandedGym, resolveGymLogoSource } from '@/lib/gymBranding';
 
 function GymAccessCard({ entry, onPress }: { entry: AthleteLinkedGym; onPress: () => void }) {
   const city = entry.gym.city?.trim();
   const subtitle = city ? `${city} · Reservas y tarifa` : 'Reservas y tarifa';
-  const logoSource = resolveGymLogoSource(entry.gym);
+  const isHype = isHypeBrandedGym(entry.gym);
+  const logoSource = useMemo(() => resolveGymLogoSource(entry.gym), [entry.gym]);
+  const [logoFailed, setLogoFailed] = useState(false);
+  const displayLogo = logoFailed && isHype ? hypeGymLogo : logoSource;
 
   return (
     <Pressable
@@ -22,13 +25,14 @@ function GymAccessCard({ entry, onPress }: { entry: AthleteLinkedGym; onPress: (
       accessibilityLabel={`Abrir ${entry.gym.name}`}
       style={({ pressed }) => [styles.gymCard, pressed && styles.gymCardPressed]}
     >
-      <View style={styles.gymIcon}>
-        {logoSource ? (
+      <View style={[styles.gymIcon, isHype && styles.gymIconHype]}>
+        {displayLogo ? (
           <Image
-            source={logoSource}
+            source={displayLogo}
             style={styles.gymLogo}
             resizeMode="contain"
             accessibilityLabel={`Logo de ${entry.gym.name}`}
+            onError={() => setLogoFailed(true)}
           />
         ) : (
           <Ionicons name="barbell-outline" size={22} color={colors.accent} />
@@ -77,10 +81,6 @@ export function AthleteGymAccess() {
   return (
     <View key={menusKey}>
       <CollapsibleSection title="Acceso a tus gimnasios">
-        <Text style={styles.intro}>
-          Reserva clases y consulta tu tarifa en los centros donde eres miembro.
-        </Text>
-
         {isLoading ? (
           <View style={styles.stateCard}>
             <ActivityIndicator color={colors.accent} />
@@ -111,12 +111,6 @@ export function AthleteGymAccess() {
 }
 
 const styles = StyleSheet.create({
-  intro: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.md,
-  },
   list: {
     gap: spacing.sm,
   },
@@ -143,6 +137,10 @@ const styles = StyleSheet.create({
     backgroundColor: withAlpha(colors.accent, '18'),
     overflow: 'hidden',
     padding: spacing.xs,
+  },
+  gymIconHype: {
+    backgroundColor: colors.black,
+    padding: 4,
   },
   gymLogo: {
     width: '100%',

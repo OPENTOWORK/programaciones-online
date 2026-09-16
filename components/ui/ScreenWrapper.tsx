@@ -1,11 +1,11 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, type RefObject } from 'react';
-import { ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppBackgroundScaffold } from '@/components/ui/AppBackgroundLogo';
 import { colors, spacing } from '@/constants/theme';
-import { ATHLETE_TAB_BAR_HEIGHT, useBottomSafeInset } from '@/lib/mobileInsets';
+import { useBottomSafeInset } from '@/lib/mobileInsets';
 import { isWebPlatform } from '@/lib/platformAccess';
 
 interface ScreenWrapperProps {
@@ -29,9 +29,7 @@ export function ScreenWrapper({
   const internalScrollRef = useRef<ScrollView>(null);
   const scrollRef = externalScrollRef ?? internalScrollRef;
   const bottomInset = useBottomSafeInset();
-  const scrollBottomPadding = isWebPlatform()
-    ? spacing.xxl
-    : spacing.xxl + ATHLETE_TAB_BAR_HEIGHT + bottomInset;
+  const scrollBottomPadding = isWebPlatform() ? spacing.xxl : spacing.lg + bottomInset;
 
   useFocusEffect(
     useCallback(() => {
@@ -47,6 +45,7 @@ export function ScreenWrapper({
       contentContainerStyle={[
         styles.scrollContent,
         padded && styles.padded,
+        padded && !isWebPlatform() && styles.paddedNative,
         !isWebPlatform() && { paddingBottom: scrollBottomPadding },
         style,
       ]}
@@ -83,5 +82,8 @@ const styles = StyleSheet.create({
   padded: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+  },
+  paddedNative: {
+    paddingTop: spacing.sm,
   },
 });

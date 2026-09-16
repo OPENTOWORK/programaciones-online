@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { GymClassFormModal } from '@/components/gym/GymClassFormModal';
+import { GymClassTypeFormModal } from '@/components/gym/GymClassTypeFormModal';
 import { GymErrorBanner, GymScreen, GymScreenHeader } from '@/components/gym/GymScreen';
 import { GymWeekTimetable } from '@/components/gym/GymWeekTimetable';
 import { ActionSheetModal, type ActionSheetAction } from '@/components/ui/ActionSheetModal';
@@ -51,6 +52,7 @@ export default function GymScheduleScreen() {
   } = useGymSchedule();
 
   const [formOpen, setFormOpen] = useState(false);
+  const [typeFormOpen, setTypeFormOpen] = useState(false);
   const [editing, setEditing] = useState<GymClass | null>(null);
   const [defaultDate, setDefaultDate] = useState<Date | undefined>();
   const [actions, setActions] = useState<GymClass | null>(null);
@@ -251,6 +253,14 @@ export default function GymScheduleScreen() {
                       onPress={() => void applyWeeklyTemplate()}
                     />
                   ) : null}
+                  {permissions.canManage ? (
+                    <Button
+                      title="Crear modalidad"
+                      variant="outline"
+                      size="compact"
+                      onPress={() => setTypeFormOpen(true)}
+                    />
+                  ) : null}
                   <Button title="Crear clase" size="compact" onPress={() => openCreate()} />
                 </>
               ) : null}
@@ -325,6 +335,17 @@ export default function GymScheduleScreen() {
           defaultDate={defaultDate}
           onCancel={() => setFormOpen(false)}
           onSubmit={handleSubmit}
+        />
+
+        <GymClassTypeFormModal
+          visible={typeFormOpen}
+          onCancel={() => setTypeFormOpen(false)}
+          onSubmit={async (input) => {
+            if (!gym) return { error: 'No hay gimnasio activo.' };
+            const result = await saveGymClassType(gym.id, input);
+            if (!result.error) refresh();
+            return result;
+          }}
         />
 
         <ActionSheetModal

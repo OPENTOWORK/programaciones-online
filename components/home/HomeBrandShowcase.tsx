@@ -8,7 +8,11 @@ import { borderRadius, colors, shadows, spacing, typography, withAlpha } from '@
 
 const heroBackground = require('@/assets/home-hero-banner.jpg');
 
-export function HomeBrandShowcase() {
+interface HomeBrandShowcaseProps {
+  fillAvailable?: boolean;
+}
+
+export function HomeBrandShowcase({ fillAvailable = false }: HomeBrandShowcaseProps) {
   const router = useRouter();
 
   return (
@@ -16,9 +20,13 @@ export function HomeBrandShowcase() {
       onPress={() => router.push('/tabs/programs')}
       accessibilityRole="button"
       accessibilityLabel="Explorar programaciones"
-      style={({ pressed }) => [styles.heroCard, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.heroCard,
+        fillAvailable && styles.heroCardFill,
+        pressed && styles.pressed,
+      ]}
     >
-      <View style={styles.heroBackground}>
+      <View style={[styles.heroBackground, fillAvailable && styles.heroBackgroundFill]}>
         <Image source={heroBackground} style={styles.heroImage} resizeMode="cover" accessibilityIgnoresInvertColors />
         <LinearGradient
           colors={['rgba(8,12,16,0.78)', 'rgba(8,12,16,0.42)', 'rgba(8,12,16,0.12)']}
@@ -28,7 +36,7 @@ export function HomeBrandShowcase() {
           style={styles.heroGradient}
           pointerEvents="none"
         />
-        <View style={styles.heroOverlay} pointerEvents="none">
+        <View style={[styles.heroOverlay, fillAvailable && styles.heroOverlayFill]} pointerEvents="none">
           <View style={styles.heroBrandRow}>
             <AppLogo size={48} />
             <Text style={styles.heroBrandTagline}>Programaciones a tu medida</Text>
@@ -59,11 +67,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     ...shadows.card,
   },
+  heroCardFill: {
+    flex: 1,
+    minHeight: 220,
+  },
   heroBackground: {
     position: 'relative',
     width: '100%',
     height: 240,
     overflow: 'hidden',
+  },
+  heroBackgroundFill: {
+    flex: 1,
+    height: undefined,
+    minHeight: 220,
   },
   heroImage: {
     ...StyleSheet.absoluteFillObject,
@@ -81,6 +98,10 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     height: 240,
     gap: spacing.sm,
+  },
+  heroOverlayFill: {
+    height: undefined,
+    minHeight: 220,
   },
   heroBrandRow: {
     flexDirection: 'row',

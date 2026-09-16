@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
+import { BlockTimerButton } from '@/components/workout/BlockTimerButton';
 import { Card } from '@/components/ui/Card';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
@@ -16,6 +17,7 @@ import {
   parseWorkoutContent,
   type WorkoutContentBlock,
 } from '@/lib/workoutContentParser';
+import { resolveWorkoutBlockTimer } from '@/lib/workoutBlockTimer';
 import {
   getBlockTimingHint,
   parseBlockItemForDisplay,
@@ -49,6 +51,8 @@ interface WorkoutSectionProps {
   uploadingExerciseKey?: string | null;
   sentExerciseKeys?: Set<string> | string[];
   renderAfterBlock?: (blockKey: string, blockIndex: number) => ReactNode;
+  /** Cronos dentro de cada bloque: solo en la sesión que el atleta está haciendo. */
+  showBlockTimers?: boolean;
 }
 
 function TimingPartPill({ part }: { part: TimingDisplayPart }) {
@@ -222,6 +226,8 @@ function BlockItems({
 
 interface BlockCardProps extends Omit<BlockItemsProps, 'items'> {
   block: WorkoutContentBlock;
+  /** Añade el crono del formato del bloque (AMRAP, For time, EMOM, Tabata o crono). */
+  showTimer?: boolean;
 }
 
 /** Vídeos que el entrenador ha colgado de un bloque de texto, que no tiene lista de ejercicios. */
@@ -351,7 +357,7 @@ function WorkoutNoteCard({ block, ...itemProps }: BlockCardProps) {
   );
 }
 
-function WorkoutBlockCard({ block, ...itemProps }: BlockCardProps) {
+function WorkoutBlockCard({ block, showTimer, ...itemProps }: BlockCardProps) {
   if (block.text !== undefined) {
     return <WorkoutTextCard block={block} {...itemProps} />;
   }
@@ -367,6 +373,7 @@ function WorkoutBlockCard({ block, ...itemProps }: BlockCardProps) {
     .filter((part) => part.icon === 'info' && part.value.length > 28)
     .map((part) => part.value);
   const timingHint = getBlockTimingHint(block.label);
+  const timerPlan = showTimer ? resolveWorkoutBlockTimer(block) : null;
 
   return (
     <View style={styles.blockCard}>
@@ -392,6 +399,8 @@ function WorkoutBlockCard({ block, ...itemProps }: BlockCardProps) {
 
       {timingHint ? <Text style={styles.timingHint}>{timingHint}</Text> : null}
 
+      {timerPlan ? <BlockTimerButton plan={timerPlan} /> : null}
+
       <BlockItems items={block.items} {...itemProps} />
     </View>
   );
@@ -412,6 +421,7 @@ export function WorkoutSection({
   uploadingExerciseKey,
   sentExerciseKeys,
   renderAfterBlock,
+  showBlockTimers = false,
 }: WorkoutSectionProps) {
   if (!content?.trim()) return null;
 
@@ -444,7 +454,12 @@ export function WorkoutSection({
             return (
               <Fragment key={`${block.label}-${index}`}>
                 {index > 0 ? <View style={styles.blockDivider} /> : null}
-                <WorkoutBlockCard block={block} blockIndex={index} {...itemProps} />
+                <WorkoutBlockCard
+                  block={block}
+                  blockIndex={index}
+                  showTimer={showBlockTimers}
+                  {...itemProps}
+                />
                 {renderAfterBlock ? renderAfterBlock(blockKey, index) : null}
               </Fragment>
             );

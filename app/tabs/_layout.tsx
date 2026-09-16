@@ -28,6 +28,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      sceneContainerStyle={styles.scene}
       screenOptions={{
         headerShown: false,
         lazy: true,
@@ -56,5 +57,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  scene: {
+    flex: 1,
   },
 });

@@ -6,9 +6,11 @@
 | --- | --- |
 | Nombre en App Store Connect | Training ProgLine |
 | Bundle ID | `com.trainingprogline.app` |
-| Versión | 1.0.15 (`expo.version`) |
-| Build | 1 (`expo.ios.buildNumber`) |
+| Versión (iOS) | 1.0 (`APP_STORE_VERSION` en `codemagic.yaml`, sobreescribe `expo.version`) |
+| Versión (Android y web) | 1.0.15 (`expo.version`) |
+| Build | Lo asigna Codemagic (`PROJECT_BUILD_NUMBER`); en local, `expo.ios.buildNumber` |
 | Política de privacidad (URL pública) | `https://carlosgarciacano87-dev.github.io/app-progras/privacy.html` |
+| Eliminación de cuenta (en la app) | Perfil → **Eliminar cuenta** (`/profile/delete-account`) |
 | Eliminación de cuenta (URL pública) | `https://carlosgarciacano87-dev.github.io/app-progras/account-deletion.html` |
 | Cifrado | `ITSAppUsesNonExemptEncryption = false` (ver `APPLE_ENCRYPTION_COMPLIANCE.md`) |
 
@@ -138,7 +140,10 @@ Los textos de permiso se inyectan desde los plugins de `app.json`:
 | `NSPrivacyAccessedAPICategoryUserDefaults` | `CA92.1` | React Native, expo-constants |
 | `NSPrivacyAccessedAPICategoryDiskSpace` | `E174.1`, `85F4.1` | expo-file-system |
 
-También se declara `NSPrivacyTracking: false` (la app no hace seguimiento publicitario).
+También se declara `NSPrivacyTracking: false` (la app no hace seguimiento publicitario) y
+`NSPrivacyCollectedDataTypes` con los datos que sí recoge, todos marcados como **no usados
+para seguimiento**. La ficha de *App Privacy* en App Store Connect tiene que coincidir con
+esa lista: ver `APPSTORE_REJECTION_891e4009.md`.
 
 Si Apple envía un correo pidiendo motivos adicionales tras el primer envío, hay que añadirlos en ese mismo bloque.
 
@@ -161,5 +166,6 @@ Para cada nueva entrega a App Store hay que subir el build:
 
 1. **`IOS_STORE_URL` en `lib/appVersion.ts`** todavía tiene un ID de ejemplo (`id0000000000`). Cuando App Store Connect asigne el ID real de la app, hay que sustituirlo. Solo afecta al aviso de "actualiza la app" en iOS; no bloquea la publicación de la primera versión.
 2. **Ficha de App Store:** descripción, palabras clave, categoría, clasificación por edades y URL de soporte se rellenan a mano en App Store Connect.
-3. **App Privacy:** en App Store Connect hay que declarar los datos que recoge la app (email, nombre, fotos/vídeos de progreso, mensajes) y que no se usan para seguimiento.
+3. **App Privacy:** en App Store Connect hay que declarar los datos que recoge la app (email, nombre, fotos/vídeos de progreso, mensajes) y que no se usan para seguimiento. La lista exacta está en `APPSTORE_REJECTION_891e4009.md`.
 4. **Cuenta de prueba para el revisor:** Apple exige credenciales de demo si la app requiere login. Prepara un usuario de prueba con datos ya cargados.
+5. **Borrado de cuenta:** la parte de servidor ya está aplicada (`npm run supabase:account-deletion`, verificable con `npm run test:account-deletion`). Solo falta adjuntar el vídeo del flujo en las Review Notes.

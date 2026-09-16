@@ -1,4 +1,4 @@
-import { ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text } from 'react-native';
 import { useMemo } from 'react';
 
 import { CategoryTabs } from '@/components/program/CategoryTabs';
@@ -38,7 +38,11 @@ export default function ProgramsScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { ...typography.h1, color: colors.text, marginBottom: 4 },
+  title: {
+    ...(Platform.OS === 'web' ? typography.h1 : typography.h2),
+    color: colors.text,
+    marginBottom: 4,
+  },
   loader: { marginTop: 32 },
   error: { ...typography.bodySmall, color: colors.danger, marginTop: 16 },
 });

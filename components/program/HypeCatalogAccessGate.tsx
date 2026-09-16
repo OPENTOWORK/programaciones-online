@@ -3,16 +3,16 @@ import { StyleSheet, Text } from 'react-native';
 import { ProgramCard } from '@/components/program/ProgramCard';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
+import { CATALOG_ACCESS_REQUEST_MESSAGE, SHOW_CATALOG_PRICING } from '@/lib/storeCompliance';
 import type { Program } from '@/lib/types';
 
 export function HypeCatalogAccessGate({ program }: { program: Program }) {
   return (
     <ScreenWrapper>
-      <Text style={styles.title}>Programación de pago</Text>
-      <Text style={styles.copy}>
-        El contenido está reservado al administrador. Los atletas y entrenadores podrán comprarla
-        cuando conectemos la pasarela de pagos.
+      <Text style={styles.title}>
+        {SHOW_CATALOG_PRICING ? 'Programación de pago' : 'Programación no asignada'}
       </Text>
+      <Text style={styles.copy}>{CATALOG_ACCESS_REQUEST_MESSAGE}</Text>
       <ProgramCard program={program} />
     </ScreenWrapper>
   );

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Image, StyleSheet, View, type ViewStyle } from 'react-native';
+import { Image, Platform, StyleSheet, View, useWindowDimensions, type ViewStyle } from 'react-native';
 
 import { useAppTheme } from '@/hooks/useAppTheme';
 
@@ -28,19 +28,31 @@ export function AppBackgroundScaffold({ children, style }: AppBackgroundScaffold
 
 export function AppBackgroundLogo() {
   const { scheme } = useAppTheme();
+  const { height: windowHeight } = useWindowDimensions();
+  const isNative = Platform.OS !== 'web';
   const isLight = scheme === 'light';
 
   return (
     <View
-      style={styles.layer}
+      style={[
+        styles.layer,
+        isNative && {
+          justifyContent: 'flex-start',
+          paddingTop: Math.min(windowHeight * 0.035, 24),
+        },
+      ]}
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      <View style={styles.markWrap}>
+      <View style={[styles.markWrap, isNative && styles.markWrapNative]}>
         <Image
           source={logoWatermark}
-          style={[styles.mark, isLight ? styles.markLight : styles.markDark]}
+          style={[
+            styles.mark,
+            isLight ? styles.markLight : styles.markDark,
+            isNative && (isLight ? styles.markNativeLight : styles.markNativeDark),
+          ]}
           resizeMode="contain"
           accessibilityIgnoresInvertColors
         />
@@ -74,6 +86,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  markWrapNative: {
+    width: '36%',
+    maxWidth: 180,
+  },
   mark: {
     width: '100%',
     height: '100%',
@@ -83,5 +99,11 @@ const styles = StyleSheet.create({
   },
   markLight: {
     opacity: 0.1,
+  },
+  markNativeDark: {
+    opacity: 0.055,
+  },
+  markNativeLight: {
+    opacity: 0.045,
   },
 });

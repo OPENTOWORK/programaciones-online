@@ -20,7 +20,9 @@ import type { SessionWorkoutContent } from '@/hooks/useSessionRunner';
 import { normalizeExerciseName } from '@/lib/exerciseName';
 import { formatSessionSectionTitle } from '@/lib/personalizedPlanContent';
 import type { ChecklistItem } from '@/lib/sessionChecklist';
+import type { SessionLogVideo } from '@/lib/sessionVideoService';
 import type { SessionVideoSource } from '@/lib/sessionVideoPicker';
+import type { FeedbackAttachmentDraft } from '@/lib/trainerFeedbackMediaService';
 
 type ActiveVideo = {
   key: string;
@@ -61,6 +63,8 @@ interface SessionWorkoutViewProps {
   attachment?: ReactNode;
   /** Misma pantalla que el atleta, sin guardar marcas ni comentarios. */
   preview?: boolean;
+  /** Corrección en vídeo del atleta (telestrator, solo web). */
+  onAnnotatedVideo?: (draft: FeedbackAttachmentDraft, video: SessionLogVideo) => void;
 }
 
 export function SessionWorkoutView({
@@ -88,6 +92,7 @@ export function SessionWorkoutView({
   allowFeedbackVideos = false,
   attachment,
   preview = false,
+  onAnnotatedVideo,
 }: SessionWorkoutViewProps) {
   const [activeVideo, setActiveVideo] = useState<ActiveVideo | null>(null);
   const [sendTarget, setSendTarget] = useState<SendTarget | null>(null);
@@ -207,6 +212,8 @@ export function SessionWorkoutView({
     uploadingExerciseKey: locked ? null : uploadingExerciseKey,
     sentExerciseKeys: locked ? undefined : sentExerciseKeys,
     renderAfterBlock: renderBlockComment,
+    // El crono acompaña al entreno en marcha, no al registro que ya cerró el atleta.
+    showBlockTimers: !readOnly || preview,
   });
 
   if (loadingLog) {
@@ -354,6 +361,7 @@ export function SessionWorkoutView({
           isLoading={videosLoading}
           readOnly
           compact={false}
+          onAnnotatedVideo={onAnnotatedVideo}
         />
       )}
 

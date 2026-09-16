@@ -7,6 +7,7 @@ import { AppLogo } from '@/components/ui/AppLogo';
 import { Button } from '@/components/ui/Button';
 import { NavCountBadge } from '@/components/ui/NavCountBadge';
 import { ThemePicker } from '@/components/ui/ThemePicker';
+import { ACCOUNT_DELETION_ROUTE } from '@/constants/legal';
 import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -241,6 +242,13 @@ export function TrainerDesktopShell({ children }: TrainerDesktopShellProps) {
               style={styles.signOutBtn}
               textStyle={styles.signOutText}
             />
+            <Button
+              title="Eliminar cuenta"
+              variant="ghost"
+              onPress={() => router.push(ACCOUNT_DELETION_ROUTE)}
+              style={styles.signOutBtn}
+              textStyle={styles.deleteAccountText}
+            />
           </View>
         </View>
       ) : null}
@@ -452,6 +460,10 @@ const styles = StyleSheet.create({
   signOutText: {
     ...typography.bodySmall,
     color: colors.textMuted,
+  },
+  deleteAccountText: {
+    ...typography.bodySmall,
+    color: colors.danger,
   },
   main: {
     flex: 1,

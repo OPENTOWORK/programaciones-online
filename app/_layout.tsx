@@ -80,6 +80,7 @@ function RootNavigator() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="auth" options={{ headerShown: false }} />
           <Stack.Screen name="tabs" options={{ headerShown: false }} />
+          <Stack.Screen name="timer" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
           <Stack.Screen name="plan/[id]/index" options={{ title: 'Programación' }} />
           <Stack.Screen name="plan/[id]/[venue]" options={{ title: 'Base · Training' }} />
           <Stack.Screen name="program/[id]/index" options={{ title: 'Programación' }} />
@@ -96,6 +97,7 @@ function RootNavigator() {
           <Stack.Screen name="profile/nutrition" options={{ title: 'Datos de nutrición' }} />
           <Stack.Screen name="profile/training" options={{ title: 'Datos de entrenamiento' }} />
           <Stack.Screen name="profile/appointments" options={{ title: 'Citas' }} />
+          <Stack.Screen name="profile/delete-account" options={{ title: 'Eliminar cuenta' }} />
           <Stack.Screen name="legal/privacy" options={{ title: 'Política de privacidad' }} />
           <Stack.Screen name="support/index" options={{ title: 'Contacto' }} />
           <Stack.Screen name="support/[id]" options={{ title: 'Solicitud de soporte' }} />

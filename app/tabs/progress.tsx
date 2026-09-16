@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { BodyMetricsChart } from '@/components/progress/BodyMetricsChart';
 import { MotivationBanner } from '@/components/progress/MotivationBanner';

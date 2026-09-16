@@ -34,6 +34,7 @@ export type AppIconName =
   | 'stats'
   | 'play'
   | 'time'
+  | 'timer'
   | 'chevronLeft'
   | 'chevronRight'
   | 'chevronDown'
@@ -103,6 +104,7 @@ const ICONS: Record<AppIconName, { default: IoniconName; outline?: IoniconName }
   stats: { default: 'trending-up-outline' },
   play: { default: 'play-circle-outline' },
   time: { default: 'time-outline' },
+  timer: { default: 'stopwatch', outline: 'stopwatch-outline' },
   chevronLeft: { default: 'chevron-back' },
   chevronRight: { default: 'chevron-forward' },
   chevronDown: { default: 'chevron-down' },

@@ -17,6 +17,7 @@ import { SkeletonBlock } from '@/components/ui/SkeletonBlock';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useGym } from '@/hooks/useGym';
 import { useGymCatalog } from '@/hooks/useGymData';
+import { GymClassTypeFormModal } from '@/components/gym/GymClassTypeFormModal';
 import { saveGymClassType, deleteGymMembershipPlan, deleteGymPromotion, saveGymMembershipPlan, saveGymPromotion } from '@/lib/gymService';
 import { formatGymMoney } from '@/lib/gymShopService';
 import { isHypeGymCatalogTarget } from '@/lib/hypeGymRatesCatalog';
@@ -471,9 +472,11 @@ export default function GymClassesScreen() {
           </View>
         )}
 
-        <ClassTypeModal
+        <GymClassTypeFormModal
           visible={typeFormOpen}
           classType={editingType}
+          title={editingType ? 'Editar tipo de clase' : 'Nuevo tipo de clase'}
+          subtitle="Se usa como plantilla al programar el horario."
           onCancel={() => setTypeFormOpen(false)}
           onSubmit={async (input) => {
             if (!gym) return { error: 'No hay gimnasio activo.' };
@@ -682,102 +685,6 @@ function PromotionModal({
         />
       ) : null}
 
-      <ToggleRow label="Activo" value={active} onChange={setActive} />
-    </FormModal>
-  );
-}
-
-function ClassTypeModal({
-  visible,
-  classType,
-  onCancel,
-  onSubmit,
-}: {
-  visible: boolean;
-  classType: GymClassType | null;
-  onCancel: () => void;
-  onSubmit: (input: {
-    name: string;
-    description?: string;
-    durationMinutes: number;
-    capacity: number;
-    active?: boolean;
-  }) => Promise<{ error?: string }>;
-}) {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [duration, setDuration] = useState('60');
-  const [capacity, setCapacity] = useState('12');
-  const [active, setActive] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!visible) return;
-    setName(classType?.name ?? '');
-    setDescription(classType?.description ?? '');
-    setDuration(String(classType?.durationMinutes ?? 60));
-    setCapacity(String(classType?.capacity ?? 12));
-    setActive(classType?.active ?? true);
-    setError(null);
-  }, [classType, visible]);
-
-  const handleSubmit = async () => {
-    const durationValue = Number(duration);
-    const capacityValue = Number(capacity);
-
-    if (!name.trim()) return setError('El nombre es obligatorio.');
-    if (!Number.isFinite(durationValue) || durationValue < 5) {
-      return setError('La duración debe ser de al menos 5 minutos.');
-    }
-    if (!Number.isFinite(capacityValue) || capacityValue < 1) {
-      return setError('El aforo debe ser de al menos 1 plaza.');
-    }
-
-    setSaving(true);
-    setError(null);
-    const result = await onSubmit({
-      name,
-      description,
-      durationMinutes: durationValue,
-      capacity: capacityValue,
-      active,
-    });
-    setSaving(false);
-
-    if (result.error) return setError(result.error);
-    onCancel();
-  };
-
-  return (
-    <FormModal
-      visible={visible}
-      title={classType ? 'Editar tipo de clase' : 'Nuevo tipo de clase'}
-      subtitle="Se usa como plantilla al programar el horario."
-      error={error}
-      saving={saving}
-      onCancel={onCancel}
-      onSubmit={() => void handleSubmit()}
-    >
-      <Input label="Nombre" value={name} onChangeText={setName} placeholder="Cross Training" />
-      <Input
-        label="Descripción"
-        value={description}
-        onChangeText={setDescription}
-        placeholder="Opcional"
-      />
-      <Input
-        label="Duración (minutos)"
-        value={duration}
-        onChangeText={(value) => setDuration(value.replace(/[^\d]/g, ''))}
-        keyboardType="number-pad"
-      />
-      <Input
-        label="Aforo"
-        value={capacity}
-        onChangeText={(value) => setCapacity(value.replace(/[^\d]/g, ''))}
-        keyboardType="number-pad"
-      />
       <ToggleRow label="Activo" value={active} onChange={setActive} />
     </FormModal>
   );

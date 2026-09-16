@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { PRIVACY_POLICY_ROUTE } from '@/constants/legal';
+import { ACCOUNT_DELETION_ROUTE, PRIVACY_POLICY_ROUTE } from '@/constants/legal';
 import { SUPPORT_ROUTE } from '@/constants/support';
 import { colors, spacing, typography } from '@/constants/theme';
 
@@ -30,6 +30,18 @@ export function ProfileFooterLinks() {
           <Text style={styles.text}>Contacto</Text>
         </Pressable>
       </Link>
+
+      <Text style={styles.separator}>·</Text>
+
+      <Link href={ACCOUNT_DELETION_ROUTE} asChild>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Eliminar cuenta"
+          style={({ pressed }) => [styles.link, pressed && styles.pressed]}
+        >
+          <Text style={[styles.text, styles.danger]}>Eliminar cuenta</Text>
+        </Pressable>
+      </Link>
     </View>
   );
 }
@@ -52,6 +64,9 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     textDecorationLine: 'underline',
+  },
+  danger: {
+    color: colors.danger,
   },
   separator: {
     ...typography.caption,

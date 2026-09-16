@@ -3,11 +3,13 @@ import { useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { AthletePlanCard } from '@/components/program/AthletePlanCard';
 import { PersonalizedPlanGroupCard } from '@/components/program/PersonalizedPlanGroupCard';
+import { CatalogProgramList } from '@/components/program/CatalogProgramList';
 import { ProgramCard } from '@/components/program/ProgramCard';
 import { ServicePlanEmptyCard } from '@/components/program/ServicePlanEmptyCard';
 import { HomeTrainingCalendarPanel } from '@/components/homeTraining/HomeTrainingCalendarPanel';
 import { TrainerPlansPanel } from '@/components/trainer/TrainerPlansPanel';
 import { Card } from '@/components/ui/Card';
+import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { SUPPORT_ROUTE } from '@/constants/support';
 import { colors, spacing, typography } from '@/constants/theme';
@@ -179,21 +181,33 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
     myAthletePlans.filter((item) => isSessionBasedAthletePlanType(item.planType)),
   );
   const nutritionPlans = myAthletePlans.filter((item) => item.planType === 'nutrition');
+  const useFillCatalog =
+    !useProgramGrid &&
+    useAthleteView &&
+    !isStaff &&
+    !isGymAthletePlansStaff &&
+    catalogPrograms.length > 0 &&
+    !showAthleteAssignedPlans &&
+    !isServiceRequestPlan &&
+    !showServiceEmptyCard &&
+    !showWeeklyChallenge;
 
   if (isHomeTraining) {
     return (
-      <HomeTrainingCalendarPanel
-        asAthlete={useAthleteView}
-        onRequestHomeTrainerJoin={
-          isTrainerOnlyRole(user?.role)
-            ? () => openTrainerChat(HOME_TRAINING_STAFF_JOIN.prefill)
-            : undefined
-        }
-      />
+      <ScreenWrapper>
+        <HomeTrainingCalendarPanel
+          asAthlete={useAthleteView}
+          onRequestHomeTrainerJoin={
+            isTrainerOnlyRole(user?.role)
+              ? () => openTrainerChat(HOME_TRAINING_STAFF_JOIN.prefill)
+              : undefined
+          }
+        />
+      </ScreenWrapper>
     );
   }
 
-  return (
+  const content = (
     <>
       {showAthleteAssignedPlans ? (
         <View style={styles.assignedSection}>
@@ -255,6 +269,10 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
             <Text style={styles.emptyText}>Todavía no hay programaciones publicadas en este plan.</Text>
           </Card>
         ) : null
+      ) : useFillCatalog ? (
+        <View style={styles.fillCatalog}>
+          <CatalogProgramList programs={catalogPrograms} />
+        </View>
       ) : (
         <View style={useProgramGrid ? styles.programGrid : undefined}>
           {catalogPrograms.map((program) => (
@@ -280,9 +298,23 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
       ) : null}
     </>
   );
+
+  return (
+    <ScreenWrapper scrollable={!useFillCatalog} style={useFillCatalog ? styles.fillScreen : undefined}>
+      {content}
+    </ScreenWrapper>
+  );
 }
 
 const styles = StyleSheet.create({
+  fillScreen: {
+    flex: 1,
+    paddingBottom: 0,
+  },
+  fillCatalog: {
+    flex: 1,
+    minHeight: 0,
+  },
   loader: { marginTop: spacing.xl },
   assignedSection: { marginTop: spacing.md },
   serviceCards: { gap: spacing.md },

@@ -1,5 +1,6 @@
 import { View, StyleSheet } from 'react-native';
 import { Redirect, usePathname, useSegments } from 'expo-router';
+import type { ReactNode } from 'react';
 
 import { AthleteTabBar } from '@/components/ui/AthleteTabBar';
 import { AuthWebShell } from '@/components/ui/AuthWebShell';
@@ -9,6 +10,7 @@ import { TrainerDesktopShell } from '@/components/ui/TrainerDesktopShell';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { isGymRole } from '@/lib/athleteService';
+import { useAthleteTabBarHeight } from '@/lib/mobileInsets';
 import {
   isGymRoleAthleteRouteAllowed,
   isGymTvDisplayRoute,
@@ -30,13 +32,21 @@ function isLandingRoute(segments: string[]) {
   return first === undefined || first === 'index';
 }
 
-function withPersistentTabs(children: React.ReactNode) {
+function AthleteTabScaffold({ children }: { children: ReactNode }) {
+  const tabBarHeight = useAthleteTabBarHeight();
+
   return (
     <View style={styles.shell}>
-      <View style={styles.content}>{children}</View>
-      <AthleteTabBar />
+      <View style={[styles.content, { paddingBottom: tabBarHeight }]}>{children}</View>
+      <View style={styles.tabBarWrap}>
+        <AthleteTabBar />
+      </View>
     </View>
   );
+}
+
+function withPersistentTabs(children: React.ReactNode) {
+  return <AthleteTabScaffold>{children}</AthleteTabScaffold>;
 }
 
 export function AppShell({ children }: AppShellProps) {
@@ -44,13 +54,15 @@ export function AppShell({ children }: AppShellProps) {
   const segments = useSegments();
   const pathname = usePathname();
   const isGymPanel = !isLoading && Boolean(user) && usesGymPanel(user?.role);
+  const isImmersiveAthleteRoute = pathname.startsWith('/timer');
   const showAthleteTabs =
     !isLoading &&
     Boolean(user) &&
     !isAuthRoute(segments) &&
     !isLandingRoute(segments) &&
     !isTrainerDesktopWeb(user?.role) &&
-    !isGymPanel;
+    !isGymPanel &&
+    !isImmersiveAthleteRoute;
 
   const gymRoleBlockedRoute =
     !isLoading &&
@@ -98,9 +110,16 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     backgroundColor: colors.background,
+    position: 'relative',
   },
   content: {
     flex: 1,
     minHeight: 0,
+  },
+  tabBarWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
 });

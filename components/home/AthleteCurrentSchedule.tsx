@@ -2,10 +2,11 @@ import { useFocusEffect, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { spacing } from '@/constants/theme';
+
 import { AthleteProgramPicker } from '@/components/program/AthleteProgramPicker';
 import { AthleteScheduleCalendar } from '@/components/schedule/AthleteScheduleCalendar';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
-import { spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyAthletePlans } from '@/hooks/useAthletePlans';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
@@ -185,6 +186,6 @@ export function AthleteCurrentSchedule({
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: spacing.md,
+    gap: spacing.sm,
   },
 });

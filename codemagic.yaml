@@ -16,7 +16,10 @@ workflows:
       cocoapods: default
       vars:
         BUNDLE_ID: "com.trainingprogline.app"
-        APP_STORE_VERSION: "1.0.15"
+        # Tiene que coincidir con la versión abierta en App Store Connect para
+        # que el build entre como respuesta al envío rechazado en vez de crear
+        # una versión nueva. El build number lo pone Codemagic.
+        APP_STORE_VERSION: "1.0"
 
     scripts:
       - name: Install dependencies

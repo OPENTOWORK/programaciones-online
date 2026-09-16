@@ -1,11 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { SessionPdfCard } from '@/components/workout/SessionPdfCard';
 import { SessionWorkoutView } from '@/components/workout/SessionWorkoutView';
 import { HypeCatalogAccessGate } from '@/components/program/HypeCatalogAccessGate';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
-import { colors } from '@/constants/theme';
+import { Card } from '@/components/ui/Card';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useExerciseVideos } from '@/hooks/useExerciseVideos';
 import { useProgram, useWorkout } from '@/hooks/usePrograms';
@@ -31,7 +32,8 @@ function formatWorkoutMeta(workout: {
 }
 
 export default function WorkoutDetailScreen() {
-  const { id, date } = useLocalSearchParams<{ id: string; date?: string }>();
+  const { id, date, preview } = useLocalSearchParams<{ id: string; date?: string; preview?: string }>();
+  const isPreview = preview === '1' || preview === 'true';
   const router = useRouter();
   const { user, isDemoMode } = useAuth();
   const { workout, isLoading } = useWorkout(id ?? '');
@@ -55,10 +57,10 @@ export default function WorkoutDetailScreen() {
       entrenoId: id,
       scheduledDate,
     },
-    isDemoMode,
+    isDemoMode: isDemoMode || isPreview,
   });
 
-  if (isLoading || runner.loadingLog) {
+  if (isLoading || (!isPreview && runner.loadingLog)) {
     return (
       <ScreenWrapper scrollable={false}>
         <Text style={{ color: colors.text }}>Cargando sesión…</Text>
@@ -75,6 +77,7 @@ export default function WorkoutDetailScreen() {
   }
 
   if (
+    !isPreview &&
     parentProgram &&
     isPaidHypeCatalogProgram(parentProgram) &&
     !canEnterHypeCatalogProgram(user?.role)
@@ -83,6 +86,51 @@ export default function WorkoutDetailScreen() {
   }
 
   const pdfStoragePath = workout.schedule?.pdfStoragePath;
+
+  if (isPreview) {
+    return (
+      <ScreenWrapper>
+        <Card style={styles.previewBanner}>
+          <Text style={styles.previewTitle}>Día de ejemplo</Text>
+          <Text style={styles.previewText}>
+            Vista previa de una sesión de {parentProgram?.name ?? 'esta programación'}. No se guardan marcas ni sensaciones.
+          </Text>
+        </Card>
+        <SessionWorkoutView
+          workout={{
+            name: workout.name,
+            estimatedDuration: workout.estimatedDuration,
+            warmup: workout.warmup,
+            main: workout.main,
+            core: workout.core,
+            cooldown: workout.cooldown,
+            exercises: workout.exercises,
+            programId: workout.programId,
+          }}
+          meta={formatWorkoutMeta(workout).join(' · ')}
+          scheduledDateLabel={scheduledDateLabel}
+          attachment={
+            pdfStoragePath ? (
+              <SessionPdfCard
+                fileName={workout.schedule?.pdfFileName}
+                resolveUrl={() => signedUrlForCatalogWorkoutPdf(pdfStoragePath)}
+              />
+            ) : null
+          }
+          checklist={[]}
+          completed={{}}
+          feelings=""
+          onFeelingsChange={() => {}}
+          onToggleItem={() => {}}
+          onSave={() => safeGoBack(router, '/tabs/programs')}
+          saving={false}
+          getVideoId={getVideoId}
+          hasVideo={hasVideo}
+          preview
+        />
+      </ScreenWrapper>
+    );
+  }
 
   return (
     <ScreenWrapper>
@@ -134,3 +182,22 @@ export default function WorkoutDetailScreen() {
     </ScreenWrapper>
   );
 }
+
+const styles = StyleSheet.create({
+  previewBanner: {
+    marginBottom: spacing.md,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '12'),
+  },
+  previewTitle: {
+    ...typography.body,
+    color: colors.accent,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  previewText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+});

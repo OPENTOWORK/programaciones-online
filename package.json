@@ -175,6 +175,8 @@
     "supabase:session-schedule": "node scripts/apply-session-schedule.mjs",
     "supabase:privacy-policy": "node scripts/upload-privacy-policy.mjs",
     "supabase:deploy-privacy": "node scripts/deploy-privacy-function.mjs",
+    "supabase:account-deletion": "node scripts/apply-account-deletion.mjs",
+    "test:account-deletion": "node scripts/test-account-deletion.mjs",
     "assets:icons": "node scripts/generate-app-icons.mjs",
     "assets:playstore": "node scripts/generate-app-icons.mjs && node scripts/generate-playstore-graphics.mjs",
     "android:icons": "node scripts/generate-app-icons.mjs && npx expo prebuild --platform android --no-install",

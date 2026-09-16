@@ -1,14 +1,17 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AthleteCurrentSchedule } from '@/components/home/AthleteCurrentSchedule';
 import { AthleteGymAccess } from '@/components/home/AthleteGymAccess';
+import { AthleteWorkoutTimer } from '@/components/home/AthleteWorkoutTimer';
 import { HomeBrandShowcase } from '@/components/home/HomeBrandShowcase';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { isTrainerRole } from '@/lib/athleteService';
+import { useAthleteTabBarHeight, useBottomSafeInset } from '@/lib/mobileInsets';
 
 function formatToday() {
   return new Date().toLocaleDateString('es-ES', {
@@ -28,6 +31,15 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const firstName = user?.name?.split(' ')[0] ?? 'atleta';
   const isTrainer = isTrainerRole(user?.role);
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useAthleteTabBarHeight();
+  const bottomInset = useBottomSafeInset();
+
+  const athletePageMinHeight = useMemo(() => {
+    const screenPadding = spacing.sm + spacing.lg + bottomInset;
+    return Math.max(480, windowHeight - tabBarHeight - insets.top - screenPadding);
+  }, [bottomInset, insets.top, tabBarHeight, windowHeight]);
 
   const scrollRef = useRef<ScrollView>(null);
   const calendarOffsetY = useRef(0);
@@ -47,40 +59,59 @@ export default function HomeScreen() {
   }, [focusCalendar, isTrainer, router]);
 
   return (
-    <ScreenWrapper scrollRef={scrollRef} resetScrollOnFocus={!focusCalendar}>
-      <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.greeting}>Hola, {firstName}</Text>
-          <Text style={styles.date}>{formatToday()}</Text>
+    <ScreenWrapper
+      scrollRef={scrollRef}
+      resetScrollOnFocus={!focusCalendar}
+      scrollable={isTrainer || focusCalendar}
+      style={!isTrainer && !focusCalendar ? styles.fillScreen : undefined}
+    >
+      <View style={[styles.page, !isTrainer && { minHeight: athletePageMinHeight, flex: 1 }]}>
+        <View style={styles.header}>
+          <View style={styles.headerCopy}>
+            <Text style={styles.greeting}>Hola, {firstName}</Text>
+            <Text style={styles.date}>{formatToday()}</Text>
+          </View>
+          <Pressable
+            onPress={() => router.push('/tabs/profile')}
+            accessibilityRole="button"
+            accessibilityLabel="Ir al perfil"
+            style={({ pressed }) => [styles.avatar, pressed && styles.avatarPressed]}
+          >
+            <Text style={styles.avatarText}>{user?.avatarInitials ?? 'TP'}</Text>
+          </Pressable>
         </View>
-        <Pressable
-          onPress={() => router.push('/tabs/profile')}
-          accessibilityRole="button"
-          accessibilityLabel="Ir al perfil"
-          style={({ pressed }) => [styles.avatar, pressed && styles.avatarPressed]}
-        >
-          <Text style={styles.avatarText}>{user?.avatarInitials ?? 'TP'}</Text>
-        </Pressable>
+
+        {!isTrainer ? (
+          <View style={styles.athleteBody}>
+            <HomeBrandShowcase fillAvailable />
+            <View
+              style={styles.calendarWrap}
+              onLayout={(event) => {
+                calendarOffsetY.current = event.nativeEvent.layout.y;
+              }}
+            >
+              <AthleteGymAccess />
+              <AthleteCurrentSchedule preferPersonalized={focusCalendar} forceExpanded={focusCalendar} />
+              <AthleteWorkoutTimer />
+            </View>
+          </View>
+        ) : (
+          <HomeBrandShowcase />
+        )}
       </View>
-
-      <HomeBrandShowcase />
-
-      {!isTrainer ? (
-        <View
-          style={styles.calendarWrap}
-          onLayout={(event) => {
-            calendarOffsetY.current = event.nativeEvent.layout.y;
-          }}
-        >
-          <AthleteGymAccess />
-          <AthleteCurrentSchedule preferPersonalized={focusCalendar} forceExpanded={focusCalendar} />
-        </View>
-      ) : null}
     </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
+  page: {
+    flexGrow: 1,
+  },
+  athleteBody: {
+    flex: 1,
+    gap: spacing.lg,
+    minHeight: 0,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -110,8 +141,13 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   avatarText: { ...typography.body, color: colors.black, fontWeight: '700' },
+  fillScreen: {
+    flex: 1,
+    paddingBottom: 0,
+  },
   calendarWrap: {
-    marginTop: spacing.lg,
-    gap: spacing.md,
+    flex: 1,
+    gap: spacing.sm,
+    minHeight: 0,
   },
 });
