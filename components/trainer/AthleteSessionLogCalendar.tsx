@@ -169,15 +169,18 @@ export function AthleteSessionLogCalendar({
           {monthSummaries.map((month) => {
             const selected = selectedDate.getFullYear() === year && selectedDate.getMonth() === month.monthIndex;
             const currentMonth = today.getFullYear() === year && today.getMonth() === month.monthIndex;
+            const reviewedCount = month.count - month.pendingCount;
+            const allReviewedInMonth = month.count > 0 && month.pendingCount === 0;
             return (
               <Pressable
                 key={month.monthIndex}
                 onPress={() => openMonth(month.monthIndex, month.firstLogDate)}
                 accessibilityRole="button"
-                accessibilityLabel={`${monthShortLabel(month.monthIndex)} ${year}${month.count ? `, ${month.count} entrenos` : ''}${month.pendingCount ? `, ${month.pendingCount} por revisar` : ''}`}
+                accessibilityLabel={`${monthShortLabel(month.monthIndex)} ${year}${month.count ? `, ${month.count} entrenos` : ''}${month.pendingCount ? `, ${month.pendingCount} por revisar` : reviewedCount ? ', revisados' : ''}`}
                 style={({ pressed }) => [
                   styles.yearCell,
-                  month.count > 0 && !selected && styles.yearCellWithLogs,
+                  allReviewedInMonth && !selected && styles.yearCellReviewed,
+                  month.count > 0 && !selected && !allReviewedInMonth && styles.yearCellWithLogs,
                   month.pendingCount > 0 && !selected && styles.yearCellPending,
                   month.hasFavorite && !selected && month.pendingCount === 0 && styles.yearCellFavorite,
                   selected && styles.yearCellSelected,
@@ -194,7 +197,13 @@ export function AthleteSessionLogCalendar({
                   {monthShortLabel(month.monthIndex)}
                 </Text>
                 {month.count > 0 ? (
-                  <Text style={[styles.yearCellCount, selected && styles.yearCellCountSelected]}>
+                  <Text
+                    style={[
+                      styles.yearCellCount,
+                      allReviewedInMonth && !selected && styles.yearCellCountReviewed,
+                      selected && styles.yearCellCountSelected,
+                    ]}
+                  >
                     {month.pendingCount > 0 ? '! ' : month.hasFavorite ? '★ ' : ''}
                     {month.count}
                   </Text>
@@ -225,6 +234,7 @@ export function AthleteSessionLogCalendar({
                 const hasFavorite = dayLogs.some((log) => favoriteIds?.has(log.id));
                 const pendingCount = dayLogs.filter((log) => pendingReviewLogIds?.has(log.id)).length;
                 const hasPendingReview = pendingCount > 0;
+                const allReviewed = hasLogs && !hasPendingReview;
 
                 return (
                   <Pressable
@@ -234,7 +244,7 @@ export function AthleteSessionLogCalendar({
                       styles.day,
                       selected && styles.daySelected,
                       hasPendingReview && !selected && styles.dayPendingReview,
-                      hasLogs && !selected && !hasPendingReview && styles.dayWithLogs,
+                      allReviewed && !selected && styles.dayReviewed,
                       hasFavorite && !selected && !hasPendingReview && styles.dayFavorite,
                       pressed && !selected && styles.dayPressed,
                     ]}
@@ -252,7 +262,7 @@ export function AthleteSessionLogCalendar({
                         isSameCalendarDay(day, today) && styles.dayNumberToday,
                         selected && styles.dayNumberSelected,
                         hasPendingReview && !selected && styles.dayNumberPendingReview,
-                        hasLogs && !selected && !hasPendingReview && styles.dayNumberWithLogs,
+                        allReviewed && !selected && styles.dayNumberReviewed,
                       ]}
                     >
                       {day.getDate()}
@@ -264,6 +274,7 @@ export function AthleteSessionLogCalendar({
                           selected && styles.logBadgeSelected,
                           hasPendingReview && styles.logBadgePending,
                           hasFavorite && !hasPendingReview && styles.logBadgeFavorite,
+                          allReviewed && !hasFavorite && styles.logBadgeReviewed,
                         ]}
                       >
                         <Text style={[styles.logBadgeText, selected && styles.logBadgeTextSelected]}>
@@ -368,6 +379,10 @@ const styles = StyleSheet.create({
     backgroundColor: withAlpha(colors.accent, '14'),
     borderColor: withAlpha(colors.accent, '33'),
   },
+  yearCellReviewed: {
+    backgroundColor: withAlpha(colors.success, '14'),
+    borderColor: withAlpha(colors.success, '35'),
+  },
   yearCellFavorite: {
     backgroundColor: 'rgba(245, 185, 66, 0.14)',
     borderColor: 'rgba(245, 185, 66, 0.35)',
@@ -399,6 +414,9 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.accent,
     fontWeight: '700',
+  },
+  yearCellCountReviewed: {
+    color: colors.success,
   },
   yearCellCountSelected: {
     color: colors.black,
@@ -435,8 +453,8 @@ const styles = StyleSheet.create({
   daySelected: {
     backgroundColor: colors.accent,
   },
-  dayWithLogs: {
-    backgroundColor: withAlpha(colors.accent, '14'),
+  dayReviewed: {
+    backgroundColor: withAlpha(colors.success, '14'),
   },
   dayPendingReview: {
     backgroundColor: withAlpha(colors.warning, '16'),
@@ -464,8 +482,8 @@ const styles = StyleSheet.create({
     color: colors.black,
     fontWeight: '800',
   },
-  dayNumberWithLogs: {
-    color: colors.accent,
+  dayNumberReviewed: {
+    color: colors.success,
     fontWeight: '700',
   },
   dayNumberPendingReview: {
@@ -479,7 +497,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accent,
+    backgroundColor: colors.success,
   },
   logBadgeSelected: {
     backgroundColor: colors.black,
@@ -489,6 +507,9 @@ const styles = StyleSheet.create({
   },
   logBadgePending: {
     backgroundColor: colors.warning,
+  },
+  logBadgeReviewed: {
+    backgroundColor: colors.success,
   },
   logBadgeText: {
     ...typography.caption,

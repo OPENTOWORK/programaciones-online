@@ -116,6 +116,67 @@ export async function fetchLeadOwnerId(athleteId: string): Promise<string | null
   return row ? leadOwnerId(row) : null;
 }
 
+async function fetchProfileRoleSlug(profileId: string): Promise<UserRole | undefined> {
+  if (!profileId || !isSupabaseConfigured) return undefined;
+
+  const supabase = getSupabase();
+  if (!supabase) return undefined;
+
+  const { data, error } = await supabase
+    .from(PERFIL_TABLE)
+    .select('roles(slug)')
+    .eq('id', profileId)
+    .maybeSingle();
+
+  if (error || !data) return undefined;
+
+  const roles = data.roles as { slug?: string } | { slug?: string }[] | null | undefined;
+  const roleData = Array.isArray(roles) ? roles[0] : roles;
+  const slug = roleData?.slug;
+  if (slug === 'atleta' || slug === 'entrenador' || slug === 'administrador' || slug === 'gimnasio') {
+    return slug;
+  }
+
+  return undefined;
+}
+
+async function fetchAthleteIsCededToOtherTrainerFallback(athleteId: string): Promise<boolean> {
+  const rows = await fetchCrmLeadOwnerRows();
+  const row = rows.find((item) => item.athlete_id === athleteId && !item.archived_at);
+  if (!row) return false;
+
+  const assignedTrainerId = row.assigned_trainer_id as string | null;
+  const recordTrainerId = row.trainer_id as string | null;
+  if (!assignedTrainerId || !recordTrainerId || assignedTrainerId === recordTrainerId) {
+    return false;
+  }
+
+  const [recordRole, assignedRole] = await Promise.all([
+    fetchProfileRoleSlug(recordTrainerId),
+    fetchProfileRoleSlug(assignedTrainerId),
+  ]);
+
+  return recordRole === 'administrador' && assignedRole === 'entrenador';
+}
+
+/** Atleta cuya ficha del admin está cedida a un entrenador externo. */
+export async function fetchAthleteIsCededToOtherTrainer(athleteId: string): Promise<boolean> {
+  if (!athleteId || !isSupabaseConfigured) return false;
+
+  const supabase = getSupabase();
+  if (!supabase) return false;
+
+  const { data, error } = await supabase.rpc('athlete_is_ceded_to_other_trainer', {
+    p_athlete_id: athleteId,
+  });
+
+  if (error) {
+    return fetchAthleteIsCededToOtherTrainerFallback(athleteId);
+  }
+
+  return Boolean(data);
+}
+
 export async function fetchProfileNamesByIds(ids: readonly string[]): Promise<Map<string, string>> {
   const unique = [...new Set(ids.filter(Boolean))];
   const names = new Map<string, string>();

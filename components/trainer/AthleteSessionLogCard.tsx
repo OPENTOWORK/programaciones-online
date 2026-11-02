@@ -1,10 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { useTrainerAthleteFeedback } from '@/hooks/useTrainerAthleteFeedback';
 import type { SessionLogRecord } from '@/lib/sessionLogService';
-import { isSessionLogPendingReview } from '@/lib/sessionLogReview';
+import { canUnmarkSessionLogReview, isSessionLogPendingReview } from '@/lib/sessionLogReview';
 
 type TrainerAthleteFeedbackState = ReturnType<typeof useTrainerAthleteFeedback>;
 
@@ -32,6 +32,8 @@ export function AthleteSessionLogCard({
   feedback,
   favorite = false,
   onToggleFavorite,
+  onToggleReviewed,
+  markingReviewed = false,
   last = false,
 }: {
   log: SessionLogRecord;
@@ -39,9 +41,14 @@ export function AthleteSessionLogCard({
   feedback?: TrainerAthleteFeedbackState;
   favorite?: boolean;
   onToggleFavorite?: () => void;
+  onToggleReviewed?: () => void;
+  markingReviewed?: boolean;
   last?: boolean;
 }) {
   const pendingReview = isSessionLogPendingReview(log.id, feedback);
+  const reviewed = !pendingReview;
+  const canUnmark =
+    reviewed && feedback && canUnmarkSessionLogReview(log.id, feedback.entries);
 
   return (
     <View style={[styles.row, last && styles.rowLast]}>
@@ -76,6 +83,47 @@ export function AthleteSessionLogCard({
             ) : null}
           </View>
         </Pressable>
+
+        {onToggleReviewed && (pendingReview || canUnmark) ? (
+          <Pressable
+            onPress={onToggleReviewed}
+            disabled={markingReviewed}
+            accessibilityRole="button"
+            accessibilityState={{ selected: reviewed }}
+            accessibilityLabel={
+              pendingReview
+                ? `Marcar ${log.workoutName} como revisado`
+                : `Marcar ${log.workoutName} como pendiente de revisar`
+            }
+            style={({ pressed }) => [
+              styles.reviewBtn,
+              reviewed && styles.reviewBtnReviewed,
+              markingReviewed && styles.reviewBtnDisabled,
+              pressed && !markingReviewed && styles.reviewBtnPressed,
+            ]}
+          >
+            {markingReviewed ? (
+              <ActivityIndicator
+                size="small"
+                color={reviewed ? colors.white : colors.success}
+              />
+            ) : (
+              <>
+                {reviewed ? (
+                  <Ionicons name="checkmark" size={14} color={colors.white} />
+                ) : null}
+                <Text style={[styles.reviewBtnText, reviewed && styles.reviewBtnTextReviewed]}>
+                  Revisado
+                </Text>
+              </>
+            )}
+          </Pressable>
+        ) : reviewed ? (
+          <View style={[styles.reviewBtn, styles.reviewBtnReviewed, styles.reviewBtnLocked]}>
+            <Ionicons name="checkmark" size={14} color={colors.white} />
+            <Text style={[styles.reviewBtnText, styles.reviewBtnTextReviewed]}>Revisado</Text>
+          </View>
+        ) : null}
 
         {onToggleFavorite ? (
           <Pressable
@@ -129,8 +177,46 @@ const styles = StyleSheet.create({
   headerTrailing: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
     flexShrink: 0,
+  },
+  reviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.success, '66'),
+    backgroundColor: withAlpha(colors.success, '14'),
+    minWidth: 76,
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
+  },
+  reviewBtnReviewed: {
+    borderColor: colors.success,
+    backgroundColor: colors.success,
+  },
+  reviewBtnLocked: {
+    opacity: 0.95,
+  },
+  reviewBtnPressed: {
+    backgroundColor: withAlpha(colors.success, '28'),
+  },
+  reviewBtnDisabled: {
+    opacity: 0.7,
+    ...(Platform.OS === 'web' ? ({ cursor: 'default' } as object) : null),
+  },
+  reviewBtnText: {
+    ...typography.caption,
+    color: colors.success,
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.2,
+  },
+  reviewBtnTextReviewed: {
+    color: colors.white,
   },
   title: {
     ...typography.body,

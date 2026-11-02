@@ -1,6 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps, ReactNode } from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   PanResponder,
@@ -10,11 +10,15 @@ import {
   Text,
   View,
   type GestureResponderHandlers,
+  type View as RNView,
 } from 'react-native';
 
 import { AthleteWeekListView } from '@/components/schedule/AthleteWeekListView';
 
+import { PlanGroupCalendarLegend } from '@/components/program/PlanGroupCalendarLegend';
 import { DayActionsButton } from '@/components/trainer/CalendarDayActionsMenu';
+import type { PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
+import { selectPlanGroupForSchedulePeriod } from '@/lib/planValidity';
 import type { PopoverAnchor } from '@/components/ui/PopoverMenu';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import {
@@ -35,6 +39,7 @@ import {
   formatShortWeekRange,
   formatWeekMonthLabel,
   formatYearLabel,
+  listMondaysInYear,
   shiftYear,
   type SchedulePreviewItem,
   type ScheduleViewMode,
@@ -131,6 +136,13 @@ interface ScheduleCalendarGridProps {
   inlineEditingKey?: string;
   /** Al elegir una semana en la cuadrícula anual del desafío. */
   onWeeklyChallengeWeekSelect?: (monday: Date) => void;
+  /** Planes mostrados en el calendario (nombre y vigencia). */
+  planGroups?: PersonalizedPlanGroup[];
+  /** Apila todas las semanas del año en vertical (sin scroll lateral). */
+  weekYearStack?: boolean;
+  /** Semana a la que hacer scroll al cargar (lunes de esa semana). */
+  anchorWeekMonday?: Date | null;
+  onAnchorWeekLayout?: (weekContainer: RNView) => void;
 }
 
 const VIEW_MODES: Array<{ id: ScheduleViewMode; label: string }> = [
@@ -617,23 +629,49 @@ export function ScheduleCalendarGrid({
   sessionSelection,
   inlineEditingKey,
   onWeeklyChallengeWeekSelect,
+  planGroups,
+  weekYearStack = false,
+  anchorWeekMonday = null,
+  onAnchorWeekLayout,
 }: ScheduleCalendarGridProps) {
+  const anchorWeekRef = useRef<RNView>(null);
   const weeklyChallengeYear = layout === 'weeklyChallenge';
   const navigate = (direction: -1 | 1) => {
+    if (weekYearStack && viewMode === 'week') {
+      onFocusDateChange(shiftYear(focusDate, direction));
+      return;
+    }
     onFocusDateChange(
       shiftSchedulePeriod(focusDate, viewMode, direction, { weeklyChallengeYear }),
     );
   };
 
   const periods =
-    weeklyChallengeYear && viewMode === 'month'
-      ? [focusDate]
-      : Array.from({ length: Math.max(1, visiblePeriods) }, (_, index) =>
-          shiftSchedulePeriod(focusDate, viewMode, index, { weeklyChallengeYear }),
-        );
+    weekYearStack && viewMode === 'week'
+      ? listMondaysInYear(focusDate.getFullYear())
+      : weeklyChallengeYear && viewMode === 'month'
+        ? [focusDate]
+        : Array.from({ length: Math.max(1, visiblePeriods) }, (_, index) =>
+            shiftSchedulePeriod(focusDate, viewMode, index, { weeklyChallengeYear }),
+          );
   const stretchPeriod = fill && periods.length === 1;
   const periodNames = PERIOD_LABELS[viewMode];
   const visibleViewModes = weeklyChallengeYear ? WEEKLY_CHALLENGE_VIEW_MODES : VIEW_MODES;
+  const legendPlanGroup = useMemo(
+    () => (planGroups ? selectPlanGroupForSchedulePeriod(planGroups, focusDate, viewMode) : null),
+    [focusDate, planGroups, viewMode],
+  );
+
+  const notifyAnchorWeekLayout = useCallback(() => {
+    if (!weekYearStack || !anchorWeekMonday || !onAnchorWeekLayout || !anchorWeekRef.current) return;
+    onAnchorWeekLayout(anchorWeekRef.current);
+  }, [anchorWeekMonday, onAnchorWeekLayout, weekYearStack]);
+
+  useEffect(() => {
+    if (!weekYearStack || !anchorWeekMonday) return;
+    const frame = requestAnimationFrame(() => notifyAnchorWeekLayout());
+    return () => cancelAnimationFrame(frame);
+  }, [anchorWeekMonday, items.length, notifyAnchorWeekLayout, periods.length, weekYearStack]);
 
   return (
     <View style={fill ? styles.containerFill : undefined}>
@@ -665,16 +703,30 @@ export function ScheduleCalendarGrid({
           <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
         </Pressable>
         <Text style={[styles.periodLabel, size === 'large' && styles.periodLabelLarge, size === 'athlete' && styles.periodLabelAthlete]}>
-          {periodLabelFor(focusDate, viewMode, size, weeklyChallengeYear)}
+          {weekYearStack && viewMode === 'week'
+            ? `${formatYearLabel(focusDate)} · ${periods.length} semanas`
+            : periodLabelFor(focusDate, viewMode, size, weeklyChallengeYear)}
         </Text>
         <Pressable onPress={() => navigate(1)} style={styles.navBtn} accessibilityLabel="Siguiente">
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         </Pressable>
       </View>
 
-      {periods.map((periodDate, index) => (
+      {legendPlanGroup ? (
+        <PlanGroupCalendarLegend group={legendPlanGroup} focusDate={focusDate} viewMode={viewMode} />
+      ) : null}
+
+      {periods.map((periodDate, index) => {
+        const isAnchorWeek =
+          weekYearStack &&
+          anchorWeekMonday &&
+          periodDate.toDateString() === anchorWeekMonday.toDateString();
+        return (
         <View
           key={periodDate.toISOString()}
+          ref={isAnchorWeek ? anchorWeekRef : undefined}
+          collapsable={false}
+          onLayout={isAnchorWeek ? () => notifyAnchorWeekLayout() : undefined}
           style={[styles.period, stretchPeriod && styles.periodFill, index > 0 && styles.periodStacked]}
         >
           {index > 0 ? (
@@ -711,7 +763,8 @@ export function ScheduleCalendarGrid({
               items={items}
               size={size}
               layout={layout}
-              fill={stretchPeriod}
+              fill={stretchPeriod && !weekYearStack}
+              weekYearStack={weekYearStack}
               selectedDate={selectedDate}
               onDayPress={onDayPress}
               onDayActionsPress={onDayActionsPress}
@@ -739,9 +792,10 @@ export function ScheduleCalendarGrid({
             />
           ) : null}
         </View>
-      ))}
+        );
+      })}
 
-      {onVisiblePeriodsChange && !(weeklyChallengeYear && viewMode === 'month') ? (
+      {onVisiblePeriodsChange && !weekYearStack && !(weeklyChallengeYear && viewMode === 'month') ? (
         <View style={styles.extendRow}>
           <Pressable
             onPress={() => onVisiblePeriodsChange(visiblePeriods + 1)}
@@ -1076,6 +1130,7 @@ function WeekView({
   size,
   layout = 'default',
   fill = false,
+  weekYearStack = false,
   selectedDate,
   onDayPress,
   onDayActionsPress,
@@ -1093,6 +1148,7 @@ function WeekView({
   size: ScheduleCalendarSize;
   layout?: ScheduleCalendarLayout;
   fill?: boolean;
+  weekYearStack?: boolean;
   selectedDate?: Date;
   onDayPress?: (date: Date, dayItems: SchedulePreviewItem[]) => void;
   onDayActionsPress?: (
@@ -1349,10 +1405,21 @@ function WeekView({
   }
 
   return (
-    <View style={[styles.weekGridWrapper, fill && styles.weekGridWrapperFill]}>
+    <View
+      style={[
+        styles.weekGridWrapper,
+        fill && styles.weekGridWrapperFill,
+        weekYearStack && styles.weekGridWrapperYearStack,
+      ]}
+    >
       <View
         collapsable={false}
-        style={[styles.weekGrid, fill && styles.weekGridFill, size === 'athlete' && styles.weekGridAthlete]}
+        style={[
+          styles.weekGrid,
+          fill && styles.weekGridFill,
+          size === 'athlete' && styles.weekGridAthlete,
+          weekYearStack && styles.weekGridYearStack,
+        ]}
         onLayout={canDrag ? measureColumnBounds : undefined}
       >
         {days.map((day) => {
@@ -1382,6 +1449,7 @@ function WeekView({
               styles.weekColumn,
               size === 'large' && styles.weekColumnLarge,
               size === 'athlete' && styles.weekColumnAthlete,
+              weekYearStack && styles.weekColumnYearStack,
               fill && styles.weekColumnFill,
               !fill && hasExpandedSession && styles.weekColumnExpanded,
               selected && styles.weekColumnSelected,
@@ -1771,6 +1839,22 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'visible',
   },
+  weekGridWrapperYearStack: {
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
+  weekGridYearStack: {
+    width: '100%',
+    maxWidth: '100%',
+    flexWrap: 'nowrap',
+    ...(Platform.OS === 'web' ? ({ overflowX: 'hidden' } as object) : null),
+  },
+  weekColumnYearStack: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+  },
   weekGridWrapperFill: {
     flex: 1,
     minHeight: 0,
@@ -2006,8 +2090,8 @@ const styles = StyleSheet.create({
     minHeight: 480,
   },
   sessionChipDetail: {
-    marginTop: spacing.xs,
-    paddingTop: spacing.xs,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     flexShrink: 0,

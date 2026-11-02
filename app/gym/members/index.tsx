@@ -13,6 +13,7 @@ import {
 import { GymCoachFormModal } from '@/components/gym/GymCoachFormModal';
 import { GymMemberDataActions } from '@/components/gym/GymMemberDataActions';
 import { GymMemberCrmBoard } from '@/components/gym/GymMemberCrmBoard';
+import { CrmViewToggle, type CrmViewMode } from '@/components/crm/CrmViewToggle';
 import { GymMemberFormModal } from '@/components/gym/GymMemberFormModal';
 import {
   WellhubActivatedBanner,
@@ -151,6 +152,7 @@ export default function GymMembersScreen() {
   const [importError, setImportError] = useState<string | null>(null);
   const [wellhubPlanMemberIds, setWellhubPlanMemberIds] = useState<Set<string>>(new Set());
   const [wellhubActivated, setWellhubActivated] = useState(false);
+  const [crmViewMode, setCrmViewMode] = useState<CrmViewMode>('kanban');
 
   const wide = width >= TABLE_BREAKPOINT;
   const showingWellhub = kind === 'wellhub';
@@ -521,6 +523,12 @@ export default function GymMembersScreen() {
               })}
             </View>
           ) : null}
+
+          {showingCrm ? (
+            <View style={styles.crmViewRow}>
+              <CrmViewToggle mode={crmViewMode} onChange={setCrmViewMode} />
+            </View>
+          ) : null}
         </View>
 
         {showingCrm ? (
@@ -529,6 +537,7 @@ export default function GymMembersScreen() {
             isLoading={isLoading}
             error={error}
             canOperate={permissions.canOperate}
+            viewMode={crmViewMode}
             onRetry={refresh}
             onAdd={() => setCreating(true)}
           />
@@ -834,6 +843,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
+  },
+  crmViewRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
   chip: {
     paddingHorizontal: 10,

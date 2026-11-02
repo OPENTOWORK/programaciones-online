@@ -362,6 +362,11 @@ export function lastMondayOnOrBefore(date: Date) {
   return monday;
 }
 
+/** Lunes de la semana ISO que contiene `date` (domingo → lunes anterior). */
+export function getWeekMonday(date: Date) {
+  return getMonday(startOfDay(date));
+}
+
 export function listMondaysInYear(year: number) {
   const mondays: Date[] = [];
   let cursor = firstMondayOnOrAfter(new Date(year, 0, 1));

@@ -1,4 +1,6 @@
 import type { ProgressData, WorkoutLog } from '@/lib/types';
+import { collectScheduledRestDayKeysForUser } from '@/lib/athleteSchedule';
+import { toLocalDateString } from '@/lib/sessionSchedule';
 
 const RECENT_HISTORY_LIMIT = 6;
 
@@ -26,31 +28,49 @@ function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
-function calculateStreak(logDates: Date[]) {
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addLocalDays(date: Date, delta: number) {
+  const next = startOfLocalDay(date);
+  next.setDate(next.getDate() + delta);
+  return next;
+}
+
+/** Racha de días con entreno; los descansos programados no rompen la racha ni la incrementan. */
+function calculateStreak(logDates: Date[], restDayKeys: ReadonlySet<string>) {
   if (logDates.length === 0) return 0;
 
-  const uniqueDays = [...new Set(logDates.map((d) => d.toDateString()))]
-    .map((value) => new Date(value))
-    .sort((a, b) => b.getTime() - a.getTime());
+  const workoutKeys = new Set(logDates.map((date) => toLocalDateString(startOfLocalDay(date))));
+
+  const today = startOfLocalDay(new Date());
+  const oldestLog = logDates.reduce(
+    (earliest, date) => (startOfLocalDay(date) < earliest ? startOfLocalDay(date) : earliest),
+    startOfLocalDay(logDates[0]),
+  );
+  const maxLookback =
+    Math.ceil((today.getTime() - oldestLog.getTime()) / 86400000) + 2;
 
   let streak = 0;
-  const cursor = new Date();
-  cursor.setHours(0, 0, 0, 0);
+  let day = today;
 
-  for (const day of uniqueDays) {
-    const normalized = new Date(day);
-    normalized.setHours(0, 0, 0, 0);
-    const diffDays = Math.round((cursor.getTime() - normalized.getTime()) / 86400000);
+  for (let index = 0; index <= maxLookback; index += 1) {
+    const key = toLocalDateString(day);
 
-    if (diffDays === 0 || (streak > 0 && diffDays === 1)) {
+    if (workoutKeys.has(key)) {
       streak += 1;
-      cursor.setDate(cursor.getDate() - 1);
-    } else if (streak === 0 && diffDays === 1) {
-      streak = 1;
-      cursor.setDate(cursor.getDate() - 1);
+    } else if (restDayKeys.has(key)) {
+      // Día de descanso planificado: no suma, pero tampoco corta la racha.
+    } else if (streak > 0) {
+      break;
+    } else if (index === 0) {
+      // Hoy aún no hay registro: seguimos mirando ayer.
     } else {
       break;
     }
+
+    day = addLocalDays(day, -1);
   }
 
   return streak;
@@ -100,7 +120,19 @@ export async function fetchProgressData(userId: string): Promise<ProgressData> {
     duration: log.duration ?? '—',
   }));
 
-  const streak = calculateStreak(parsedLogs.map((log) => log.completedDate));
+  const streakRestRangeStart =
+    parsedLogs.length > 0
+      ? parsedLogs.reduce(
+          (earliest, log) =>
+            log.completedDate < earliest ? log.completedDate : earliest,
+          parsedLogs[0].completedDate,
+        )
+      : now;
+  const restDayKeys = await collectScheduledRestDayKeysForUser(userId, streakRestRangeStart, now);
+  const streak = calculateStreak(
+    parsedLogs.map((log) => log.completedDate),
+    restDayKeys,
+  );
 
   let motivationalStatus = emptyProgress.motivationalStatus;
   if (weeklyCompleted > 0 && adherence >= 80) {

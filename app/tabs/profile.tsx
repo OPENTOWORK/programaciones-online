@@ -12,10 +12,10 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
-import { ACCOUNT_DELETION_ROUTE } from '@/constants/legal';
 import { colors, goalLabels, levelColors, spacing, typography } from '@/constants/theme';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAthleteIntakeForms } from '@/hooks/useAthleteIntakeForms';
+import { useAthletePreviewMode } from '@/hooks/useAthletePreviewMode';
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useIntakeFormTemplates } from '@/hooks/useIntakeFormTemplates';
@@ -57,10 +57,11 @@ export default function ProfileScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { user, signOut, refreshUser } = useAuth();
+  const preview = useAthletePreviewMode();
   const { basics, measured, derived, refresh, latestMeasurement } = usePhysicalProfile();
   const { profile: nutrition, refresh: refreshNutrition } = useNutritionProfile();
   const { profile: training, refresh: refreshTraining } = useTrainingProfile();
-  const isAthlete = !isTrainerRole(user?.role);
+  const isAthlete = preview.enabled || !isTrainerRole(user?.role);
   const { isComplete: intakeComplete, isLoading: intakeLoading, usesCustomForms } = useAthleteIntakeForm();
   const { statuses: intakeStatuses, isLoading: intakeListLoading } = useAthleteIntakeForms();
   const { templates: trainerIntakeForms, isLoading: trainerIntakeFormsLoading } = useIntakeFormTemplates();
@@ -387,14 +388,6 @@ export default function ProfileScreen() {
         <Button title="Cerrar sesión" onPress={handleLogout} variant="ghost" style={styles.btn} />
       )}
 
-      <Button
-        title="Eliminar cuenta"
-        onPress={() => router.push(ACCOUNT_DELETION_ROUTE)}
-        variant="ghost"
-        style={styles.btn}
-        textStyle={styles.deleteAccountText}
-      />
-
       <ProfileFooterLinks />
     </ScreenWrapper>
   );
@@ -465,7 +458,6 @@ const styles = StyleSheet.create({
   rowHint: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
   rowValue: { ...typography.body, color: colors.text, fontWeight: '500', textAlign: 'right' },
   btn: { marginTop: spacing.md },
-  deleteAccountText: { color: colors.danger },
   confirmBox: {
     marginTop: spacing.md,
     padding: spacing.md,

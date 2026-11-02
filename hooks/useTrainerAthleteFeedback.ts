@@ -195,6 +195,95 @@ export function useTrainerAthleteFeedback(targetAthleteId?: string) {
     [useLocalStore, persistent],
   );
 
+  const markSessionReviewed = useCallback(
+    async (sessionLogId: string) => {
+      if (!trainerId || !athleteId) {
+        return { error: 'Solo el entrenador puede marcar sesiones como revisadas.' };
+      }
+      if (entries.some((entry) => entry.sessionLogId === sessionLogId)) {
+        return {};
+      }
+
+      setSending(true);
+      setError(null);
+
+      const result = await createTrainerAthleteFeedback({
+        trainerId,
+        athleteId,
+        message: '',
+        sessionLogId,
+        useLocalStore: useLocalStore || !persistent,
+        allowEmptyMessage: true,
+      });
+
+      setSending(false);
+
+      if (result.error || !result.entry) {
+        const failure = result.error ?? 'No se pudo marcar como revisado.';
+        setError(failure);
+        return { error: failure };
+      }
+
+      setEntries((current) => [{ ...result.entry!, attachments: [] }, ...current]);
+      return { entry: result.entry };
+    },
+    [athleteId, entries, persistent, trainerId, useLocalStore],
+  );
+
+  const unmarkSessionReviewed = useCallback(
+    async (sessionLogId: string) => {
+      if (!trainerId || !athleteId) {
+        return { error: 'Solo el entrenador puede cambiar el estado de revisión.' };
+      }
+
+      const markers = entries.filter(
+        (entry) => entry.sessionLogId === sessionLogId && !entry.message.trim() && entry.attachments.length === 0,
+      );
+      if (markers.length === 0) {
+        return {};
+      }
+
+      setSending(true);
+      setError(null);
+
+      for (const entry of markers) {
+        const result = await deleteTrainerAthleteFeedback(entry, useLocalStore || !persistent);
+        if (result.error) {
+          setSending(false);
+          setError(result.error);
+          return { error: result.error };
+        }
+      }
+
+      const removedIds = new Set(markers.map((entry) => entry.id));
+      setSending(false);
+      setEntries((current) => current.filter((entry) => !removedIds.has(entry.id)));
+      return {};
+    },
+    [athleteId, entries, persistent, trainerId, useLocalStore],
+  );
+
+  const toggleSessionReviewed = useCallback(
+    async (sessionLogId: string) => {
+      const pending = !entries.some((entry) => entry.sessionLogId === sessionLogId);
+      if (pending) {
+        return markSessionReviewed(sessionLogId);
+      }
+      const hasSubstantive = entries.some(
+        (entry) =>
+          entry.sessionLogId === sessionLogId &&
+          (entry.message.trim().length > 0 || entry.attachments.length > 0),
+      );
+      if (hasSubstantive) {
+        return {
+          error: 'Este entreno ya tiene feedback enviado; no se puede marcar como pendiente.',
+        };
+      }
+      return unmarkSessionReviewed(sessionLogId);
+    },
+    [entries, markSessionReviewed, unmarkSessionReviewed],
+  );
+
   const generalEntries = useMemo(
     () => entries.filter((entry) => !entry.sessionLogId),
     [entries],
@@ -224,6 +313,9 @@ export function useTrainerAthleteFeedback(targetAthleteId?: string) {
     send,
     update,
     remove,
+    markSessionReviewed,
+    unmarkSessionReviewed,
+    toggleSessionReviewed,
     refresh: load,
   };
 }

@@ -1,10 +1,16 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { Platform } from 'react-native';
-import * as XLSX from 'xlsx';
 
 import type { GymProduct, GymProductInput } from '@/lib/gymTypes';
 
 export type GymShopDataFormat = 'csv' | 'excel';
+
+/** `xlsx` pesa casi un mega: solo se descarga al importar o exportar en Excel. */
+let xlsxModule: Promise<typeof import('xlsx')> | null = null;
+function loadXlsx() {
+  xlsxModule ??= import('xlsx');
+  return xlsxModule;
+}
 
 export interface GymShopImportRow extends GymProductInput {
   productId?: string;
@@ -162,7 +168,8 @@ export function shopRowsToCsv(rows: GymShopExportRow[]) {
   return matrix.map((row) => row.map((cell) => escapeCsvCell(cell)).join(';')).join('\r\n');
 }
 
-export function shopRowsToExcelBuffer(rows: GymShopExportRow[]) {
+export async function shopRowsToExcelBuffer(rows: GymShopExportRow[]) {
+  const XLSX = await loadXlsx();
   const worksheet = XLSX.utils.aoa_to_sheet(rowsToMatrix(rows));
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Productos');
@@ -253,7 +260,8 @@ function parseDelimitedText(text: string): GymShopImportResult {
   return { rows, skipped };
 }
 
-function parseWorkbookBuffer(buffer: ArrayBuffer): GymShopImportResult {
+async function parseWorkbookBuffer(buffer: ArrayBuffer): Promise<GymShopImportResult> {
+  const XLSX = await loadXlsx();
   const workbook = XLSX.read(buffer, { type: 'array' });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return { rows: [], skipped: 0 };
@@ -314,7 +322,7 @@ export async function exportGymShopProducts(
     return { data: rows.length };
   }
 
-  const buffer = shopRowsToExcelBuffer(rows);
+  const buffer = await shopRowsToExcelBuffer(rows);
   if (
     !downloadOnWeb(
       `${fileStem}-${stamp}.xlsx`,

@@ -218,10 +218,9 @@ Android y web mantienen el comportamiento anterior.
 - [x] Migración de borrado de cuenta aplicada en producción (`npm run supabase:account-deletion`).
 - [x] Borrado probado de punta a punta (`npm run test:account-deletion`, 13/13).
 - [ ] Corregir la ficha de **App Privacy** en App Store Connect (sección 2 de este documento).
-- [x] `codemagic.yaml` → `APP_STORE_VERSION: "1.0"`, para que el build entre en la versión
-      rechazada en vez de crear una nueva. El build number lo asigna Codemagic
-      (`PROJECT_BUILD_NUMBER`) y solo tiene que ser mayor que `9`.
-      `app.json` se queda en `1.0.15` porque esa versión la comparten Android y web.
+- [x] La respuesta a aquel rechazo ya no reutiliza la versión `1.0`. La versión
+      nueva es `1.0.21` (`codemagic.yaml` → `APP_STORE_VERSION` y `app.json`).
+      El build number de Codemagic lo asigna `PROJECT_BUILD_NUMBER`.
 - [ ] Grabar el vídeo del borrado de cuenta en un iPhone físico y adjuntarlo en
       *App Review Information → Notes*.
 - [ ] En las Review Notes, indicar dónde está el botón de eliminar cuenta:

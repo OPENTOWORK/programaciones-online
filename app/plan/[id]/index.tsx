@@ -4,12 +4,15 @@ import { ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { PlanCategoryContent } from '@/components/program/PlanCategoryContent';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, typography } from '@/constants/theme';
+import { useAthleteCededAccess } from '@/hooks/useAthleteCededAccess';
 import { usePrograms } from '@/hooks/usePrograms';
+import { isPlanCategoryAllowedForCededAthlete } from '@/lib/programService';
 import { normalizeRouteParam } from '@/lib/routeParams';
 
 export default function PlanCategoryScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const planId = normalizeRouteParam(params.id) ?? '';
+  const { isCeded: isCededAthlete } = useAthleteCededAccess();
   const { plans, isLoading, error } = usePrograms();
   const plan = plans.find((item) => item.id === planId);
 
@@ -30,6 +33,10 @@ export default function PlanCategoryScreen() {
   }
 
   if (!plan || plan.category === 'standard') {
+    return <Redirect href="/tabs/programs" />;
+  }
+
+  if (isCededAthlete && !isPlanCategoryAllowedForCededAthlete(plan.category)) {
     return <Redirect href="/tabs/programs" />;
   }
 

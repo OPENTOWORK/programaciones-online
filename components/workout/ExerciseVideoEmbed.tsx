@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
   },
   fillContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: 0,
     overflow: 'hidden',
     backgroundColor: colors.black,
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
   },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.black,

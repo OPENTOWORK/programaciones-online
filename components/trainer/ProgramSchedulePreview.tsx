@@ -1,10 +1,12 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ScheduleCalendarGrid } from '@/components/trainer/ScheduleCalendarGrid';
 import { Card } from '@/components/ui/Card';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
+import { useTrainerMobileLayout } from '@/hooks/useTrainerMobileLayout';
+import { useTrainerMobilePreviewMode } from '@/hooks/useTrainerMobilePreview';
 import { buildScheduleCalendarItems } from '@/lib/scheduleCalendarItems';
 import { isHypeWeeklyChallengeProgram } from '@/lib/hypeCatalog';
 import type { SchedulePreviewItem, ScheduleViewMode } from '@/lib/programSchedulePreview';
@@ -54,7 +56,9 @@ export function ProgramSchedulePreview({
   hideHeader = false,
   embedded = false,
 }: ProgramSchedulePreviewProps) {
-  const isAthlete = variant === 'athlete';
+  const mobileLayout = useTrainerMobileLayout();
+  const preview = useTrainerMobilePreviewMode();
+  const isAthlete = variant === 'athlete' || mobileLayout || preview.enabled;
   const isWeeklyChallenge = isHypeWeeklyChallengeProgram(program);
   const [viewMode, setViewMode] = useState<ScheduleViewMode>(
     initialViewMode ?? (isWeeklyChallenge ? 'week' : isAthlete ? 'day' : 'week'),
@@ -186,6 +190,7 @@ const styles = StyleSheet.create({
   panelAthlete: {
     padding: spacing.md,
     minHeight: 0,
+    flex: 0,
   },
   panelEmbedded: {
     flex: 0,

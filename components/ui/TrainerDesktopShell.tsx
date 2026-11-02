@@ -7,7 +7,6 @@ import { AppLogo } from '@/components/ui/AppLogo';
 import { Button } from '@/components/ui/Button';
 import { NavCountBadge } from '@/components/ui/NavCountBadge';
 import { ThemePicker } from '@/components/ui/ThemePicker';
-import { ACCOUNT_DELETION_ROUTE } from '@/constants/legal';
 import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -27,6 +26,7 @@ type NavItem = {
     | '/library'
     | '/tabs/profile'
     | '/trainer/template'
+    | '/trainer/mobile-preview'
     | '/trainer/chats'
     | '/trainer/support'
     | '/trainer/gyms';
@@ -87,6 +87,12 @@ const NAV_ITEMS: NavItem[] = [
     href: '/trainer/template',
     icon: 'templates',
     match: (pathname) => pathname.startsWith('/trainer/template'),
+  },
+  {
+    label: 'Vistas móviles',
+    href: '/trainer/mobile-preview',
+    icon: 'home',
+    match: (pathname) => pathname.startsWith('/trainer/mobile-preview'),
   },
   {
     label: 'Soporte',
@@ -241,13 +247,6 @@ export function TrainerDesktopShell({ children }: TrainerDesktopShellProps) {
               onPress={() => void signOut()}
               style={styles.signOutBtn}
               textStyle={styles.signOutText}
-            />
-            <Button
-              title="Eliminar cuenta"
-              variant="ghost"
-              onPress={() => router.push(ACCOUNT_DELETION_ROUTE)}
-              style={styles.signOutBtn}
-              textStyle={styles.deleteAccountText}
             />
           </View>
         </View>
@@ -460,10 +459,6 @@ const styles = StyleSheet.create({
   signOutText: {
     ...typography.bodySmall,
     color: colors.textMuted,
-  },
-  deleteAccountText: {
-    ...typography.bodySmall,
-    color: colors.danger,
   },
   main: {
     flex: 1,

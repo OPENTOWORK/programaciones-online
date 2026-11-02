@@ -5,13 +5,20 @@ import type { AthleteSummary, UserRole } from '@/lib/types';
 
 type AppRouter = ReturnType<typeof useRouter>;
 
-export function getPostLoginRoute(role?: UserRole): '/tabs/programs' | '/tabs/home' | '/gym' {
+export function getPostLoginRoute(
+  role?: UserRole,
+  options?: { trainerDesktop?: boolean },
+): '/tabs/programs' | '/tabs/home' | '/gym' {
   if (usesGymPanel(role)) {
     return '/gym';
   }
 
-  if (isTrainerDesktopWeb(role)) {
+  if (options?.trainerDesktop ?? isTrainerDesktopWeb(role)) {
     return '/tabs/programs';
+  }
+
+  if (role === 'entrenador' || role === 'administrador') {
+    return '/tabs/home';
   }
 
   return '/tabs/home';
@@ -30,6 +37,11 @@ export function getTrainerLeadProfileHref(lead: Pick<AthleteSummary, 'id' | 'rol
 }
 
 export function getTrainerAthleteProfileHref(athleteId: string): Href {
+  return { pathname: '/trainer/athlete/[id]/calendar', params: { id: athleteId } };
+}
+
+/** Ficha completa del atleta (datos, planes, historial). */
+export function getTrainerAthleteDetailsHref(athleteId: string): Href {
   return { pathname: '/trainer/athlete/[id]', params: { id: athleteId } };
 }
 

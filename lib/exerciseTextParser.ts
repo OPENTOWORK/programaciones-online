@@ -82,6 +82,22 @@ export function collectExerciseNamesFromSessionDraft(draft: {
   return [...names];
 }
 
+export function collectExerciseNamesFromWorkout(workout: {
+  exercises: Array<{ name: string }>;
+  warmup: string;
+  main: string;
+  core?: string;
+  cooldown?: string;
+}) {
+  return collectExerciseNamesFromSessionDraft({
+    exercises: workout.exercises,
+    warmup: workout.warmup,
+    main: workout.main,
+    core: workout.core ?? '',
+    cooldown: workout.cooldown,
+  });
+}
+
 export function collectExerciseNamesFromDrafts(
   editorItems: Array<{
     draft: {

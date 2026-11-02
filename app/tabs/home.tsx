@@ -8,6 +8,8 @@ import { AthleteWorkoutTimer } from '@/components/home/AthleteWorkoutTimer';
 import { HomeBrandShowcase } from '@/components/home/HomeBrandShowcase';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
+import { useAthleteCededAccess } from '@/hooks/useAthleteCededAccess';
+import { useAthletePreviewEffectiveUser, useAthletePreviewMode } from '@/hooks/useAthletePreviewMode';
 import { useAuth } from '@/hooks/useAuth';
 import { isTrainerRole } from '@/lib/athleteService';
 
@@ -26,9 +28,12 @@ export default function HomeScreen() {
   const focusValue = Array.isArray(focus) ? focus[0] : focus;
   const focusCalendar = focusValue === 'calendar';
 
-  const { user } = useAuth();
+  const { user: authUser } = useAuth();
+  const user = useAthletePreviewEffectiveUser() ?? authUser;
+  const preview = useAthletePreviewMode();
+  const { isCeded: isCededAthlete } = useAthleteCededAccess();
   const firstName = user?.name?.split(' ')[0] ?? 'atleta';
-  const isTrainer = isTrainerRole(user?.role);
+  const isTrainer = !preview.enabled && isTrainerRole(user?.role);
 
   const scrollRef = useRef<ScrollView>(null);
   const calendarOffsetY = useRef(0);
@@ -56,7 +61,13 @@ export default function HomeScreen() {
             <Text style={styles.date}>{formatToday()}</Text>
           </View>
           <Pressable
-            onPress={() => router.push('/tabs/profile')}
+            onPress={() => {
+              if (preview.enabled) {
+                preview.setActiveTab('profile');
+                return;
+              }
+              router.push('/tabs/profile');
+            }}
             accessibilityRole="button"
             accessibilityLabel="Ir al perfil"
             style={({ pressed }) => [styles.avatar, pressed && styles.avatarPressed]}
@@ -74,7 +85,7 @@ export default function HomeScreen() {
                 calendarOffsetY.current = event.nativeEvent.layout.y;
               }}
             >
-              <AthleteGymAccess />
+              {!isCededAthlete ? <AthleteGymAccess /> : null}
               <AthleteCurrentSchedule preferPersonalized={focusCalendar} forceExpanded={focusCalendar} />
               <AthleteWorkoutTimer />
             </View>

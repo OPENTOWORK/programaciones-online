@@ -1,5 +1,7 @@
 import * as Application from 'expo-application';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
+
+import { openExternalUrl } from '@/lib/openExternalUrl';
 
 export type AppStorePlatform = 'android' | 'ios';
 
@@ -56,4 +58,21 @@ export function compareVersions(left: string, right: string): number {
 
 export function isVersionOutdated(current: string, minimumRequired: string): boolean {
   return compareVersions(current, minimumRequired) < 0;
+}
+
+/** Abre la ficha de la tienda; en Android intenta primero la app de Play Store. */
+export async function openStoreListing(platform: AppStorePlatform, storeUrl: string) {
+  if (platform === 'android') {
+    const marketUrl = 'market://details?id=com.trainingprogline.app';
+    try {
+      if (await Linking.canOpenURL(marketUrl)) {
+        await Linking.openURL(marketUrl);
+        return;
+      }
+    } catch {
+      // Si falla market://, caemos al enlace https.
+    }
+  }
+
+  await openExternalUrl(storeUrl);
 }

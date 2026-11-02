@@ -1,9 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -29,15 +30,20 @@ import { PopoverMenu, type PopoverAnchor } from '@/components/ui/PopoverMenu';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useSessionTemplates } from '@/hooks/useSessionTemplates';
+import { useTrainerMobileLayout } from '@/hooks/useTrainerMobileLayout';
+import { useTrainerMobilePreviewMode } from '@/hooks/useTrainerMobilePreview';
 import { isTrainerRole } from '@/lib/athleteService';
 import {
   formatDayLabel,
+  getWeekMonday,
   itemsForDate,
+  listMondaysInYear,
   parseSchedulePreviewItemKey,
   type SchedulePreviewItem,
   type ScheduleViewMode,
 } from '@/lib/programSchedulePreview';
 import { buildScheduleCalendarItems, type ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
+import type { PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
 import { isHypeWeeklyChallengeProgram } from '@/lib/hypeCatalog';
 import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
 import { signedUrlForCatalogWorkoutPdf } from '@/lib/catalogWorkoutPdfService';
@@ -137,6 +143,33 @@ interface ScheduleCalendarModalProps {
   ) => Promise<string | null> | string | null;
   /** Al abrir, las sesiones visibles salen desplegadas. */
   expandSessionsByDefault?: boolean;
+  planGroups?: PersonalizedPlanGroup[];
+}
+
+/** Lleva la semana actual a la vista dentro del scroll de la página (calendario embebido). */
+function scrollEmbeddedWeekIntoView(weekContainer: View): boolean {
+  const node = weekContainer as unknown as HTMLElement;
+  if (typeof node.getBoundingClientRect !== 'function') return false;
+
+  let parent: HTMLElement | null = node.parentElement;
+  while (parent) {
+    const overflowY = window.getComputedStyle(parent).overflowY;
+    const canScroll =
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      parent.scrollHeight > parent.clientHeight + 8;
+    if (canScroll) {
+      const top = node.getBoundingClientRect().top - parent.getBoundingClientRect().top + parent.scrollTop;
+      parent.scrollTop = Math.max(0, top - 72);
+      return true;
+    }
+    parent = parent.parentElement;
+  }
+
+  if (typeof node.scrollIntoView === 'function') {
+    node.scrollIntoView({ block: 'start', inline: 'nearest' });
+    return true;
+  }
+  return false;
 }
 
 export function ScheduleCalendarModal({
@@ -163,18 +196,27 @@ export function ScheduleCalendarModal({
   onSessionReorderDay,
   expandSessionsByDefault = true,
   embedded = false,
+  planGroups,
 }: ScheduleCalendarModalProps) {
   const router = useRouter();
   const { user } = useAuth();
   const isTrainer = isTrainerRole(user?.role);
   const { width, height } = useWindowDimensions();
   const isWideCalendar = width >= 960;
+  const mobileLayout = useTrainerMobileLayout();
+  const preview = useTrainerMobilePreviewMode();
+  /** Escritorio del entrenador (p. ej. calendario embebido en Planes): cuadrícula amplia. Móvil o web estrecha: vista compacta. */
+  const useAthleteCalendarLayout =
+    preview.enabled || mobileLayout || (!embedded && !isWideCalendar);
+  const calendarSize = useAthleteCalendarLayout ? 'athlete' : 'large';
   const isWeeklyChallenge = isHypeWeeklyChallengeProgram(source.program);
   const editorMaxWidth = Math.min(720, width - spacing.lg * 2);
   const editorMaxHeight = Math.min(height * 0.88, 860);
   const editorScrollMaxHeight = editorMaxHeight - 88;
 
-  const [viewMode, setViewMode] = useState<ScheduleViewMode>('week');
+  const [viewMode, setViewMode] = useState<ScheduleViewMode>(() =>
+    isWeeklyChallenge ? 'week' : useAthleteCalendarLayout ? 'day' : 'week',
+  );
   const handleViewModeChange = useCallback(
     (mode: ScheduleViewMode) => {
       if (isWeeklyChallenge && mode !== 'week' && mode !== 'month') return;
@@ -186,6 +228,65 @@ export function ScheduleCalendarModal({
   const [focusDate, setFocusDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [visiblePeriods, setVisiblePeriods] = useState(1);
+  const calendarScrollRef = useRef<ScrollView>(null);
+  const calendarScrollContentRef = useRef<View>(null);
+  const didScrollToCurrentWeekRef = useRef(false);
+  const weekYearStack =
+    !isWeeklyChallenge && calendarSize === 'large' && viewMode === 'week';
+  const anchorWeekMonday = useMemo(() => {
+    if (!weekYearStack) return null;
+    const year = focusDate.getFullYear();
+    const today = new Date();
+    if (year !== today.getFullYear()) return null;
+    return getWeekMonday(today);
+  }, [focusDate, weekYearStack]);
+
+  const handleAnchorWeekLayout = useCallback(
+    (weekContainer: View) => {
+      if (!weekYearStack || !anchorWeekMonday || didScrollToCurrentWeekRef.current) return;
+      if (embedded && Platform.OS === 'web') {
+        requestAnimationFrame(() => {
+          if (didScrollToCurrentWeekRef.current) return;
+          if (scrollEmbeddedWeekIntoView(weekContainer)) {
+            didScrollToCurrentWeekRef.current = true;
+          }
+        });
+        return;
+      }
+      const scrollContent = calendarScrollContentRef.current;
+      const scrollView = calendarScrollRef.current;
+      if (!scrollContent || !scrollView) return;
+
+      weekContainer.measureLayout(
+        scrollContent,
+        (_x, y) => {
+          scrollView.scrollTo({ y: Math.max(0, y - spacing.lg), animated: false });
+          didScrollToCurrentWeekRef.current = true;
+        },
+        () => {
+          if (Platform.OS !== 'web') return;
+          weekContainer.measureInWindow((_wx, weekY) => {
+            scrollContent.measureInWindow((_cx, contentY) => {
+              const offset = weekY - contentY;
+              scrollView.scrollTo({ y: Math.max(0, offset - spacing.lg), animated: false });
+              didScrollToCurrentWeekRef.current = true;
+            });
+          });
+        },
+      );
+    },
+    [anchorWeekMonday, embedded, weekYearStack],
+  );
+
+  useEffect(() => {
+    didScrollToCurrentWeekRef.current = false;
+  }, [source, viewMode, focusDate.getFullYear(), weekYearStack]);
+
+  useEffect(() => {
+    if (!weekYearStack || anchorWeekMonday) return;
+    calendarScrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [anchorWeekMonday, focusDate.getFullYear(), weekYearStack]);
+
   const [editor, setEditor] = useState<{
     item?: SchedulePreviewItem;
     draft: SessionDraft;
@@ -333,11 +434,18 @@ export function ScheduleCalendarModal({
 
   const items = useMemo(() => {
     const weeklyChallengeYear = isWeeklyChallenge && viewMode === 'month';
-    const periodCount = weeklyChallengeYear ? 1 : visiblePeriods;
     const seen = new Set<string>();
     const merged: SchedulePreviewItem[] = [];
-    for (let index = 0; index < periodCount; index += 1) {
-      const periodDate = shiftSchedulePeriod(focusDate, viewMode, index, { weeklyChallengeYear });
+
+    const periodDates =
+      weekYearStack && viewMode === 'week'
+        ? listMondaysInYear(focusDate.getFullYear())
+        : Array.from(
+            { length: weeklyChallengeYear ? 1 : Math.max(1, visiblePeriods) },
+            (_, index) => shiftSchedulePeriod(focusDate, viewMode, index, { weeklyChallengeYear }),
+          );
+
+    for (const periodDate of periodDates) {
       for (const item of buildScheduleCalendarItems(source, periodDate, viewMode)) {
         // Una misma sesión se repite en varias fechas, así que la clave incluye el día.
         const key = `${item.id}@${item.date.toDateString()}`;
@@ -347,7 +455,19 @@ export function ScheduleCalendarModal({
       }
     }
     return merged;
-  }, [source, focusDate, viewMode, visiblePeriods, isWeeklyChallenge]);
+  }, [source, focusDate, viewMode, visiblePeriods, isWeeklyChallenge, weekYearStack]);
+
+  const prevScheduleItemsCountRef = useRef(0);
+  useEffect(() => {
+    if (
+      weekYearStack &&
+      prevScheduleItemsCountRef.current === 0 &&
+      items.length > 0
+    ) {
+      didScrollToCurrentWeekRef.current = false;
+    }
+    prevScheduleItemsCountRef.current = items.length;
+  }, [items.length, weekYearStack]);
 
   const handleWeeklyChallengeWeekSelect = useCallback((monday: Date) => {
     setFocusDate(monday);
@@ -356,8 +476,10 @@ export function ScheduleCalendarModal({
     setVisiblePeriods(1);
   }, []);
 
+  const shouldExpandSessionsByDefault = expandSessionsByDefault && !useAthleteCalendarLayout;
+
   useEffect(() => {
-    if (!expandSessionsByDefault || !visible) return;
+    if (!shouldExpandSessionsByDefault || !visible) return;
 
     const unseenKeys = items
       .map(scheduleItemKey)
@@ -369,7 +491,7 @@ export function ScheduleCalendarModal({
       const extra = unseenKeys.filter((key) => !current.includes(key));
       return extra.length === 0 ? current : [...current, ...extra];
     });
-  }, [expandSessionsByDefault, items, visible]);
+  }, [shouldExpandSessionsByDefault, items, visible]);
 
   const selectableItems = useMemo(
     () => items.filter(isSelectableCalendarSession),
@@ -909,7 +1031,7 @@ export function ScheduleCalendarModal({
             onPress={() => onSessionEdit(item)}
             style={({ pressed }) => [styles.detailEditBtn, pressed && styles.detailEditBtnPressed]}
           >
-            <Ionicons name="play-outline" size={14} color={colors.accent} />
+            <Ionicons name="play-outline" size={14} color={colors.accentVivid} />
             <Text style={styles.detailEditText}>Abrir sesión</Text>
           </Pressable>
         ) : null}
@@ -918,7 +1040,7 @@ export function ScheduleCalendarModal({
             onPress={() => openInlineEditor(item)}
             style={({ pressed }) => [styles.detailEditBtn, pressed && styles.detailEditBtnPressed]}
           >
-            <Ionicons name="create-outline" size={14} color={colors.accent} />
+            <Ionicons name="create-outline" size={14} color={colors.accentVivid} />
             <Text style={styles.detailEditText}>Escribir sobre este entreno</Text>
           </Pressable>
         ) : null}
@@ -991,7 +1113,13 @@ export function ScheduleCalendarModal({
 
   const hasExpandedSessions = expandedItemIds.length > 0 || Boolean(inlineEditor);
   /** Con sesiones desplegadas el cuadrante crece con el contenido en lugar de recortarse al alto de pantalla. */
-  const stretchCalendar = !embedded && isWideCalendar && !hasExpandedSessions && !editor;
+  const stretchCalendar =
+    !embedded &&
+    isWideCalendar &&
+    !hasExpandedSessions &&
+    !editor &&
+    !useAthleteCalendarLayout &&
+    !weekYearStack;
 
   const calendarPanel = (
     <View
@@ -1007,14 +1135,17 @@ export function ScheduleCalendarModal({
         onViewModeChange={handleViewModeChange}
         focusDate={focusDate}
         onFocusDateChange={setFocusDate}
-        size="large"
+        size={calendarSize}
         layout={isWeeklyChallenge ? 'weeklyChallenge' : 'default'}
         selectedDate={selectedDate}
         onDayPress={handleDayPress}
         onDayActionsPress={showDayActions ? handleDayActionsPress : undefined}
         onSessionPress={handleSessionPress}
         visiblePeriods={visiblePeriods}
-        onVisiblePeriodsChange={(value) => setVisiblePeriods(Math.max(1, value))}
+        onVisiblePeriodsChange={
+          weekYearStack ? undefined : (value) => setVisiblePeriods(Math.max(1, value))
+        }
+        weekYearStack={weekYearStack}
         fill={stretchCalendar}
         expandedItemIds={expandedItemIds}
         onToggleItemExpanded={toggleExpandedItem}
@@ -1024,6 +1155,9 @@ export function ScheduleCalendarModal({
         sessionSelection={sessionSelection}
         inlineEditingKey={inlineEditor ? scheduleItemKey(inlineEditor.item) : undefined}
         onWeeklyChallengeWeekSelect={isWeeklyChallenge ? handleWeeklyChallengeWeekSelect : undefined}
+        planGroups={planGroups}
+        anchorWeekMonday={anchorWeekMonday}
+        onAnchorWeekLayout={handleAnchorWeekLayout}
       />
     </View>
   );
@@ -1082,15 +1216,23 @@ export function ScheduleCalendarModal({
         calendarPanel
       ) : (
         <ScrollView
-          style={styles.calendarScroll}
-          contentContainerStyle={[
-            styles.body,
-            stretchCalendar && styles.bodyFill,
-            hasExpandedSessions && styles.bodyExpanded,
+          ref={calendarScrollRef}
+          style={[
+            styles.calendarScroll,
+            embedded && weekYearStack && styles.calendarScrollEmbeddedYear,
           ]}
-          showsVerticalScrollIndicator={hasExpandedSessions}
+          contentContainerStyle={[
+            embedded ? styles.bodyEmbedded : styles.body,
+            !embedded && stretchCalendar && styles.bodyFill,
+            hasExpandedSessions && styles.bodyExpanded,
+            weekYearStack && styles.bodyYearStack,
+          ]}
+          showsVerticalScrollIndicator={weekYearStack || hasExpandedSessions}
+          nestedScrollEnabled
         >
-          {calendarPanel}
+          <View ref={calendarScrollContentRef} collapsable={false}>
+            {calendarPanel}
+          </View>
         </ScrollView>
       )}
       {editorOverlay}
@@ -1369,15 +1511,28 @@ const styles = StyleSheet.create({
   calendarScroll: {
     flex: 1,
   },
+  calendarScrollEmbeddedYear: {
+    flex: 1,
+    minHeight: 0,
+    ...(Platform.OS === 'web' ? ({ overflowX: 'hidden' } as object) : null),
+  },
+  bodyEmbedded: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+    flexGrow: 1,
+  },
+  bodyYearStack: {
+    ...(Platform.OS === 'web' ? ({ overflowX: 'hidden', maxWidth: '100%' } as object) : null),
+  },
   editorOverlayLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.lg,
     zIndex: 20,
   },
   editorBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.38)',
   },
   editorDialog: {
@@ -1473,15 +1628,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: withAlpha(colors.accent, '14'),
+    borderColor: colors.accentVivid,
+    backgroundColor: withAlpha(colors.accentVivid, '22'),
   },
   detailEditBtnPressed: {
     opacity: 0.8,
   },
   detailEditText: {
     ...typography.caption,
-    color: colors.accent,
+    color: colors.accentVivid,
     fontWeight: '700',
   },
   inlineEditorActions: {

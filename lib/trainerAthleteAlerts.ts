@@ -98,7 +98,7 @@ export async function fetchTrainerAthleteAlerts(
       .in('user_id', athleteIds),
     supabase
       .from('workout_logs')
-      .select('user_id, updated_at')
+      .select('id, user_id, updated_at')
       .in('user_id', athleteIds),
     supabase
       .from('athlete_intake_forms')
@@ -142,6 +142,7 @@ export async function fetchTrainerAthleteAlerts(
     alert.sessionActivityCount = (alert.sessionActivityCount ?? 0) + 1;
     if (updatedAt >= timestamp(alert.lastSessionAt)) {
       alert.lastSessionAt = typeof row.updated_at === 'string' ? row.updated_at : alert.lastSessionAt;
+      if (typeof row.id === 'string') alert.lastSessionLogId = row.id;
     }
     const readAt = timestamp(readsByAthlete.get(athleteId)?.sessions_read_at);
     if (updatedAt > readAt) alert.sessionCount += 1;

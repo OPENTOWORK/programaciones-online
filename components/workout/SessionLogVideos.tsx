@@ -1,18 +1,18 @@
-import { useState } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
+import { VideoTelestratorModal } from '@/components/trainer/VideoTelestratorModal';
 import { ActionSheetModal } from '@/components/ui/ActionSheetModal';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
-import { SessionVideoSendModal } from '@/components/workout/SessionVideoSendModal';
-import { VideoTelestratorModal } from '@/components/trainer/VideoTelestratorModal';
 import { SessionVideoCarouselModal } from '@/components/workout/SessionVideoCarousel';
 import { SessionVideoPlayer } from '@/components/workout/SessionVideoPlayer';
+import { SessionVideoSendModal } from '@/components/workout/SessionVideoSendModal';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useSessionVideos } from '@/hooks/useSessionVideos';
-import type { SessionLogVideo } from '@/lib/sessionVideoService';
 import type { SessionVideoSource } from '@/lib/sessionVideoPicker';
+import type { SessionLogVideo } from '@/lib/sessionVideoService';
 import type { FeedbackAttachmentDraft } from '@/lib/trainerFeedbackMediaService';
 
 function formatVideoDate(iso: string) {
@@ -39,6 +39,8 @@ interface SessionLogVideosProps {
   onUpload?: (source: SessionVideoSource) => void;
   onRemove?: (videoId: string) => void;
   onAnnotatedVideo?: (draft: FeedbackAttachmentDraft, video: SessionLogVideo) => void;
+  /** Contenido propio bajo cada vídeo, p. ej. los apuntes privados del entrenador. */
+  renderVideoExtra?: (video: SessionLogVideo) => ReactNode;
 }
 
 export function SessionLogVideos({
@@ -56,6 +58,7 @@ export function SessionLogVideos({
   onUpload,
   onRemove,
   onAnnotatedVideo,
+  renderVideoExtra,
 }: SessionLogVideosProps) {
   const controlled = videosProp !== undefined;
   const internal = useSessionVideos(controlled ? undefined : logId, controlled ? undefined : userId);
@@ -181,6 +184,9 @@ export function SessionLogVideos({
                     <AppIcon name="trash" size={14} color={colors.danger} />
                     <Text style={styles.deleteText}>Eliminar</Text>
                   </Pressable>
+                ) : null}
+                {renderVideoExtra ? (
+                  <View style={styles.videoExtra}>{renderVideoExtra(video)}</View>
                 ) : null}
               </View>
             );
@@ -347,6 +353,10 @@ const styles = StyleSheet.create({
   },
   videoClip: {
     gap: spacing.xs,
+    maxWidth: '100%',
+  },
+  videoExtra: {
+    maxWidth: 380,
   },
   deleteBtn: {
     flexDirection: 'row',

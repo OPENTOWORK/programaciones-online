@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -20,11 +19,17 @@ import { borderRadius, colors, spacing, typography, withAlpha } from '@/constant
 import { useAthlete, useAthletes } from '@/hooks/useAthletes';
 import { useChatComposer } from '@/hooks/useChatComposer';
 import { useCanManageAthleteChat } from '@/hooks/useCanManageAthleteChat';
+import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useTrainerBroadcast } from '@/hooks/useTrainerBroadcast';
-import { useTrainerChatInbox, type TrainerChatConversation } from '@/hooks/useTrainerChatInbox';
+import {
+  trainerConversationUnread,
+  useTrainerChatInbox,
+  type TrainerChatConversation,
+} from '@/hooks/useTrainerChatInbox';
+import { useTrainerDesktopWebLayout, useTrainerMobileLayout } from '@/hooks/useTrainerMobileLayout';
 import { useTrainerMessages } from '@/hooks/useTrainerMessages';
-import { getFeedbackChatHref } from '@/lib/navigation';
 import { useTrainerNotifications } from '@/hooks/useTrainerNotifications';
+import { getFeedbackChatHref } from '@/lib/navigation';
 
 function formatChatTime(iso?: string) {
   if (!iso) return '';
@@ -54,14 +59,14 @@ function previewCopy(conversation: TrainerChatConversation) {
 
 function ConversationRow({
   conversation,
-  selected,
+  selected = false,
   onPress,
 }: {
   conversation: TrainerChatConversation;
-  selected: boolean;
+  selected?: boolean;
   onPress: () => void;
 }) {
-  const unread = conversation.preview?.unread ?? conversation.athlete.alerts?.chatCount ?? 0;
+  const unread = trainerConversationUnread(conversation);
 
   return (
     <Pressable
@@ -101,95 +106,120 @@ function ConversationRow({
   );
 }
 
-function SelectedChat({ athleteId, onOpened }: { athleteId: string; onOpened?: () => void }) {
+function SelectedAthleteChat({
+  athleteId,
+  onChatRead,
+}: {
+  athleteId: string;
+  onChatRead?: () => void;
+}) {
   const router = useRouter();
-  const { athlete, isLoading } = useAthlete(athleteId);
+  const { athlete, isLoading: loadingAthlete } = useAthlete(athleteId);
   const canChat = useCanManageAthleteChat(athleteId);
   const { messages, isEmpty, sendMessage } = useTrainerMessages({ athleteId, asTrainer: true });
   const { acknowledgeChat } = useTrainerNotifications();
+
   const composer = useChatComposer({
     onSend: (text, attachments) => sendMessage(text, attachments),
   });
 
-  const acknowledgeChatRef = useRef(acknowledgeChat);
-  acknowledgeChatRef.current = acknowledgeChat;
+  const markRead = useCallback(() => {
+    if (!athleteId || !canChat) return;
+    onChatRead?.();
+    void acknowledgeChat(athleteId);
+  }, [acknowledgeChat, athleteId, canChat, onChatRead]);
+
+  useFocusRefresh(markRead);
 
   useEffect(() => {
-    if (!canChat) return;
-    let cancelled = false;
-    void acknowledgeChatRef.current(athleteId).then(() => {
-      if (!cancelled) onOpened?.();
-    });
-    return () => {
-      cancelled = true;
-    };
-    // Solo al cambiar de conversación: onOpened refresca la bandeja.
-  }, [athleteId, canChat]);
+    markRead();
+  }, [markRead]);
 
-  if ((isLoading && !athlete) || canChat === null) {
+  if (loadingAthlete || canChat === null) {
     return <ActivityIndicator color={colors.accent} style={styles.threadLoader} />;
   }
 
   if (!athlete || !canChat) {
     return (
-      <Text style={styles.emptyText}>
-        No puedes abrir este chat. El atleta está asignado a otro entrenador.
-      </Text>
+      <View style={styles.threadEmpty}>
+        <Text style={styles.threadEmptyTitle}>Chat no disponible</Text>
+        <Text style={styles.threadEmptyText}>
+          No puedes abrir este chat. El atleta está asignado a otro entrenador.
+        </Text>
+      </View>
     );
   }
 
   return (
-    <TrainerChatPanel
-      title={athlete.name}
-      subtitle={athlete.email}
-      emptyTitle="Sin mensajes todavía"
-      emptyText="Envía el primer mensaje a este atleta"
-      messages={messages}
-      isEmpty={isEmpty}
-      viewerRole="trainer"
-      composer={composer}
-      onOpenFeedback={(message) =>
-        router.push(
-          getFeedbackChatHref({
-            asTrainer: true,
-            athleteId,
-            sessionLogId: message.sessionLogId,
-            scheduledDate: message.scheduledDate,
-          }),
-        )
-      }
-    />
+    <View style={styles.threadInner}>
+      <TrainerChatPanel
+        title={athlete.name}
+        subtitle={athlete.email}
+        emptyTitle="Sin mensajes todavía"
+        emptyText="Envía el primer mensaje a este atleta"
+        messages={messages}
+        isEmpty={isEmpty}
+        viewerRole="trainer"
+        composer={composer}
+        onOpenFeedback={(message) =>
+          router.push(
+            getFeedbackChatHref({
+              asTrainer: true,
+              athleteId,
+              sessionLogId: message.sessionLogId,
+              scheduledDate: message.scheduledDate,
+            }),
+          )
+        }
+      />
+    </View>
   );
 }
 
 export default function TrainerChatsScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string | string[] }>();
-  const selectedId = Array.isArray(id) ? id[0] : id;
-  const { conversations, isLoading, error, refresh } = useTrainerChatInbox();
+  const params = useLocalSearchParams<{ athleteId?: string | string[] }>();
+  const selectedAthleteId = Array.isArray(params.athleteId) ? params.athleteId[0] : params.athleteId;
+  const isDesktopTrainer = useTrainerDesktopWebLayout();
+  const isMobileLayout = useTrainerMobileLayout();
+  const isSplitLayout = isDesktopTrainer && !isMobileLayout;
+  const { conversations, isLoading, error, refresh, patchPreviewUnread } = useTrainerChatInbox();
   const { athletes } = useAthletes();
   const [query, setQuery] = useState('');
+  const [onlyUnread, setOnlyUnread] = useState(false);
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const broadcast = useTrainerBroadcast();
-  const { width } = useWindowDimensions();
-  const split = width >= 960;
+
+  const unreadCount = useMemo(
+    () =>
+      conversations.filter((conversation) => trainerConversationUnread(conversation) > 0).length,
+    [conversations],
+  );
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return conversations;
     return conversations.filter((conversation) => {
+      if (onlyUnread && trainerConversationUnread(conversation) === 0) {
+        return false;
+      }
+      if (!needle) return true;
       const haystack = `${conversation.athlete.name} ${conversation.athlete.email}`.toLowerCase();
       return haystack.includes(needle);
     });
-  }, [conversations, query]);
+  }, [conversations, onlyUnread, query]);
 
   const openChat = (athleteId: string) => {
-    if (split) {
-      router.replace({ pathname: '/trainer/chats', params: { id: athleteId } });
+    if (isSplitLayout) {
+      router.replace({ pathname: '/trainer/chats', params: { athleteId } });
       return;
     }
     router.push({ pathname: '/trainer/chat/[id]', params: { id: athleteId } });
   };
+
+  const selectedAthlete = useMemo(
+    () => conversations.find((item) => item.athlete.id === selectedAthleteId)?.athlete,
+    [conversations, selectedAthleteId],
+  );
 
   const openBroadcast = () => {
     broadcast.reset();
@@ -199,18 +229,24 @@ export default function TrainerChatsScreen() {
 
   return (
     <ScreenWrapper scrollable={false} padded={false}>
-      <View style={[styles.page, split && styles.pageSplit]}>
-        <View style={[styles.inbox, split && styles.inboxSplit]}>
-          <View style={styles.header}>
+      <View style={[styles.page, isSplitLayout && styles.pageSplit]}>
+        <View style={[styles.inbox, isSplitLayout ? styles.inboxSplit : styles.inboxMobile]}>
+          <View style={[styles.header, isSplitLayout && styles.headerSplit]}>
             <View style={styles.headerCopy}>
               <Text style={styles.title}>Chats</Text>
-              <Text style={styles.subtitle}>Conversaciones con tus atletas</Text>
+              <Text style={styles.subtitle} numberOfLines={isSplitLayout ? 2 : undefined}>
+                Conversaciones con tus atletas
+              </Text>
             </View>
             <Pressable
               onPress={openBroadcast}
               accessibilityRole="button"
               accessibilityLabel="Envío masivo"
-              style={({ pressed }) => [styles.broadcastBtn, pressed && styles.rowPressed]}
+              style={({ pressed }) => [
+                styles.broadcastBtn,
+                isSplitLayout && styles.broadcastBtnSplit,
+                pressed && styles.rowPressed,
+              ]}
             >
               <AppIcon name="trainer" size={15} color={colors.accent} outlined />
               <Text style={styles.broadcastBtnText}>Envío masivo</Text>
@@ -226,6 +262,42 @@ export default function TrainerChatsScreen() {
               placeholderTextColor={colors.textMuted}
               style={styles.searchInput}
             />
+            {query ? (
+              <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                <AppIcon name="close" size={16} color={colors.textMuted} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          <View style={styles.filterRow}>
+            <Pressable
+              onPress={() => setOnlyUnread(false)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !onlyUnread }}
+              style={({ pressed }) => [
+                styles.filterChip,
+                !onlyUnread && styles.filterChipActive,
+                pressed && styles.rowPressed,
+              ]}
+            >
+              <Text style={[styles.filterChipText, !onlyUnread && styles.filterChipTextActive]}>
+                Todos · {conversations.length}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setOnlyUnread(true)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: onlyUnread }}
+              style={({ pressed }) => [
+                styles.filterChip,
+                onlyUnread && styles.filterChipActive,
+                pressed && styles.rowPressed,
+              ]}
+            >
+              <Text style={[styles.filterChipText, onlyUnread && styles.filterChipTextActive]}>
+                Sin leer · {unreadCount}
+              </Text>
+            </Pressable>
           </View>
 
           {isLoading ? (
@@ -235,12 +307,14 @@ export default function TrainerChatsScreen() {
           ) : filtered.length === 0 ? (
             <Card style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>
-                {query.trim() ? 'Sin coincidencias' : 'Todavía no hay chats'}
+                {query.trim() || onlyUnread ? 'Sin coincidencias' : 'Todavía no hay chats'}
               </Text>
               <Text style={styles.emptyText}>
-                {query.trim()
-                  ? 'Prueba con otro nombre o correo.'
-                  : 'Cuando un atleta te escriba, o tú le envíes un mensaje, aparecerá aquí.'}
+                {onlyUnread
+                  ? 'No tienes mensajes sin leer.'
+                  : query.trim()
+                    ? 'Prueba con otro nombre o correo.'
+                    : 'Cuando un atleta te escriba, o tú le envíes un mensaje, aparecerá aquí.'}
               </Text>
             </Card>
           ) : (
@@ -249,7 +323,7 @@ export default function TrainerChatsScreen() {
                 <ConversationRow
                   key={conversation.athlete.id}
                   conversation={conversation}
-                  selected={split && selectedId === conversation.athlete.id}
+                  selected={isSplitLayout && selectedAthleteId === conversation.athlete.id}
                   onPress={() => openChat(conversation.athlete.id)}
                 />
               ))}
@@ -257,10 +331,14 @@ export default function TrainerChatsScreen() {
           )}
         </View>
 
-        {split ? (
+        {isSplitLayout ? (
           <View style={styles.thread}>
-            {selectedId ? (
-              <SelectedChat key={selectedId} athleteId={selectedId} onOpened={() => void refresh()} />
+            {selectedAthlete ? (
+              <SelectedAthleteChat
+                key={selectedAthlete.id}
+                athleteId={selectedAthlete.id}
+                onChatRead={() => patchPreviewUnread(selectedAthlete.id)}
+              />
             ) : (
               <View style={styles.threadEmpty}>
                 <AppIcon name="chat" size={28} color={colors.textMuted} outlined />
@@ -301,16 +379,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   inbox: {
-    flex: 1,
     minWidth: 0,
     minHeight: 0,
     padding: spacing.md,
     gap: spacing.sm,
   },
+  inboxMobile: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+  },
   inboxSplit: {
-    maxWidth: 380,
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 360,
+    width: 360,
+    minWidth: 320,
+    maxWidth: 400,
     borderRightWidth: 1,
     borderRightColor: colors.border,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+  },
+  filterChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  filterChipActive: {
+    borderColor: colors.accent,
+    backgroundColor: withAlpha(colors.accent, '18'),
+  },
+  filterChipText: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '700',
+  },
+  filterChipTextActive: {
+    color: colors.text,
   },
   header: {
     flexDirection: 'row',
@@ -319,9 +432,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.xs,
   },
+  headerSplit: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
   headerCopy: {
     flex: 1,
     minWidth: 0,
+    alignSelf: 'stretch',
   },
   broadcastBtn: {
     flexDirection: 'row',
@@ -333,6 +451,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: withAlpha(colors.accent, '55'),
     backgroundColor: withAlpha(colors.accent, '12'),
+    flexShrink: 0,
+  },
+  broadcastBtnSplit: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.xs,
   },
   broadcastBtnText: {
     ...typography.caption,
@@ -342,11 +465,13 @@ const styles = StyleSheet.create({
   title: {
     ...typography.h2,
     color: colors.text,
+    flexShrink: 0,
   },
   subtitle: {
     ...typography.bodySmall,
     color: colors.textSecondary,
     marginTop: 2,
+    flexShrink: 1,
   },
   searchWrap: {
     flexDirection: 'row',
@@ -477,6 +602,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
     minHeight: 0,
     padding: spacing.md,
+  },
+  threadInner: {
+    flex: 1,
+    minHeight: 0,
   },
   threadLoader: {
     marginTop: spacing.xl,

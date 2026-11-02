@@ -40,9 +40,10 @@ export function SessionDraftSummary({
         <View key={section.label} style={styles.section}>
           {hideSectionLabels ? null : <Text style={styles.sectionLabel}>{section.label}</Text>}
           {section.blocks.map((block, blockIndex) => {
+            const blockStyle = blockIndex > 0 ? [styles.block, styles.blockAfterTitle] : styles.block;
             if (block.type === 'free_text') {
               return (
-                <View key={`${block.id}-${blockIndex}`} style={styles.block}>
+                <View key={`${block.id}-${blockIndex}`} style={blockStyle}>
                   {block.title?.trim() ? <Text style={styles.blockHeader}>{block.title.trim()}</Text> : null}
                   <Text style={styles.freeText}>{block.timing.trim()}</Text>
                 </View>
@@ -54,7 +55,7 @@ export function SessionDraftSummary({
               .filter((line) => line.trim());
 
             return (
-              <View key={`${block.id}-${blockIndex}`} style={styles.block}>
+              <View key={`${block.id}-${blockIndex}`} style={blockStyle}>
                 <Text style={styles.blockHeader}>{blockHeader(block)}</Text>
                 {lines.map((line, lineIndex) => (
                   <Text key={`${block.id}-${lineIndex}`} style={styles.blockItem}>
@@ -73,31 +74,38 @@ export function SessionDraftSummary({
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   section: {
-    gap: 2,
+    gap: spacing.sm,
   },
   sectionLabel: {
     ...typography.caption,
-    color: colors.accent,
+    color: colors.accentVivid,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   block: {
-    gap: 1,
-    marginTop: 2,
+    gap: spacing.xs,
+  },
+  blockAfterTitle: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   blockHeader: {
     ...typography.caption,
     color: colors.text,
     fontWeight: '700',
+    lineHeight: 18,
+    marginBottom: spacing.xs,
   },
   blockItem: {
     ...typography.caption,
     color: colors.textSecondary,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   blockNotes: {
     ...typography.caption,

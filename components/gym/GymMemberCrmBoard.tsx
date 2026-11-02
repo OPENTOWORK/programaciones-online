@@ -3,8 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { DraggableGymMemberCard } from '@/components/gym/DraggableGymMemberCard';
+import {
+  GymMemberCrmGridView,
+  GymMemberCrmListView,
+} from '@/components/gym/GymMemberCrmAlternateViews';
 import { GymMemberCrmCard } from '@/components/gym/GymMemberCrmCard';
 import { GymEmptyState, GymErrorBanner } from '@/components/gym/GymScreen';
+import type { CrmViewMode } from '@/components/crm/CrmViewToggle';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/SkeletonBlock';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
@@ -35,6 +40,7 @@ export function GymMemberCrmBoard({
   isLoading,
   error,
   canOperate,
+  viewMode = 'kanban',
   onRetry,
   onAdd,
 }: {
@@ -42,6 +48,7 @@ export function GymMemberCrmBoard({
   isLoading: boolean;
   error?: string | null;
   canOperate: boolean;
+  viewMode?: CrmViewMode;
   onRetry: () => void;
   onAdd: () => void;
 }) {
@@ -349,6 +356,28 @@ export function GymMemberCrmBoard({
     ? localMembers.find((member) => member.id === draggingId)
     : undefined;
   const dragSourceStage = draggingMember ? gymMemberCrmColumn(draggingMember) : undefined;
+
+  if (viewMode === 'list') {
+    return (
+      <GymMemberCrmListView
+        members={localMembers}
+        canOperate={canOperate}
+        onOpenMember={openMember}
+        onMoveMember={(member, direction) => void moveMember(member, direction)}
+      />
+    );
+  }
+
+  if (viewMode === 'grid') {
+    return (
+      <GymMemberCrmGridView
+        members={localMembers}
+        canOperate={canOperate}
+        onOpenMember={openMember}
+        onMoveMember={(member, direction) => void moveMember(member, direction)}
+      />
+    );
+  }
 
   return (
     <View ref={boardWrapperRef} collapsable={false} style={styles.boardWrapper}>

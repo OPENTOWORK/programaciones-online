@@ -1,6 +1,6 @@
-import { View, StyleSheet } from 'react-native';
 import { Redirect, usePathname, useSegments } from 'expo-router';
 import type { ReactNode } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { AthleteTabBar } from '@/components/ui/AthleteTabBar';
 import { AuthWebShell } from '@/components/ui/AuthWebShell';
@@ -12,11 +12,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { isGymRole } from '@/lib/athleteService';
 import { useAthleteTabBarHeight } from '@/lib/mobileInsets';
 import {
-  isGymRoleAthleteRouteAllowed,
-  isGymTvDisplayRoute,
-  isTrainerDesktopWeb,
-  isWebPlatform,
-  usesGymPanel,
+    isGymRoleAthleteRouteAllowed,
+    isGymTvDisplayRoute,
+    isTrainerDesktopWeb,
+    isWebPlatform,
+    usesGymPanel,
 } from '@/lib/platformAccess';
 
 interface AppShellProps {

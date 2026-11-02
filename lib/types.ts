@@ -162,6 +162,7 @@ export interface AthleteAlertSummary {
   intakeCompleted?: boolean;
   lastChatAt?: string;
   lastSessionAt?: string;
+  lastSessionLogId?: string;
   lastIntakeAt?: string;
 }
 

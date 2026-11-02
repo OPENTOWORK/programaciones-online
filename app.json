@@ -2,7 +2,7 @@
   "expo": {
     "name": "Training ProgLine",
     "slug": "programaciones-online",
-    "version": "1.0.15",
+    "version": "1.0.21",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "programaciones-online",
@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.trainingprogline.app",
-      "buildNumber": "10",
+      "buildNumber": "1",
       "icon": "./assets/ios-icon.png",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -127,13 +127,13 @@
     },
     "android": {
       "package": "com.trainingprogline.app",
-      "versionCode": 16,
+      "versionCode": 21,
       "blockedPermissions": [
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#0F1419",
+        "backgroundColor": "#1B1B1D",
         "backgroundImage": "./assets/android-icon-background.png",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -152,11 +152,20 @@
       "expo-asset",
       "expo-font",
       "expo-web-browser",
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "asyncRoutes": {
+            "web": "production",
+            "default": false
+          }
+        }
+      ],
       [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
           "resizeMode": "contain",
           "backgroundColor": "#0F1419"
         }
@@ -174,7 +183,9 @@
         {
           "microphonePermission": "La app necesita el micrófono para grabar notas de voz de feedback."
         }
-      ]
+      ],
+      "./plugins/withAndroidPlayCompatibility",
+      "react-native-compressor"
     ],
     "experiments": {
       "typedRoutes": true

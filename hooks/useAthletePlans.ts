@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useAthletePreviewMode } from '@/hooks/useAthletePreviewMode';
 import { useAuth } from '@/hooks/useAuth';
 import { useGym } from '@/hooks/useGym';
 import {
@@ -18,6 +19,11 @@ import type { AthletePlan, AthletePlanType, NutritionPlanData } from '@/lib/type
 
 export function useMyAthletePlans(planType?: AthletePlanType) {
   const { user, isDemoMode, isLoading: authLoading } = useAuth();
+  const preview = useAthletePreviewMode();
+  const plansUserId =
+    preview.enabled && preview.simulateCededAthlete && preview.previewSubject?.id
+      ? preview.previewSubject.id
+      : user?.id;
   const [plans, setPlans] = useState<AthletePlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,10 +31,15 @@ export function useMyAthletePlans(planType?: AthletePlanType) {
 
   const load = useCallback(
     async ({ silent = false, force = false }: { silent?: boolean; force?: boolean } = {}) => {
-      if (authLoading || !user?.id) return;
+      if (authLoading) return;
+      if (preview.enabled && preview.simulateCededAthlete && preview.previewSubjectLoading) return;
+      if (!plansUserId) return;
       if (!force && silent && !refreshGate.current.shouldRefresh(false)) return;
 
-      if (isAdminRole(user.role)) {
+      const previewingCededAthlete =
+        preview.enabled && preview.simulateCededAthlete && Boolean(preview.previewSubject);
+
+      if (user && isAdminRole(user.role) && !previewingCededAthlete) {
         setPlans((current) => (current.length === 0 ? current : []));
         setError((current) => (current === null ? current : null));
         setIsLoading((current) => (current ? false : current));
@@ -41,7 +52,7 @@ export function useMyAthletePlans(planType?: AthletePlanType) {
       setError(null);
 
       try {
-        const data = await fetchAthletePlansForUser(user.id, planType);
+        const data = await fetchAthletePlansForUser(plansUserId, planType);
         setPlans(data);
         refreshGate.current.markFetched();
       } catch (loadError) {
@@ -51,7 +62,16 @@ export function useMyAthletePlans(planType?: AthletePlanType) {
         setIsLoading(false);
       }
     },
-    [authLoading, planType, user?.id, user?.role],
+    [
+      authLoading,
+      planType,
+      plansUserId,
+      preview.enabled,
+      preview.previewSubjectLoading,
+      preview.previewSubject,
+      preview.simulateCededAthlete,
+      user,
+    ],
   );
 
   useEffect(() => {

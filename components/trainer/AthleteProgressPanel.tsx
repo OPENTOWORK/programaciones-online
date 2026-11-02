@@ -1,12 +1,11 @@
-import { ActivityIndicator, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { ActivityIndicator, StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { BodyMetricsChart } from '@/components/progress/BodyMetricsChart';
 import { ProgressOverview } from '@/components/progress/ProgressOverview';
 import { ProgressPhotos } from '@/components/progress/ProgressPhotos';
 import { RepMaxCard } from '@/components/progress/RepMaxCard';
-import { Card } from '@/components/ui/Card';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing } from '@/constants/theme';
 import { useProgress } from '@/hooks/useProgress';
 import type { BodyMeasurement } from '@/lib/bodyMetrics';
 
@@ -31,11 +30,7 @@ export function AthleteProgressPanel({ athleteId, metricHistory, style }: Athlet
       : `${progress.monthlyCompleted}`;
 
   return (
-    <CollapsibleSection
-      style={style}
-      title="Progreso del atleta"
-      subtitle="Entrenos, racha, medidas, fotos y RM"
-    >
+    <CollapsibleSection style={style} title="Progreso del atleta">
       {isLoading ? (
         <ActivityIndicator color={colors.accent} style={styles.loader} />
       ) : (
@@ -65,26 +60,6 @@ export function AthleteProgressPanel({ athleteId, metricHistory, style }: Athlet
             ]}
           />
 
-          <Text style={styles.sectionTitle}>Historial reciente</Text>
-          {progress.history.length === 0 ? (
-            <Card style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Todavía no hay entrenamientos registrados.</Text>
-            </Card>
-          ) : (
-            <View style={styles.historyGrid}>
-              {progress.history.map((log) => (
-                <Card key={log.id} style={styles.historyCard}>
-                  <Text style={styles.historyName} numberOfLines={1}>
-                    {log.workoutName}
-                  </Text>
-                  <Text style={styles.historyMeta} numberOfLines={1}>
-                    {log.completedAt} · {log.duration}
-                  </Text>
-                </Card>
-              ))}
-            </View>
-          )}
-
           <BodyMetricsChart entries={metricHistory} />
 
           <ProgressPhotos dense userId={athleteId} readOnly />
@@ -102,39 +77,5 @@ const styles = StyleSheet.create({
   },
   content: {
     gap: spacing.sm,
-  },
-  sectionTitle: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  emptyCard: {
-    padding: spacing.sm + 2,
-  },
-  emptyText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-  historyGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  historyCard: {
-    width: '48%',
-    flexGrow: 1,
-    padding: spacing.sm + 2,
-    marginBottom: 0,
-  },
-  historyName: {
-    ...typography.bodySmall,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  historyMeta: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
   },
 });

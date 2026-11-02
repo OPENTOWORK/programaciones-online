@@ -5,7 +5,7 @@ import {
   appointmentTimeRange,
 } from '@/lib/appointmentSchedule';
 import { readPersistedRecord, writePersistedRecord } from '@/lib/localUserDataStorage';
-import { getTrainerAthleteProfileHref } from '@/lib/navigation';
+import { getTrainerAthleteDetailsHref, getTrainerAthleteProfileHref } from '@/lib/navigation';
 import type { AlertSource } from '@/lib/trainerAthleteAlerts';
 import type { Appointment, AthleteSummary } from '@/lib/types';
 
@@ -34,6 +34,12 @@ function formatShortDate(iso?: string) {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return '';
   return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+}
+
+export function trainerNotificationActionLabel(kind: TrainerNotificationKind): string | null {
+  if (kind === 'chat') return 'Ver mensaje';
+  if (kind === 'sessions') return 'Ver entrenamiento';
+  return null;
 }
 
 export function formatNotificationWhen(iso?: string) {
@@ -177,7 +183,12 @@ export function buildTrainerNotifications(input: {
           : when
             ? `Entreno revisado · ${when}`
             : 'Entreno revisado',
-        href: getTrainerAthleteProfileHref(athlete.id),
+        href: alerts.lastSessionLogId
+          ? {
+              pathname: '/trainer/athlete/[id]/log/[logId]',
+              params: { id: athlete.id, logId: alerts.lastSessionLogId },
+            }
+          : getTrainerAthleteDetailsHref(athlete.id),
         athleteId: athlete.id,
         alertSource: 'sessions',
         done: !pending,

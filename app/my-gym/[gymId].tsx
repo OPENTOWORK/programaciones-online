@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { GymClassSlotsGrid } from '@/components/gym/GymClassSlotsGrid';
 import { GymAthleteChatPanel } from '@/components/gym/GymAthleteChatPanel';

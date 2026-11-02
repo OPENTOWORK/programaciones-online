@@ -1,6 +1,13 @@
 import { Platform, StyleSheet, View } from 'react-native';
 
-import { colors, withAlpha } from '@/constants/theme';
+import { getAppTheme } from '@/constants/appThemes';
+import { colors, scopedThemeContainerStyle, withAlpha } from '@/constants/theme';
+
+const ATHLETE_MOBILE_THEME = getAppTheme('night');
+const athleteMobileThemeStyle = scopedThemeContainerStyle(
+  ATHLETE_MOBILE_THEME.palette,
+  ATHLETE_MOBILE_THEME.scheme,
+);
 
 const MOBILE_MAX_WIDTH = 430;
 
@@ -14,7 +21,7 @@ export function MobileShell({ children }: MobileShellProps) {
   }
 
   return (
-    <View style={styles.outer}>
+    <View style={[styles.outer, athleteMobileThemeStyle]}>
       <View style={styles.frame}>{children}</View>
     </View>
   );

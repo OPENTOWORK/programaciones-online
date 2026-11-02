@@ -2,7 +2,9 @@ import { fetchAthletePlansForAthlete, fetchAthletePlansForUser } from '@/lib/ath
 import { isPdfOnlyPlanSession, parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
 import {
   buildPlanGroupValidityMap,
+  getPlanValidityFromContent,
   isDateWithinPlanValidity,
+  type PlanValidity,
 } from '@/lib/planValidity';
 import { buildSchedulePreviewItems, itemsForDate, type SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import { createPersonalizedPlanPreviewProgram } from '@/lib/personalizedPlanContent';
@@ -20,6 +22,7 @@ import {
 import { isSessionBasedAthletePlanType } from '@/lib/trainerConstants';
 import type { AthletePlan, Program, Workout } from '@/lib/types';
 import type { SessionDraft, SessionKind } from '@/lib/trainerSessionDraft';
+import { toLocalDateString, toWeekdayIndex, type SessionSchedule } from '@/lib/sessionSchedule';
 
 export interface AthleteCalendarSession {
   id: string;
@@ -46,6 +49,51 @@ function dateKey(date: Date) {
 
 function planToDraft(plan: AthletePlan): SessionDraft {
   return parsePersonalizedPlanContent(plan.content);
+}
+
+function groupHasExplicitValidFrom(sessions: AthletePlan[]) {
+  return sessions.some((session) => Boolean(getPlanValidityFromContent(session.content).validFrom));
+}
+
+/** Vigencia usada solo para filtrar instancias en el calendario (no para badges). */
+function validityForCalendarInstances(
+  sessions: AthletePlan[],
+  validity: PlanValidity,
+): PlanValidity {
+  if (groupHasExplicitValidFrom(sessions)) return validity;
+  if (validity.validUntil === null) {
+    return { validUntil: null };
+  }
+  if (!validity.validFrom && validity.validUntil === undefined) {
+    return {};
+  }
+  return validity;
+}
+
+/**
+ * Plan indefinido: las sesiones creadas en una fecha concreta («una sola vez») se proyectan
+ * cada semana en ese mismo día, como suele esperarse en programaciones continuas.
+ */
+function scheduleForIndefiniteCalendar(schedule: SessionSchedule, validity: PlanValidity): SessionSchedule {
+  if (validity.validUntil !== null && validity.validUntil !== undefined) {
+    return schedule;
+  }
+  if (schedule.recurrence !== 'once' || !schedule.startDate) {
+    return schedule;
+  }
+
+  const anchor = new Date(`${schedule.startDate}T12:00:00`);
+  if (Number.isNaN(anchor.getTime())) return schedule;
+
+  const weekdays =
+    schedule.weekdays.length > 0 ? schedule.weekdays : [toWeekdayIndex(anchor)];
+
+  return {
+    ...schedule,
+    weekdays,
+    recurrence: 'weekly',
+    startDate: schedule.startDate,
+  };
 }
 
 export interface CatalogProgramSchedule {
@@ -166,6 +214,11 @@ export function buildAthleteCalendarItems({
   const validityByGroup = buildPlanGroupValidityMap(plans);
 
   for (const plan of plans) {
+    const groupId = plan.planGroupId ?? plan.id;
+    const groupSessions = plans.filter((entry) => (entry.planGroupId ?? entry.id) === groupId);
+    const groupValidity = validityByGroup.get(groupId) ?? {};
+    const filterValidity = validityForCalendarInstances(groupSessions, groupValidity);
+
     const draft = planToDraft(plan);
     const isPdfSession = isPdfOnlyPlanSession(plan, draft);
     const sessionLabel =
@@ -179,19 +232,18 @@ export function buildAthleteCalendarItems({
               ? pdfSessionTitle(plan.pdfFileName)
               : draft.name.trim() || `Sesión ${plan.sessionNumber ?? 1}`;
     const previewProgram = createPersonalizedPlanPreviewProgram(plan.title);
-    const groupId = plan.planGroupId ?? plan.id;
-    const validity = validityByGroup.get(groupId) ?? {};
+    const projectedSchedule = scheduleForIndefiniteCalendar(draft.schedule, groupValidity);
     items.push(
       ...buildSchedulePreviewItems({
         program: previewProgram,
         workouts: [],
-        draft: { ...draft, name: sessionLabel },
+        draft: { ...draft, name: sessionLabel, schedule: projectedSchedule },
         editingWorkoutId: null,
         isNewSession: true,
         focusDate,
         viewMode,
       })
-        .filter((item) => isDateWithinPlanValidity(item.date, validity))
+        .filter((item) => isDateWithinPlanValidity(item.date, filterValidity))
         .map((item) => ({
         ...item,
         id: `plan:${plan.id}:${dateKey(item.date)}`,
@@ -233,4 +285,54 @@ export function calendarItemToAthleteSession(item: SchedulePreviewItem): Athlete
 
 export function sessionsForDate(items: SchedulePreviewItem[], date: Date) {
   return itemsForDate(items, date).map(calendarItemToAthleteSession);
+}
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function eachMonthStartInRange(rangeStart: Date, rangeEnd: Date) {
+  const start = startOfLocalDay(rangeStart);
+  const end = startOfLocalDay(rangeEnd);
+  const months: Date[] = [];
+  let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (cursor <= endMonth) {
+    months.push(new Date(cursor));
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+  }
+  return months;
+}
+
+/** Fechas (YYYY-MM-DD) con descanso programado en plan personalizado o catálogo activo. */
+export async function collectScheduledRestDayKeysForUser(
+  userId: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<Set<string>> {
+  const rangeFrom = startOfLocalDay(rangeStart);
+  const rangeTo = startOfLocalDay(rangeEnd);
+  if (rangeFrom > rangeTo) return new Set();
+
+  const { personalizedPlans, catalogPrograms } = await loadTrainerAthleteScheduleSources(userId);
+  const keys = new Set<string>();
+
+  for (const monthStart of eachMonthStartInRange(rangeFrom, rangeTo)) {
+    const items = buildAthleteCalendarItems({
+      plans: personalizedPlans,
+      workouts: [],
+      catalogPrograms,
+      focusDate: monthStart,
+      viewMode: 'month',
+    });
+
+    for (const item of items) {
+      if (item.kind !== 'rest') continue;
+      const day = startOfLocalDay(item.date);
+      if (day < rangeFrom || day > rangeTo) continue;
+      keys.add(toLocalDateString(day));
+    }
+  }
+
+  return keys;
 }

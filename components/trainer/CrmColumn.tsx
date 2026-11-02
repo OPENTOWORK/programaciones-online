@@ -150,8 +150,8 @@ export function CrmColumn({
 const styles = StyleSheet.create({
   column: {
     width: CRM_COLUMN_WIDTH,
-    minHeight: 180,
-    marginRight: spacing.sm,
+    minHeight: 300,
+    alignSelf: 'stretch',
     backgroundColor: colors.surfaceLight,
     borderRadius: borderRadius.lg,
     borderWidth: 1,

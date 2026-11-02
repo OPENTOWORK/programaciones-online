@@ -1,10 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { getSessionLabel, type PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
-import type { PlanValidity } from '@/lib/planValidity';
+import { isPlanValidityEnded, type PlanValidity } from '@/lib/planValidity';
 import { ATHLETE_PLAN_TYPE_LABELS } from '@/lib/trainerConstants';
 import type { AthletePlan } from '@/lib/types';
 import { planGroupUsesOnceRecurrence } from '@/lib/planGroupRecurrence';
@@ -16,6 +16,8 @@ interface AssignedPlansListProps {
   onOpenSession: (planId: string) => void;
   onOpenNutritionPlan: (planId: string) => void;
   onViewGroupCalendar?: (group: PersonalizedPlanGroup) => void;
+  onOpenPrivateNotes?: (group: PersonalizedPlanGroup) => void;
+  planPrivateNotesCounts?: Record<string, number>;
   onEditGroup?: (group: PersonalizedPlanGroup) => void;
   onUpdateGroupValidity?: (group: PersonalizedPlanGroup, validity: PlanValidity) => void | Promise<void>;
   onRepeatGroupWeekly?: (group: PersonalizedPlanGroup) => void | Promise<void>;
@@ -23,6 +25,24 @@ interface AssignedPlansListProps {
   onDeleteGroup?: (group: PersonalizedPlanGroup) => void;
   onEditNutritionPlan?: (planId: string) => void;
   onDeleteNutritionPlan?: (planId: string, title: string) => void;
+}
+
+function PlanStatusBadge({ active }: { active: boolean }) {
+  return (
+    <View
+      style={[styles.statusBadge, active ? styles.statusBadgeActive : styles.statusBadgeExpired]}
+      accessibilityLabel={active ? 'Plan activo' : 'Plan caducado'}
+    >
+      <Text
+        style={[
+          styles.statusBadgeText,
+          active ? styles.statusBadgeTextActive : styles.statusBadgeTextExpired,
+        ]}
+      >
+        {active ? 'Activo' : 'Caducado'}
+      </Text>
+    </View>
+  );
 }
 
 function PlanActionButton({
@@ -51,6 +71,8 @@ function PlanGroupCard({
   group,
   onOpenSession,
   onViewGroupCalendar,
+  onOpenPrivateNotes,
+  planPrivateNotesCounts,
   onEditGroup,
   onUpdateGroupValidity,
   onRepeatGroupWeekly,
@@ -61,6 +83,8 @@ function PlanGroupCard({
   group: PersonalizedPlanGroup;
   onOpenSession: (planId: string) => void;
   onViewGroupCalendar?: (group: PersonalizedPlanGroup) => void;
+  onOpenPrivateNotes?: (group: PersonalizedPlanGroup) => void;
+  planPrivateNotesCounts?: Record<string, number>;
   onEditGroup?: (group: PersonalizedPlanGroup) => void;
   onUpdateGroupValidity?: (group: PersonalizedPlanGroup, validity: PlanValidity) => void | Promise<void>;
   onRepeatGroupWeekly?: (group: PersonalizedPlanGroup) => void | Promise<void>;
@@ -69,6 +93,9 @@ function PlanGroupCard({
   defaultExpanded?: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const ended = isPlanValidityEnded(group.validity);
+  const noteCount = planPrivateNotesCounts?.[group.id] ?? 0;
+  const hasPrivateNotes = noteCount > 0;
 
   return (
     <View style={styles.group}>
@@ -97,13 +124,48 @@ function PlanGroupCard({
             ) : null}
 
             <View style={styles.groupHeaderActions}>
+              {onOpenPrivateNotes ? (
+                <Pressable
+                  onPress={() => onOpenPrivateNotes(group)}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    hasPrivateNotes
+                      ? `Apuntes privados de ${group.title}, ${noteCount} apuntes`
+                      : `Ver apuntes de ${group.title}`
+                  }
+                  style={({ pressed }) => [
+                    styles.privateNotesBtn,
+                    !hasPrivateNotes && styles.privateNotesBtnMuted,
+                    pressed && styles.privateNotesBtnPressed,
+                  ]}
+                >
+                  <Ionicons
+                    name="document-text-outline"
+                    size={15}
+                    color={hasPrivateNotes ? colors.accentBlue : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.privateNotesBtnText,
+                      !hasPrivateNotes && styles.privateNotesBtnTextMuted,
+                    ]}
+                  >
+                    Apuntes
+                  </Text>
+                  {hasPrivateNotes ? (
+                    <View style={styles.privateNotesCount}>
+                      <Text style={styles.privateNotesCountText}>{noteCount}</Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              ) : null}
               {onViewGroupCalendar ? (
                 <Pressable
                   onPress={() => onViewGroupCalendar(group)}
-                  accessibilityLabel={`Ver el calendario de ${group.title}`}
+                  accessibilityLabel={`Ver sesiones de ${group.title}`}
                   style={({ pressed }) => [styles.viewPlanBtn, pressed && styles.viewPlanBtnPressed]}
                 >
-                  <Ionicons name="calendar-outline" size={15} color={colors.accent} />
+                  <Ionicons name="list-outline" size={15} color={colors.accent} />
                   <Text style={styles.viewPlanText}>Ver plan</Text>
                 </Pressable>
               ) : null}
@@ -122,6 +184,7 @@ function PlanGroupCard({
                   danger
                 />
               ) : null}
+              <PlanStatusBadge active={!ended} />
             </View>
           </View>
 
@@ -197,6 +260,8 @@ export function AssignedPlansList({
   onOpenSession,
   onOpenNutritionPlan,
   onViewGroupCalendar,
+  onOpenPrivateNotes,
+  planPrivateNotesCounts,
   onEditGroup,
   onUpdateGroupValidity,
   onRepeatGroupWeekly,
@@ -213,6 +278,8 @@ export function AssignedPlansList({
           group={group}
           onOpenSession={onOpenSession}
           onViewGroupCalendar={onViewGroupCalendar}
+          onOpenPrivateNotes={onOpenPrivateNotes}
+          planPrivateNotesCounts={planPrivateNotesCounts}
           onEditGroup={onEditGroup}
           onUpdateGroupValidity={onUpdateGroupValidity}
           onRepeatGroupWeekly={onRepeatGroupWeekly}
@@ -310,6 +377,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     flexShrink: 0,
+  },
+  statusBadge: {
+    marginLeft: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusBadgeActive: {
+    backgroundColor: withAlpha(colors.success, '1A'),
+    borderColor: withAlpha(colors.success, '66'),
+  },
+  statusBadgeExpired: {
+    backgroundColor: withAlpha(colors.danger, '14'),
+    borderColor: withAlpha(colors.danger, '55'),
+  },
+  statusBadgeText: {
+    ...typography.caption,
+    fontWeight: '700',
+    fontSize: 11,
+    letterSpacing: 0.2,
+  },
+  statusBadgeTextActive: {
+    color: colors.success,
+  },
+  statusBadgeTextExpired: {
+    color: colors.danger,
   },
   groupTitle: {
     ...typography.body,
@@ -424,6 +518,51 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.accent,
     fontWeight: '700',
+  },
+  privateNotesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accentBlue, '55'),
+    backgroundColor: withAlpha(colors.accentBlue, '12'),
+    marginRight: spacing.xs,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
+  },
+  privateNotesBtnPressed: {
+    backgroundColor: withAlpha(colors.accentBlue, '24'),
+  },
+  privateNotesBtnMuted: {
+    borderColor: withAlpha(colors.textSecondary, '44'),
+    backgroundColor: withAlpha(colors.textMuted, '08'),
+  },
+  privateNotesBtnText: {
+    ...typography.caption,
+    color: colors.accentBlue,
+    fontWeight: '700',
+  },
+  privateNotesBtnTextMuted: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  privateNotesCount: {
+    minWidth: 16,
+    height: 16,
+    borderRadius: 999,
+    backgroundColor: colors.accentBlue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  privateNotesCountText: {
+    ...typography.caption,
+    color: colors.white,
+    fontWeight: '800',
+    fontSize: 9,
+    lineHeight: 12,
   },
   actionBtn: {
     width: 36,

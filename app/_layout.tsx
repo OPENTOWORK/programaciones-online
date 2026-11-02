@@ -1,3 +1,5 @@
+import { Orbitron_900Black } from '@expo-google-fonts/orbitron';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -12,6 +14,7 @@ import { useAppUpdateGate } from '@/hooks/useAppUpdateGate';
 import { GymProvider } from '@/hooks/useGym';
 import { ProgramsProvider } from '@/hooks/usePrograms';
 import { AppShell } from '@/components/ui/AppShell';
+import { HeaderBackButton } from '@/components/ui/HeaderBackButton';
 import { UpdateRequiredScreen } from '@/components/ui/UpdateRequiredScreen';
 import { colors } from '@/constants/theme';
 import { logAppRuntimeInfo, logReleaseDiagnostic, logReleaseError } from '@/lib/releaseDiagnostics';
@@ -74,6 +77,8 @@ function RootNavigator() {
             headerStyle: { backgroundColor: colors.surface },
             headerTintColor: colors.text,
             headerTitleStyle: { fontWeight: '600' },
+            headerBackVisible: false,
+            headerLeft: () => <HeaderBackButton />,
             contentStyle: { backgroundColor: colors.background, flex: 1 },
             animation: 'slide_from_right',
           }}
@@ -118,6 +123,7 @@ function RootNavigator() {
           <Stack.Screen name="trainer/plan/create" options={{ title: 'Nuevo plan' }} />
           <Stack.Screen name="trainer/plan/[id]" options={{ title: 'Plan del atleta' }} />
           <Stack.Screen name="trainer/template/index" options={{ title: 'Plantillas de sesión' }} />
+          <Stack.Screen name="trainer/mobile-preview/index" options={{ title: 'Vistas móviles', headerShown: false }} />
           <Stack.Screen name="trainer/template/[id]" options={{ title: 'Plantilla de sesión' }} />
           <Stack.Screen name="trainer/program/create" options={{ title: 'Nueva programación' }} />
           <Stack.Screen name="trainer/program/[id]/edit" options={{ title: 'Editar programación' }} />
@@ -132,6 +138,14 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Orbitron_900Black,
+  });
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <View style={Platform.OS === 'web' ? styles.webRoot : styles.nativeRoot}>

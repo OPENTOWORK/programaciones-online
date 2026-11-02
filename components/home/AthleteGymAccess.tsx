@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';

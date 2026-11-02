@@ -1,13 +1,16 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { ProgramSchedulePreview } from '@/components/trainer/ProgramSchedulePreview';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import {
   ScheduleCalendarModal,
   type CalendarSessionSaveInput,
 } from '@/components/trainer/ScheduleCalendarModal';
 import { SessionEditorForm } from '@/components/trainer/SessionEditorForm';
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/theme';
+import { useTrainerDesktopWebLayout, useTrainerMobileLayout } from '@/hooks/useTrainerMobileLayout';
 import { createPersonalizedPlanPreviewProgram } from '@/lib/personalizedPlanContent';
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import { openTrainerPreviewDay, openTrainerPreviewSession } from '@/lib/sessionNavigation';
@@ -87,8 +90,9 @@ export function PersonalizedPlanSessionLayout({
   onSessionEdit,
 }: PersonalizedPlanSessionLayoutProps) {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const isSplitLayout = width >= 1080;
+  const isMobileLayout = useTrainerMobileLayout();
+  const isDesktopTrainer = useTrainerDesktopWebLayout();
+  const isSplitLayout = isDesktopTrainer && !isMobileLayout;
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const previewProgram = useMemo(
@@ -142,8 +146,8 @@ export function PersonalizedPlanSessionLayout({
     <View style={styles.wrap}>
       {header}
 
-      <View style={[styles.splitLayout, isSplitLayout && styles.splitLayoutWide]}>
-        <View style={styles.editorColumn}>
+      <View style={[styles.splitLayout, isSplitLayout ? styles.splitLayoutWide : styles.splitLayoutStacked]}>
+        <View style={[styles.editorColumn, isSplitLayout && styles.editorColumnWide]}>
           <SessionEditorForm
             draft={draft}
             onChange={onDraftChange}
@@ -158,18 +162,28 @@ export function PersonalizedPlanSessionLayout({
         </View>
 
         <View style={[styles.previewColumn, isSplitLayout && styles.previewColumnWide]}>
-          <ProgramSchedulePreview
-            program={previewProgram}
-            workouts={[]}
-            draft={previewDraft}
-            additionalDrafts={additionalDrafts}
-            currentSessionSaved={currentSessionSaved}
-            editingWorkoutId={null}
-            isNewSession
-            onDayPress={(date) => openTrainerPreviewDay(router, date, previewState)}
-            onSessionPress={(item) => openTrainerPreviewSession(router, item, previewState)}
-            onExpand={() => setCalendarOpen(true)}
-          />
+          {isMobileLayout ? (
+            <Card style={styles.mobileCalendarCard}>
+              <Text style={styles.mobileCalendarTitle}>Calendario del plan</Text>
+              <Text style={styles.mobileCalendarSubtitle}>
+                Coloca sesiones en fechas, copia entrenos y revisa la programación en pantalla completa.
+              </Text>
+              <Button title="Abrir calendario" onPress={() => setCalendarOpen(true)} />
+            </Card>
+          ) : (
+            <ProgramSchedulePreview
+              program={previewProgram}
+              workouts={[]}
+              draft={previewDraft}
+              additionalDrafts={additionalDrafts}
+              currentSessionSaved={currentSessionSaved}
+              editingWorkoutId={null}
+              isNewSession
+              onDayPress={(date) => openTrainerPreviewDay(router, date, previewState)}
+              onSessionPress={(item) => openTrainerPreviewSession(router, item, previewState)}
+              onExpand={() => setCalendarOpen(true)}
+            />
+          )}
         </View>
       </View>
 
@@ -203,22 +217,46 @@ const styles = StyleSheet.create({
   },
   splitLayout: {
     gap: spacing.lg,
+    width: '100%',
+  },
+  splitLayoutStacked: {
+    flexDirection: 'column',
   },
   splitLayoutWide: {
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
   editorColumn: {
-    flex: 1,
+    width: '100%',
     minWidth: 0,
     gap: spacing.md,
+    flexShrink: 0,
+  },
+  editorColumnWide: {
+    flex: 1,
   },
   previewColumn: {
     width: '100%',
+    minWidth: 0,
+    flexShrink: 0,
   },
   previewColumnWide: {
     flex: 1,
-    minWidth: 0,
     alignSelf: 'flex-start',
+  },
+  mobileCalendarCard: {
+    padding: spacing.lg,
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+  },
+  mobileCalendarTitle: {
+    ...typography.h3,
+    color: colors.text,
+  },
+  mobileCalendarSubtitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+    lineHeight: 18,
+    marginBottom: spacing.xs,
   },
 });

@@ -1,6 +1,7 @@
 import { Redirect } from 'expo-router';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import { useState } from 'react';
+import { useWindowDimensions } from 'react-native';
 
 import { ProfileLoadError } from '@/components/auth/ProfileLoadError';
 import { LandingScreen } from '@/components/landing/LandingScreen';
@@ -12,6 +13,7 @@ import { isTrainerDesktopWeb, isWebPlatform } from '@/lib/platformAccess';
 import { colors, spacing, typography } from '@/constants/theme';
 
 export default function Index() {
+  const { width } = useWindowDimensions();
   const { user, isLoading, initError, profileError, retryInit, retryProfileLoad, signOut } = useAuth();
   const [retryingProfile, setRetryingProfile] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -66,10 +68,13 @@ export default function Index() {
   }
 
   if (user) {
-    if (isTrainerDesktopWeb(user.role)) {
-      return <Redirect href={getPostLoginRoute(user.role)} />;
-    }
-    return <Redirect href={getPostLoginRoute(user.role)} />;
+    return (
+      <Redirect
+        href={getPostLoginRoute(user.role, {
+          trainerDesktop: isTrainerDesktopWeb(user.role, width),
+        })}
+      />
+    );
   }
 
   // En la app nativa ya se ha descargado, así que la portada solo tiene sentido en web.

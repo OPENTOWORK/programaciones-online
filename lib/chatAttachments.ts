@@ -59,12 +59,12 @@ export async function pickChatImage(
   const result = fromCamera
     ? await ImagePicker.launchCameraAsync({
         mediaTypes: [...mediaTypes],
-        quality: 0.85,
+        quality: 0.72,
         videoMaxDuration: allowVideo ? 300 : undefined,
       })
     : await ImagePicker.launchImageLibraryAsync({
         mediaTypes: [...mediaTypes],
-        quality: 0.85,
+        quality: 0.72,
         videoMaxDuration: allowVideo ? 300 : undefined,
       });
 
@@ -100,7 +100,7 @@ export async function pickChatVideo(): Promise<{
     mediaTypes: ['videos'],
     allowsEditing: false,
     videoMaxDuration: 300,
-    quality: 0.8,
+    quality: 0.72,
   });
 
   if (result.canceled || !result.assets[0]) return { cancelled: true };
@@ -129,7 +129,7 @@ export async function pickChatGif(): Promise<{
 
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
-    quality: 1,
+    quality: 0.72,
   });
 
   if (result.canceled || !result.assets[0]) return { cancelled: true };

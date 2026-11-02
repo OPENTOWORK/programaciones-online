@@ -1,3 +1,4 @@
+import { prepareAudioForUpload, preparedToArrayBuffer } from '@/lib/prepareUploadMedia';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { FeedbackAttachmentDraft } from '@/lib/trainerFeedbackMediaService';
 
@@ -34,14 +35,6 @@ function audioExtension(mimeType: string) {
 
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^\w.\-() ]+/g, '_').trim() || 'nota-de-voz.m4a';
-}
-
-async function uriToArrayBuffer(uri: string) {
-  const response = await fetch(uri);
-  if (!response.ok) {
-    throw new Error('No se pudo leer el audio');
-  }
-  return response.arrayBuffer();
 }
 
 function isMissingTableError(error: { message?: string; code?: string } | null | undefined) {
@@ -244,9 +237,11 @@ export async function uploadSessionBlockCommentAudio(input: {
   if (!supabase) return { error: 'Supabase no está disponible' };
 
   try {
-    const fileData = await uriToArrayBuffer(input.draft.uri);
+    const prepared = await prepareAudioForUpload(input.draft.uri, input.draft.mimeType);
+    const uploadMime = prepared.mimeType;
+    const fileData = await preparedToArrayBuffer(prepared);
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, fileData, {
-      contentType: input.draft.mimeType,
+      contentType: uploadMime,
       upsert: true,
     });
 
@@ -268,7 +263,7 @@ export async function uploadSessionBlockCommentAudio(input: {
       text: (existing?.text as string | null) ?? null,
       audio_storage_path: storagePath,
       audio_file_name: safeName,
-      audio_mime_type: input.draft.mimeType,
+      audio_mime_type: uploadMime,
       audio_duration_seconds: input.draft.durationSeconds ?? null,
       updated_at: new Date().toISOString(),
     };

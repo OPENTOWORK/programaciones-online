@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     default: {},
   }),
   scrollContent: {
-    flexGrow: 1,
+    ...(Platform.OS === 'web' ? { flexGrow: 1 } : null),
     paddingBottom: spacing.xxl,
   },
   content: {

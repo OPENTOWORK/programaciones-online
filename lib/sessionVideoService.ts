@@ -1,3 +1,4 @@
+import { prepareVideoForUpload, preparedToArrayBuffer } from '@/lib/prepareUploadMedia';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export interface SessionLogVideo {
@@ -30,13 +31,6 @@ function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^\w.\-() ]+/g, '_').trim() || 'video.mp4';
 }
 
-async function uriToArrayBuffer(uri: string) {
-  const response = await fetch(uri);
-  if (!response.ok) {
-    throw new Error('No se pudo leer el video seleccionado');
-  }
-  return response.arrayBuffer();
-}
 
 function isMissingTableError(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -184,9 +178,11 @@ export async function uploadSessionVideo(input: {
   }
 
   try {
-    const fileData = input.file ? await input.file.arrayBuffer() : await uriToArrayBuffer(input.uri);
+    const prepared = await prepareVideoForUpload(input.uri, input.mimeType, input.file);
+    const uploadMime = prepared.mimeType;
+    const fileData = await preparedToArrayBuffer(prepared);
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, fileData, {
-      contentType: input.mimeType,
+      contentType: uploadMime,
       upsert: false,
     });
 
@@ -201,7 +197,7 @@ export async function uploadSessionVideo(input: {
         user_id: input.userId,
         storage_path: storagePath,
         file_name: safeName,
-        mime_type: input.mimeType,
+        mime_type: uploadMime,
         exercise_key: exerciseKey,
         exercise_name: exerciseName,
       })

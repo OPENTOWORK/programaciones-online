@@ -174,6 +174,11 @@ export default function TrainerSessionLogDetailScreen() {
         readOnlySubtitle="Registro del atleta · qué hizo y qué ejercicios tenía la sesión"
         logId={log.id}
         onAnnotatedVideo={handleAnnotatedVideo}
+        trainerNotes={{
+          athleteId: log.userId,
+          athletePlanId: log.athletePlanId,
+          performedOn: log.scheduledDate,
+        }}
       />
 
       <View style={styles.feedbackSection}>

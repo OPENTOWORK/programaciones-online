@@ -1,27 +1,36 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
-import { BlockCommentField } from '@/components/workout/BlockCommentField';
-import { ExerciseRow } from '@/components/workout/ExerciseRow';
-import { ExerciseVideoPanel } from '@/components/workout/ExerciseVideoPanel';
-import { SessionLogVideos } from '@/components/workout/SessionLogVideos';
-import { SessionVideoSendModal } from '@/components/workout/SessionVideoSendModal';
-import { WorkoutSection } from '@/components/workout/WorkoutSection';
+import {
+    TrainerExerciseNoteModal,
+    TrainerExerciseNoteTrigger,
+} from '@/components/trainer/TrainerExerciseNotes';
 import { ActionSheetModal } from '@/components/ui/ActionSheetModal';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { BlockCommentField } from '@/components/workout/BlockCommentField';
+import { ExerciseRow } from '@/components/workout/ExerciseRow';
+import { ExerciseVideoPanel } from '@/components/workout/ExerciseVideoPanel';
+import { SessionLogVideos } from '@/components/workout/SessionLogVideos';
+import { SessionVideoSendModal } from '@/components/workout/SessionVideoSendModal';
+import { WorkoutSection } from '@/components/workout/WorkoutSection';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useSessionBlockComments } from '@/hooks/useSessionBlockComments';
-import { useSessionVideos } from '@/hooks/useSessionVideos';
 import type { SessionWorkoutContent } from '@/hooks/useSessionRunner';
+import { useSessionVideos } from '@/hooks/useSessionVideos';
+import { useTrainerExerciseNotes } from '@/hooks/useTrainerExerciseNotes';
 import { normalizeExerciseName } from '@/lib/exerciseName';
 import { formatSessionSectionTitle } from '@/lib/personalizedPlanContent';
 import type { ChecklistItem } from '@/lib/sessionChecklist';
-import type { SessionLogVideo } from '@/lib/sessionVideoService';
 import type { SessionVideoSource } from '@/lib/sessionVideoPicker';
+import type { SessionLogVideo } from '@/lib/sessionVideoService';
+import {
+    formatTrainerExerciseNoteAge,
+    resolveTrainerExerciseNoteTarget,
+} from '@/lib/trainerExerciseNoteService';
 import type { FeedbackAttachmentDraft } from '@/lib/trainerFeedbackMediaService';
 
 type ActiveVideo = {
@@ -65,6 +74,11 @@ interface SessionWorkoutViewProps {
   preview?: boolean;
   /** Corrección en vídeo del atleta (telestrator, solo web). */
   onAnnotatedVideo?: (draft: FeedbackAttachmentDraft, video: SessionLogVideo) => void;
+  /**
+   * Activa los apuntes privados del entrenador sobre cada ejercicio y cada vídeo.
+   * Solo tiene efecto cuando quien mira el registro es entrenador o administrador.
+   */
+  trainerNotes?: { athleteId?: string; athletePlanId?: string; performedOn?: string };
 }
 
 export function SessionWorkoutView({
@@ -93,6 +107,7 @@ export function SessionWorkoutView({
   attachment,
   preview = false,
   onAnnotatedVideo,
+  trainerNotes,
 }: SessionWorkoutViewProps) {
   const [activeVideo, setActiveVideo] = useState<ActiveVideo | null>(null);
   const [sendTarget, setSendTarget] = useState<SendTarget | null>(null);
@@ -121,6 +136,20 @@ export function SessionWorkoutView({
     uploadAudio,
     removeAudio,
   } = useSessionBlockComments(logId, userId);
+
+  const exerciseNotes = useTrainerExerciseNotes({
+    athleteId: trainerNotes?.athleteId,
+    sessionLogId: logId,
+    athletePlanId: trainerNotes?.athletePlanId,
+    performedOn: trainerNotes?.performedOn,
+  });
+
+  const [activeTrainerNote, setActiveTrainerNote] = useState<{
+    exerciseKey: string;
+    name: string;
+    sessionVideoId?: string;
+    contextLabel?: string;
+  } | null>(null);
 
   const sentExerciseKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -194,6 +223,62 @@ export function SessionWorkoutView({
     />
   );
 
+  const renderTrainerExerciseNotes = (
+    target: { name: string; exerciseKey: string },
+    context?: { sessionVideoId?: string; contextLabel?: string },
+  ) => {
+    if (!exerciseNotes.enabled) return null;
+
+    const { name, exerciseKey } = target;
+    const notes = exerciseNotes.notesByExercise.get(exerciseKey) ?? [];
+    const history = exerciseNotes.historyByKey[exerciseKey] ?? [];
+    const summary = exerciseNotes.summaryByKey[exerciseKey];
+
+    return (
+      <TrainerExerciseNoteTrigger
+        exerciseName={name}
+        noteCount={notes.length}
+        historyCount={summary?.historyCount ?? history.length}
+        lastHistoryAge={
+          summary ? formatTrainerExerciseNoteAge(summary.lastPerformedOn) : undefined
+        }
+        onPress={() =>
+          setActiveTrainerNote({
+            exerciseKey,
+            name,
+            sessionVideoId: context?.sessionVideoId,
+            contextLabel: context?.contextLabel,
+          })
+        }
+      />
+    );
+  };
+
+  const renderExerciseNotes = (
+    exerciseName: string,
+    context?: { sessionVideoId?: string; contextLabel?: string },
+  ) => {
+    const target = resolveTrainerExerciseNoteTarget({ exerciseName });
+    if (!target) return null;
+    return renderTrainerExerciseNotes(target, context);
+  };
+
+  const renderVideoNotes = (video: SessionLogVideo) => {
+    const target = resolveTrainerExerciseNoteTarget({
+      exerciseName: video.exerciseName,
+      sessionVideoId: video.id,
+    });
+    if (!target) return null;
+
+    const displayName =
+      video.exerciseName?.trim() || video.fileName?.trim() || target.name;
+
+    return renderTrainerExerciseNotes(
+      { exerciseKey: target.exerciseKey, name: displayName },
+      { sessionVideoId: video.id },
+    );
+  };
+
   const sectionProps = (sectionKey: string) => ({
     sectionKey,
     completedItems: completed,
@@ -214,6 +299,9 @@ export function SessionWorkoutView({
     renderAfterBlock: renderBlockComment,
     // El crono acompaña al entreno en marcha, no al registro que ya cerró el atleta.
     showBlockTimers: !readOnly || preview,
+    renderExerciseExtra: exerciseNotes.enabled
+      ? (exerciseName: string) => renderExerciseNotes(exerciseName)
+      : undefined,
   });
 
   if (loadingLog) {
@@ -299,6 +387,7 @@ export function SessionWorkoutView({
                   }
                   isSendingVideo={!locked && uploadingExerciseKey === key}
                   hasSentVideo={!locked && sentExerciseKeys.has(key)}
+                  renderExtra={renderExerciseNotes(exercise.name)}
                 />
               </View>
             );
@@ -362,6 +451,7 @@ export function SessionWorkoutView({
           readOnly
           compact={false}
           onAnnotatedVideo={onAnnotatedVideo}
+          renderVideoExtra={exerciseNotes.enabled ? renderVideoNotes : undefined}
         />
       )}
 
@@ -419,6 +509,36 @@ export function SessionWorkoutView({
         }}
         onCancel={cancelPendingUpload}
       />
+
+      {activeTrainerNote && exerciseNotes.enabled ? (
+        <TrainerExerciseNoteModal
+          visible
+          onClose={() => setActiveTrainerNote(null)}
+          exerciseName={activeTrainerNote.name}
+          notes={exerciseNotes.notesByExercise.get(activeTrainerNote.exerciseKey) ?? []}
+          history={exerciseNotes.historyByKey[activeTrainerNote.exerciseKey] ?? []}
+          historyLoading={exerciseNotes.loadingHistoryKey === activeTrainerNote.exerciseKey}
+          isSaving={exerciseNotes.savingKey === activeTrainerNote.exerciseKey}
+          nextSetNumber={exerciseNotes.nextSetNumber(activeTrainerNote.exerciseKey)}
+          contextLabel={activeTrainerNote.contextLabel}
+          error={exerciseNotes.error}
+          onSave={(draft, noteId) => {
+            void exerciseNotes.saveNote({
+              exerciseKey: activeTrainerNote.exerciseKey,
+              exerciseName: activeTrainerNote.name,
+              draft,
+              noteId,
+              sessionVideoId: activeTrainerNote.sessionVideoId,
+            });
+          }}
+          onRemove={(note) => {
+            void exerciseNotes.removeNote(note);
+          }}
+          onRequestHistory={() => {
+            void exerciseNotes.loadHistory(activeTrainerNote.exerciseKey);
+          }}
+        />
+      ) : null}
     </View>
   );
 }

@@ -6,7 +6,7 @@
 | --- | --- |
 | Nombre en Play Console | Training ProgLine |
 | Nombre del paquete | `com.trainingprogline.app` |
-| Versión | 1.0.15 (versionCode 16) |
+| Versión | 1.0.20 (versionCode 21) |
 | Política de privacidad (URL pública) | `https://carlosgarciacano87-dev.github.io/app-progras/privacy.html` |
 | Eliminación de cuenta (URL pública) | `https://carlosgarciacano87-dev.github.io/app-progras/account-deletion.html` |
 
@@ -18,7 +18,7 @@ com.trainingprogline.app
 
 ## Gráficos de la ficha (logo actual)
 
-Si cambias `assets/logo-source.png`, regenera iconos y gráficos de Play Store:
+El logotipo (TP · PROGLINE) está en vectorial en `assets/brand/` (`progline-mark.svg`, `progline-logo.svg`, `progline-logo-compact.svg`). Si lo cambias, regenera iconos y gráficos de Play Store:
 
 ```bash
 npm run assets:playstore
@@ -77,20 +77,41 @@ npm run build:android
 
 4. Súbelo en Play Console → **Producción / Prueba interna** → **Crear nueva versión**.
 
+## Actualización obligatoria (Android)
+
+Cuando publiques una versión nueva, los usuarios con una versión antigua verán una pantalla de bloqueo (**Oye, actualiza**) que les lleva a Google Play.
+
+1. Sube el `.aab` nuevo a Play Console y espera a que la versión esté disponible.
+2. Activa el bloqueo en Supabase (usa la versión de `app.json`):
+
+```bash
+npm run android:require-update
+```
+
+Eso marca `1.0.20` (build `21`) como mínima obligatoria. Quien tenga una versión anterior no podrá entrar hasta actualizar.
+
+Para preparar solo el mensaje y la versión disponible sin bloquear todavía:
+
+```bash
+npm run supabase:app-updates
+```
+
 ## Política de fotos y vídeos (Google Play)
 
 La app **no declara** `READ_MEDIA_IMAGES` ni `READ_MEDIA_VIDEO`. En Android se usa el selector del sistema (Photo Picker) y esos permisos están bloqueados en `app.json` → `android.blockedPermissions`.
 
 Si Play Console muestra un rechazo por permisos de medios, sube un nuevo `.aab` generado después de ese cambio.
 
-## Optimización R8 (Google Play)
+## Avisos de Play Console (Android 15/16)
 
-Play Console puede mostrar avisos de "optimización baja" si el bundle no usa R8. No bloquea la publicación, pero el script de build ya activa:
+Estos avisos salen en el panel de la versión. No bloquean la publicación.
 
-- `android.enableMinifyInReleaseBuilds=true` (ofuscación R8)
-- `android.enableShrinkResourcesInReleaseBuilds=true` (reducción de recursos)
-
-En el próximo `npm run build:android:local` el informe debería mejorar.
+| Aviso | Qué hacemos |
+| --- | --- |
+| APIs obsoletas de barras (`setStatusBarColor`, `setNavigationBarColor`) | El plugin `plugins/withAndroidPlayCompatibility.js` quita `android:statusBarColor` y `android:navigationBarColor` del tema. La app ya usa edge-to-edge + `expo-status-bar` solo para el color de iconos. Parte del aviso puede seguir saliendo por `expo-image-picker` (Android Image Cropper). |
+| Orientación `PORTRAIT` en pantallas grandes | El mismo plugin elimina `android:screenOrientation` de `MainActivity`. iOS sigue en vertical. |
+| Optimización de mapas de bits | Viene de React Native (Fresco), Glide y `expo-file-system`. No es código nuestro; no se puede quitar sin cambiar el runtime. |
+| R8 / AGP 9 | El build activa minify, shrink, `android.r8.optimizedResourceShrinking` y R8 full mode. Expo 56 usa AGP **8.12**; no se puede subir a AGP 9 sin romper el prebuild. |
 
 ## Opción local (Windows)
 

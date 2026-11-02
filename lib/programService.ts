@@ -153,6 +153,21 @@ export function filterPlansForUserRole(plans: Plan[], role?: UserRole) {
   return plans;
 }
 
+/** Programas visibles para atletas cedidos a otro entrenador (solo nutrición). */
+export const CEDED_ATHLETE_PLAN_CATEGORIES: ProgramCategory[] = ['nutrition'];
+
+const CEDED_ATHLETE_PLAN_STUBS: Plan[] = [
+  { id: 'plan-nutrition', label: PLAN_DISPLAY_LABELS.nutrition, category: 'nutrition' },
+];
+
+export function filterPlansForCededAthlete(plans: Plan[]) {
+  return filterPlansForRole(plans, CEDED_ATHLETE_PLAN_CATEGORIES, CEDED_ATHLETE_PLAN_STUBS);
+}
+
+export function isPlanCategoryAllowedForCededAthlete(category?: ProgramCategory) {
+  return Boolean(category && CEDED_ATHLETE_PLAN_CATEGORIES.includes(category));
+}
+
 export function filterVisiblePrograms(programs: Program[]) {
   return programs.filter((program) => !isRemovedPlanCategory(program.category));
 }

@@ -16,6 +16,13 @@ export type TrainerChatConversation = {
   preview?: TrainerChatPreview;
 };
 
+/** Mensajes de chat sin leer: prioriza el contador del atleta (respeta chat_read_at). */
+export function trainerConversationUnread(conversation: TrainerChatConversation) {
+  const fromAlerts = conversation.athlete.alerts?.chatCount;
+  if (typeof fromAlerts === 'number') return fromAlerts;
+  return conversation.preview?.unread ?? 0;
+}
+
 function previewFromMessages(athleteId: string, messages: { sender: string; text: string; timestamp: string }[]) {
   const last = messages[messages.length - 1];
   if (!last) return undefined;
@@ -85,7 +92,7 @@ export function useTrainerChatInbox() {
     return [...athletes]
       .map((athlete) => ({ athlete, preview: previews[athlete.id] }))
       .sort((left, right) => {
-        const unreadDelta = (right.preview?.unread ?? 0) - (left.preview?.unread ?? 0);
+        const unreadDelta = trainerConversationUnread(right) - trainerConversationUnread(left);
         if (unreadDelta !== 0) return unreadDelta;
 
         const leftAt = left.preview?.lastAt ?? '';
@@ -101,5 +108,12 @@ export function useTrainerChatInbox() {
     isLoading: isLoading || previewsLoading,
     error,
     refresh: refreshInbox,
+    patchPreviewUnread: (athleteId: string) => {
+      setPreviews((current) => {
+        const preview = current[athleteId];
+        if (!preview || preview.unread === 0) return current;
+        return { ...current, [athleteId]: { ...preview, unread: 0 } };
+      });
+    },
   };
 }

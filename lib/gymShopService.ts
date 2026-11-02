@@ -26,6 +26,7 @@ import type {
   GymProductMovement,
   GymProductMovementKind,
 } from '@/lib/gymTypes';
+import { prepareImageForUpload, preparedToArrayBuffer } from '@/lib/prepareUploadMedia';
 import { getSupabase, isSupabaseConfigured, supabaseUrl } from '@/lib/supabase';
 
 const PRODUCTS = 'gym_products';
@@ -755,12 +756,6 @@ function extensionFromMime(mimeType?: string) {
   return 'jpg';
 }
 
-async function uriToArrayBuffer(uri: string) {
-  const response = await fetch(uri);
-  if (!response.ok) throw new Error('No se pudo leer la imagen.');
-  return response.arrayBuffer();
-}
-
 export async function uploadGymProductImage(
   gymId: string,
   productId: string,
@@ -796,14 +791,16 @@ export async function uploadGymProductImage(
   const previousThemes = parseShopProductImageThemes((existing as Row).image_themes);
   const basePath = normalizeShopProductImageBase(previousPath) ?? shopProductImageBaseKey(gymId, productId);
   const storagePath = shopProductThemeStoragePath(basePath, themeId);
-  const extension = extensionFromMime(mimeType);
-  const resolvedStoragePath = storagePath.replace(/\.png$/, `.${extension}`);
 
   try {
-    const fileData = await uriToArrayBuffer(imageUri);
+    const prepared = await prepareImageForUpload(imageUri, mimeType, 'general');
+    const uploadMime = prepared.mimeType;
+    const extension = extensionFromMime(uploadMime);
+    const resolvedStoragePath = storagePath.replace(/\.(png|jpg|jpeg|webp)$/i, `.${extension}`);
+    const fileData = await preparedToArrayBuffer(prepared);
     const { error: uploadError } = await supabase.storage.from(IMAGE_BUCKET).upload(resolvedStoragePath, fileData, {
       upsert: true,
-      contentType: mimeType,
+      contentType: uploadMime,
     });
     if (uploadError) return { error: friendlyError(uploadError, 'No se pudo subir la imagen.') };
 

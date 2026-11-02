@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { PlanCoverCard } from '@/components/program/PlanCoverCard';
@@ -35,7 +35,7 @@ interface CategoryTabsProps {
 }
 
 export function CategoryTabs({ plans, userRole, showSectionLabel = true }: CategoryTabsProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const gymSections = isGymRole(userRole)
     ? GYM_PLAN_SECTIONS.map((section) => ({
         ...section,

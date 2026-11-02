@@ -1,14 +1,26 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { AppIcon } from '@/components/ui/AppIcon';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useProgressPhotos } from '@/hooks/useProgressPhotos';
 import { ensureMediaLibraryPickerAccess } from '@/lib/mediaLibraryPicker';
 import { formatMonthLabel, type PhotoTipo } from '@/lib/photoService';
+
+const PHOTO_ASPECT = 3 / 4;
 
 async function pickImage() {
   const permission = await ensureMediaLibraryPickerAccess();
@@ -20,7 +32,7 @@ async function pickImage() {
     mediaTypes: ['images'],
     allowsEditing: true,
     aspect: [3, 4],
-    quality: 0.85,
+    quality: 0.72,
   });
 
   if (result.canceled || !result.assets[0]) {
@@ -34,36 +46,90 @@ async function pickImage() {
   };
 }
 
-function PhotoSlot({
+type PhotoViewerState = { uri: string; label: string };
+
+function PhotoLightbox({
+  viewer,
+  onClose,
+}: {
+  viewer: PhotoViewerState | null;
+  onClose: () => void;
+}) {
+  const { width, height } = useWindowDimensions();
+  const maxWidth = Math.min(width - spacing.lg * 2, 520);
+  const maxHeight = Math.min(height * 0.78, maxWidth / PHOTO_ASPECT);
+
+  if (!viewer) return null;
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.lightboxOverlay}>
+        <Pressable style={styles.lightboxBackdrop} onPress={onClose} accessibilityLabel="Cerrar foto" />
+        <View style={styles.lightboxCard}>
+          <Image
+            source={{ uri: viewer.uri }}
+            style={{ width: maxWidth, height: maxHeight, maxWidth: '100%' }}
+            resizeMode="contain"
+            accessibilityLabel={viewer.label}
+          />
+          <Text style={styles.lightboxLabel}>{viewer.label}</Text>
+          <Button title="Cerrar" variant="secondary" onPress={onClose} style={styles.lightboxCloseBtn} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function ProgressPhotoTile({
   label,
   uri,
   emptyHint,
-  dense = false,
+  onPress,
 }: {
   label: string;
   uri?: string;
-  emptyHint: string;
-  dense?: boolean;
+  emptyHint?: string;
+  onPress?: () => void;
 }) {
-  return (
-    <View style={styles.photoSlot}>
+  const canOpen = Boolean(uri && onPress);
+
+  const inner = (
+    <View style={styles.thumbInner}>
       {uri ? (
-        <Image
-          source={{ uri }}
-          style={[styles.photoImage, dense && styles.photoImageDense]}
-          accessibilityLabel={label}
-        />
+        <Image source={{ uri }} style={styles.photoImage} resizeMode="cover" accessibilityLabel={label} />
       ) : (
-        <View style={[styles.photoPlaceholder, dense && styles.photoPlaceholderDense]}>
-          <AppIcon name="measure" size={dense ? 18 : 28} color={colors.textMuted} outlined />
-          <Text style={[styles.photoPlaceholderText, dense && styles.photoPlaceholderTextDense]}>
-            {emptyHint}
-          </Text>
+        <View style={styles.photoPlaceholder}>
+          <AppIcon name="measure" size={20} color={colors.textMuted} outlined />
+          {emptyHint ? <Text style={styles.photoPlaceholderText}>{emptyHint}</Text> : null}
         </View>
       )}
-      <Text style={[styles.photoLabel, dense && styles.photoLabelDense]}>{label}</Text>
+      <View style={styles.photoBadge}>
+        <Text style={styles.photoBadgeText} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+      {canOpen ? (
+        <View style={styles.thumbZoomHint}>
+          <Ionicons name="expand-outline" size={14} color={colors.white} />
+        </View>
+      ) : null}
     </View>
   );
+
+  if (canOpen) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Ver foto: ${label}`}
+        style={({ pressed }) => [styles.thumbTile, pressed && styles.thumbTilePressed]}
+      >
+        {inner}
+      </Pressable>
+    );
+  }
+
+  return <View style={styles.thumbTile}>{inner}</View>;
 }
 
 export function ProgressPhotos({
@@ -79,9 +145,16 @@ export function ProgressPhotos({
 }) {
   const { photos, isLoading, isUploading, error, uploadPhoto, isDemoMode } = useProgressPhotos(userId);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<PhotoViewerState | null>(null);
   const canUpload = !readOnly && !isDemoMode;
+  const compact = dense;
+
+  const openViewer = (uri: string, label: string) => setViewer({ uri, label });
 
   const displayError = localError ?? error;
+
+  const currentMonthLabel = formatMonthLabel(photos.currentMonthKey);
+  const currentMonthPhoto = photos.monthlyPhotos.find((photo) => photo.mes === photos.currentMonthKey);
 
   async function handleUpload(tipo: PhotoTipo) {
     setLocalError(null);
@@ -99,48 +172,44 @@ export function ProgressPhotos({
 
   if (isLoading) {
     return (
-      <View style={[styles.section, dense && styles.sectionDense, embedded && styles.sectionEmbedded]}>
+      <View style={[styles.section, compact && styles.sectionCompact, embedded && styles.sectionEmbedded]}>
         {embedded ? null : (
-          <Text style={[styles.sectionTitle, dense && styles.sectionTitleDense]}>Fotos de progreso</Text>
+          <Text style={[styles.sectionTitle, compact && styles.sectionTitleCompact]}>Fotos de progreso</Text>
         )}
-        <Card style={dense ? styles.denseCard : undefined}>
-          <Text style={[styles.loadingText, dense && styles.loadingTextDense]}>Cargando fotos…</Text>
+        <Card style={compact ? styles.cardCompact : undefined}>
+          <Text style={styles.loadingText}>Cargando fotos…</Text>
         </Card>
       </View>
     );
   }
 
   return (
-    <View style={[styles.section, dense && styles.sectionDense, embedded && styles.sectionEmbedded]}>
+    <View style={[styles.section, compact && styles.sectionCompact, embedded && styles.sectionEmbedded]}>
       {embedded ? null : (
-        <Text style={[styles.sectionTitle, dense && styles.sectionTitleDense]}>Fotos de progreso</Text>
+        <Text style={[styles.sectionTitle, compact && styles.sectionTitleCompact]}>Fotos de progreso</Text>
       )}
 
       {isDemoMode && !readOnly ? (
-        <Card style={dense ? styles.denseCard : undefined}>
-          <Text style={[styles.infoText, dense && styles.infoTextDense]}>
-            Inicia sesión con tu cuenta para guardar fotos de progreso.
-          </Text>
+        <Card style={compact ? styles.cardCompact : undefined}>
+          <Text style={styles.infoText}>Inicia sesión con tu cuenta para guardar fotos de progreso.</Text>
         </Card>
       ) : null}
 
       {readOnly && photos.needsBeforePhoto ? (
-        <Card style={dense ? styles.denseCard : undefined}>
-          <Text style={[styles.infoText, dense && styles.infoTextDense]}>
-            Este atleta todavía no ha subido fotos de progreso.
-          </Text>
+        <Card style={compact ? styles.cardCompact : undefined}>
+          <Text style={styles.infoText}>Este atleta todavía no ha subido fotos de progreso.</Text>
         </Card>
       ) : null}
 
       {!readOnly && photos.needsBeforePhoto ? (
-        <Card style={[styles.promptCard, dense && styles.promptCardDense]}>
-          <View style={[styles.promptHeader, dense && styles.promptHeaderDense]}>
-            <View style={[styles.promptIcon, dense && styles.promptIconDense]}>
-              <AppIcon name="measure" size={dense ? 18 : 22} color={colors.accent} />
+        <Card style={[styles.promptCard, compact && styles.cardCompact]}>
+          <View style={styles.promptHeader}>
+            <View style={styles.promptIcon}>
+              <AppIcon name="measure" size={22} color={colors.accent} />
             </View>
             <View style={styles.promptCopy}>
-              <Text style={[styles.promptTitle, dense && styles.promptTitleDense]}>Tu foto de antes</Text>
-              <Text style={[styles.promptText, dense && styles.promptTextDense]}>
+              <Text style={styles.promptTitle}>Tu foto de antes</Text>
+              <Text style={styles.promptText}>
                 Sube una foto inicial para comparar tu evolución con el tiempo.
               </Text>
             </View>
@@ -150,17 +219,15 @@ export function ProgressPhotos({
             onPress={() => handleUpload('antes')}
             loading={isUploading}
             disabled={!canUpload}
-            style={dense ? styles.denseButton : undefined}
-            textStyle={dense ? styles.denseButtonText : undefined}
           />
         </Card>
       ) : null}
 
       {!readOnly && !photos.needsBeforePhoto && photos.needsMonthlyPhoto ? (
-        <Card style={[styles.reminderCard, dense && styles.reminderCardDense]}>
+        <Card style={[styles.reminderCard, compact && styles.cardCompact]}>
           <View style={styles.reminderRow}>
-            <AppIcon name="calendar" size={dense ? 16 : 20} color={colors.warning} outlined />
-            <Text style={[styles.reminderText, dense && styles.reminderTextDense]}>
+            <AppIcon name="calendar" size={20} color={colors.warning} outlined />
+            <Text style={styles.reminderText}>
               Es momento de subir tu foto de {photos.currentMonthLabel}.
             </Text>
           </View>
@@ -169,27 +236,38 @@ export function ProgressPhotos({
             onPress={() => handleUpload('mensual')}
             loading={isUploading}
             variant="outline"
-            style={[styles.reminderButton, dense && styles.denseButton]}
-            textStyle={dense ? styles.denseButtonText : undefined}
+            style={styles.reminderButton}
           />
         </Card>
       ) : null}
 
       {!photos.needsBeforePhoto ? (
-        <Card style={dense ? styles.denseCard : undefined}>
-          <Text style={[styles.galleryTitle, dense && styles.galleryTitleDense]}>Comparativa</Text>
-          <View style={styles.galleryRow}>
-            <PhotoSlot
-              dense={dense}
+        <Card style={[styles.galleryCard, compact && styles.cardCompact]}>
+          <View style={styles.galleryHeader}>
+            <Text style={styles.galleryTitle}>Comparativa</Text>
+            <Text style={styles.gallerySubtitle}>Antes · {currentMonthLabel}</Text>
+          </View>
+
+          <View style={styles.thumbGrid}>
+            <ProgressPhotoTile
               label="Antes"
               uri={photos.antesPhoto?.url}
-              emptyHint="Sin foto"
+              emptyHint="Sin foto inicial"
+              onPress={
+                photos.antesPhoto?.url
+                  ? () => openViewer(photos.antesPhoto!.url, 'Antes')
+                  : undefined
+              }
             />
-            <PhotoSlot
-              dense={dense}
-              label={formatMonthLabel(photos.currentMonthKey)}
-              uri={photos.monthlyPhotos.find((photo) => photo.mes === photos.currentMonthKey)?.url}
+            <ProgressPhotoTile
+              label={currentMonthLabel}
+              uri={currentMonthPhoto?.url}
               emptyHint="Pendiente este mes"
+              onPress={
+                currentMonthPhoto?.url
+                  ? () => openViewer(currentMonthPhoto.url, currentMonthLabel)
+                  : undefined
+              }
             />
           </View>
 
@@ -199,33 +277,15 @@ export function ProgressPhotos({
               onPress={() => handleUpload('mensual')}
               loading={isUploading}
               variant="secondary"
-              style={[styles.updateButton, dense && styles.denseButton]}
-              textStyle={dense ? styles.denseButtonText : undefined}
+              style={styles.updateButton}
             />
-          ) : null}
-
-          {photos.monthlyPhotos.length > 0 ? (
-            <View style={[styles.historyBlock, dense && styles.historyBlockDense]}>
-              <Text style={styles.historyTitle}>Historial mensual</Text>
-              <View style={styles.historyGrid}>
-                {photos.monthlyPhotos.map((photo) => (
-                  <View key={photo.id} style={styles.historyItem}>
-                    <Image
-                      source={{ uri: photo.url }}
-                      style={[styles.historyImage, dense && styles.historyImageDense]}
-                    />
-                    <Text style={styles.historyLabel}>
-                      {photo.mes ? formatMonthLabel(photo.mes) : '—'}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
           ) : null}
         </Card>
       ) : null}
 
       {displayError ? <Text style={styles.errorText}>{displayError}</Text> : null}
+
+      <PhotoLightbox viewer={viewer} onClose={() => setViewer(null)} />
     </View>
   );
 }
@@ -237,20 +297,30 @@ const styles = StyleSheet.create({
   sectionEmbedded: {
     marginTop: 0,
   },
+  sectionCompact: {
+    marginTop: 0,
+  },
   sectionTitle: {
     ...typography.h3,
     color: colors.text,
     marginBottom: spacing.sm,
+  },
+  sectionTitleCompact: {
+    ...typography.body,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  cardCompact: {
+    padding: spacing.md,
   },
   loadingText: {
     ...typography.body,
     color: colors.textSecondary,
   },
   infoText: {
-    ...typography.body,
+    ...typography.bodySmall,
     color: colors.textSecondary,
-    lineHeight: 22,
-    marginBottom: spacing.sm,
+    lineHeight: 20,
   },
   promptCard: {
     marginBottom: spacing.md,
@@ -285,7 +355,7 @@ const styles = StyleSheet.create({
   reminderCard: {
     marginBottom: spacing.md,
     gap: spacing.md,
-    borderColor: `${colors.warning}55`,
+    borderColor: withAlpha(colors.warning, '44'),
   },
   reminderRow: {
     flexDirection: 'row',
@@ -293,176 +363,151 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   reminderText: {
-    ...typography.body,
+    ...typography.bodySmall,
     color: colors.text,
     flex: 1,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   reminderButton: {
     marginTop: spacing.xs,
   },
+  galleryCard: {
+    gap: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: withAlpha(colors.surfaceLight, '55'),
+    borderColor: colors.border,
+  },
+  galleryHeader: {
+    gap: 2,
+  },
   galleryTitle: {
     ...typography.body,
     color: colors.text,
-    fontWeight: '700',
-    marginBottom: spacing.md,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
-  galleryRow: {
+  gallerySubtitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+  },
+  thumbGrid: {
     flexDirection: 'row',
-    gap: spacing.md,
-  },
-  photoSlot: {
-    flex: 1,
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  photoImage: {
-    width: '100%',
-    aspectRatio: 3 / 4,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceLight,
+  thumbTile: {
+    width: 112,
+    flexGrow: 0,
+    flexShrink: 0,
   },
-  photoPlaceholder: {
+  thumbTilePressed: {
+    opacity: 0.92,
+  },
+  thumbInner: {
+    position: 'relative',
     width: '100%',
-    aspectRatio: 3 / 4,
+    aspectRatio: PHOTO_ASPECT,
     borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderStyle: 'dashed',
+    ...(Platform.OS === 'web'
+      ? ({ cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,0,0,0.18)' } as object)
+      : null),
+  },
+  thumbZoomHint: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    width: 26,
+    height: 26,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    backgroundColor: withAlpha(colors.background, 'AA'),
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: withAlpha(colors.border, '99'),
+  },
+  photoImage: {
+    ...StyleSheet.absoluteFill,
+    width: '100%',
+    height: '100%',
+  },
+  photoPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
     padding: spacing.sm,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: withAlpha(colors.surfaceLight, '88'),
   },
   photoPlaceholderText: {
     ...typography.caption,
     color: colors.textMuted,
     textAlign: 'center',
+    fontSize: 10,
+    lineHeight: 13,
   },
-  photoLabel: {
+  photoBadge: {
+    position: 'absolute',
+    left: spacing.sm,
+    right: spacing.sm,
+    bottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: borderRadius.sm,
+    backgroundColor: withAlpha(colors.background, 'D9'),
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: withAlpha(colors.border, 'AA'),
+  },
+  photoBadgeText: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.text,
+    fontWeight: '700',
     textAlign: 'center',
-    fontWeight: '600',
-    textTransform: 'capitalize',
   },
   updateButton: {
-    marginTop: spacing.md,
+    marginTop: spacing.xs,
   },
-  historyBlock: {
-    marginTop: spacing.lg,
-    gap: spacing.sm,
+  lightboxOverlay: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
   },
-  historyTitle: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontWeight: '600',
+  lightboxBackdrop: {
+    ...StyleSheet.absoluteFill,
+    ...(Platform.OS === 'web' ? ({ cursor: 'zoom-out' } as object) : null),
   },
-  historyGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  historyItem: {
-    width: '31%',
-    gap: 4,
-  },
-  historyImage: {
+  lightboxCard: {
     width: '100%',
-    aspectRatio: 3 / 4,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.surfaceLight,
+    maxWidth: 520,
+    alignItems: 'center',
+    gap: spacing.md,
+    zIndex: 1,
   },
-  historyLabel: {
-    ...typography.caption,
-    color: colors.textMuted,
+  lightboxLabel: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '700',
     textAlign: 'center',
-    textTransform: 'capitalize',
+  },
+  lightboxCloseBtn: {
+    alignSelf: 'stretch',
+    maxWidth: 280,
   },
   errorText: {
     ...typography.bodySmall,
     color: colors.danger,
     marginTop: spacing.sm,
   },
-  sectionDense: {
-    marginTop: 0,
-    flexShrink: 1,
-  },
-  sectionTitleDense: {
-    ...typography.body,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-  },
-  denseCard: {
-    padding: spacing.sm + 2,
-  },
-  loadingTextDense: {
-    ...typography.bodySmall,
-  },
-  infoTextDense: {
-    lineHeight: 18,
-    marginBottom: 0,
-    ...typography.bodySmall,
-  },
-  promptCardDense: {
-    marginBottom: 0,
-    padding: spacing.sm + 2,
-    gap: spacing.sm,
-  },
-  promptHeaderDense: {
-    gap: spacing.sm,
-  },
-  promptIconDense: {
-    width: 34,
-    height: 34,
-  },
-  promptTitleDense: {
-    ...typography.bodySmall,
-    fontWeight: '700',
-  },
-  promptTextDense: {
-    lineHeight: 16,
-    fontSize: 12,
-  },
-  reminderCardDense: {
-    marginBottom: 0,
-    padding: spacing.sm + 2,
-    gap: spacing.sm,
-  },
-  reminderTextDense: {
-    ...typography.bodySmall,
-    lineHeight: 18,
-  },
-  galleryTitleDense: {
-    ...typography.bodySmall,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
-  },
-  photoImageDense: {
-    aspectRatio: 16 / 9,
-  },
-  photoPlaceholderDense: {
-    aspectRatio: 16 / 9,
-    padding: spacing.xs,
-    gap: spacing.xs,
-  },
-  photoPlaceholderTextDense: {
-    fontSize: 10,
-  },
-  photoLabelDense: {
-    fontSize: 10,
-  },
-  historyBlockDense: {
-    marginTop: spacing.sm,
-  },
-  historyImageDense: {
-    aspectRatio: 1,
-  },
-  denseButton: {
-    minHeight: 40,
-    paddingVertical: spacing.sm,
-  },
-  denseButtonText: {
-    fontSize: 13,
-  },
 });
+
+
+
+
+
+
+

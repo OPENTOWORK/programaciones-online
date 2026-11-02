@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, type ViewStyle } from 'react-native';
 
 export type AppColorScheme = 'light' | 'dark';
 
@@ -16,6 +16,8 @@ export const brandColors = {
   orangeHighlight: '#FFA23A',
   /** Botón de acción: naranja intenso (más fuerte que el título). */
   orangeAction: '#FF6A00',
+  /** Naranja rojizo para apartados de sesión (calendario, resúmenes). */
+  orangeRed: '#FF4A12',
   /** Subtítulo y descripción: naranja visible pero por debajo del título. */
   orangeSecondary: '#E08A45',
   /** Plateado cepillado del logo Training ProgLine. */
@@ -143,6 +145,28 @@ export function applyAppColorScheme(scheme: AppColorScheme) {
   applyThemePalette(scheme, paletteForScheme(scheme));
 }
 
+/** Aísla la paleta de un contenedor (p. ej. vista móvil del atleta) sin cambiar el tema global. */
+export function scopedThemeContainerStyle(
+  palette: ThemeSurfacePalette,
+  scheme: AppColorScheme = 'dark',
+): ViewStyle {
+  if (Platform.OS !== 'web') {
+    return {
+      flex: 1,
+      minHeight: 0,
+      backgroundColor: palette.background,
+    };
+  }
+
+  return {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: palette.background,
+    colorScheme: scheme,
+    ...cssVarsFromPalette(palette),
+  } as ViewStyle;
+}
+
 function themeToken(cssVar: string, fallback: string) {
   return Platform.OS === 'web' ? `var(${cssVar})` : fallback;
 }
@@ -169,6 +193,8 @@ export const colors = {
   overlay: themeToken(THEME_CSS_VARS.overlay, darkSurfacePalette.overlay),
   accent: themeToken(THEME_CSS_VARS.accent, darkSurfacePalette.accent),
   accentDark: themeToken(THEME_CSS_VARS.accentDark, darkSurfacePalette.accentDark),
+  /** Naranja rojizo para apartados de sesión (p. ej. «Parte principal»). */
+  accentVivid: brandColors.orangeRed,
   accentBlue: '#00B8D4',
   /** Naranja claro de marca para activación y avisos. */
   activation: brandColors.orangeLight,

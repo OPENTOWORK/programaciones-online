@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { TrainerChatPanel } from '@/components/trainer/TrainerChatPanel';
@@ -25,11 +26,16 @@ export default function TrainerAthleteChatScreen() {
     onSend: (text, attachments) => sendMessage(text, attachments),
   });
 
-  useFocusRefresh(() => {
-    if (athleteId && canChat) {
-      void acknowledgeChat(athleteId);
-    }
-  });
+  const markRead = useCallback(() => {
+    if (!athleteId || !canChat) return;
+    void acknowledgeChat(athleteId);
+  }, [acknowledgeChat, athleteId, canChat]);
+
+  useFocusRefresh(markRead);
+
+  useEffect(() => {
+    markRead();
+  }, [markRead]);
 
   if (loadingAthlete || canChat === null) {
     return (

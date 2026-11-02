@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -8,6 +8,7 @@ import {
   type CalendarSessionSaveInput,
 } from '@/components/trainer/ScheduleCalendarModal';
 import { TrainerAthleteChatWidget } from '@/components/trainer/TrainerAthleteChatWidget';
+import { HeaderBackButton } from '@/components/ui/HeaderBackButton';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
@@ -28,6 +29,7 @@ import {
 import {
   findPlanGroup as findPlanGroupByPlan,
   getNextSessionNumber,
+  filterActivePersonalizedPlanGroups,
   groupPersonalizedPlans,
   type PersonalizedPlanGroup,
 } from '@/lib/personalizedPlanGroups';
@@ -37,6 +39,7 @@ import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
 import { buildDayOrderUpdates } from '@/lib/scheduleDayOrder';
 import { hasSessionBlockContent } from '@/lib/sessionBlockSections';
+import { getTrainerAthleteDetailsHref } from '@/lib/navigation';
 import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
 import { formatScheduleSummary, toLocalDateString, toWeekdayIndex } from '@/lib/sessionSchedule';
 import {
@@ -82,7 +85,7 @@ export function TrainerAthleteScheduleBoard({
   athleteId,
   embedded = false,
 }: TrainerAthleteScheduleBoardProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const { user } = useAuth();
   const { athlete, isLoading: athleteLoading } = useAthlete(athleteId);
   const { createPlan, updatePlan, removePlan } = useTrainerAthletePlans();
@@ -113,10 +116,20 @@ export function TrainerAthleteScheduleBoard({
 
   useFocusRefresh(loadSchedule);
 
-  const personalizedGroups = useMemo(
+  const calendarPersonalizedGroups = useMemo(
     () => groupPersonalizedPlans(personalizedPlans),
     [personalizedPlans],
   );
+
+  const allCalendarPlans = useMemo(
+    () => calendarPersonalizedGroups.flatMap((group) => group.sessions),
+    [calendarPersonalizedGroups],
+  );
+
+  const defaultPlanGroup = useMemo(() => {
+    const active = filterActivePersonalizedPlanGroups(calendarPersonalizedGroups);
+    return active[0] ?? calendarPersonalizedGroups[0];
+  }, [calendarPersonalizedGroups]);
 
   const calendarSource = useMemo<ScheduleCalendarSource>(
     () => ({
@@ -127,28 +140,23 @@ export function TrainerAthleteScheduleBoard({
       draft: createEmptySessionDraft(0),
       isNewSession: false,
       athleteSchedule: {
-        plans: personalizedPlans,
+        plans: allCalendarPlans,
         workouts: [],
       },
     }),
-    [athlete?.name, personalizedPlans],
+    [allCalendarPlans, athlete?.name],
   );
 
   const findPlan = useCallback(
-    (planId?: string) => personalizedPlans.find((plan) => plan.id === planId),
-    [personalizedPlans],
+    (planId?: string) => allCalendarPlans.find((plan) => plan.id === planId),
+    [allCalendarPlans],
   );
 
   const findPlanGroup = useCallback(
-    (planId?: string): PersonalizedPlanGroup | undefined => {
-      const plan = findPlan(planId);
-      if (!plan) return undefined;
-      return findPlanGroupByPlan(personalizedGroups, plan);
-    },
-    [findPlan, personalizedGroups],
+    (planId?: string): PersonalizedPlanGroup | undefined =>
+      findPlanGroupByPlan(calendarPersonalizedGroups, planId ?? ''),
+    [calendarPersonalizedGroups],
   );
-
-  const defaultPlanGroup = personalizedGroups[0];
 
   const resolveSessionNumber = useCallback(
     (date: Date, draft: SessionDraft) => {
@@ -378,13 +386,15 @@ export function TrainerAthleteScheduleBoard({
     dayItems?: SchedulePreviewItem[],
   ) => {
     const planId = planIdFromCalendarItem(item);
+    const group = planId ? findPlanGroup(planId) : undefined;
     const source = findPlan(planId);
-    if (!source) return 'Solo se pueden mover sesiones de planes personalizados.';
+    const sessions = group?.sessions;
+    if (!source || !sessions) return 'Solo se pueden mover sesiones de planes personalizados.';
     const orderedIds = dayItems
       ?.map((entry) => planIdFromCalendarItem(entry))
       .filter((entry): entry is string => Boolean(entry));
     const error = await moveCalendarSessionToDate({
-      sessions: personalizedPlans,
+      sessions,
       plan: source,
       targetDate: date,
       orderedIds,
@@ -402,17 +412,34 @@ export function TrainerAthleteScheduleBoard({
     const orderedIds = orderedItems
       .map((item) => planIdFromCalendarItem(item))
       .filter((planId): planId is string => Boolean(planId));
-    const updates = buildDayOrderUpdates(orderedIds, personalizedPlans);
-    if (updates.length === 0) return null;
-    for (const update of updates) {
-      const result = await updatePlan(update.id, {
-        athleteId: update.athleteId,
-        planType: 'personalized',
-        title: update.title,
-        content: update.content,
-      });
-      if (result.error) return result.error;
+    const touchedGroupIds = new Set<string>();
+
+    for (const planId of orderedIds) {
+      const group = findPlanGroup(planId);
+      if (group) touchedGroupIds.add(group.id);
     }
+
+    for (const groupId of touchedGroupIds) {
+      const group = calendarPersonalizedGroups.find((entry) => entry.id === groupId);
+      if (!group) continue;
+
+      const dayIds = orderedIds.filter((planId) =>
+        group.sessions.some((session) => session.id === planId),
+      );
+      const updates = buildDayOrderUpdates(dayIds, group.sessions);
+      if (updates.length === 0) continue;
+
+      for (const update of updates) {
+        const result = await updatePlan(update.id, {
+          athleteId: update.athleteId,
+          planType: 'personalized',
+          title: update.title,
+          content: update.content,
+        });
+        if (result.error) return result.error;
+      }
+    }
+
     await loadSchedule();
     return null;
   };
@@ -453,14 +480,15 @@ export function TrainerAthleteScheduleBoard({
       title={athlete.name}
       subtitle={
         hasSchedule
-          ? `Plan personalizado de este atleta. Pulsa el marcador de un día para crear, copiar o añadir desde plantilla.${catalogNote}`
+          ? `Todos los planes personalizados, según sus fechas de vigencia. Pulsa el marcador de un día para crear, copiar o añadir desde plantilla.${catalogNote}`
           : `Todavía no hay un plan personalizado. Pulsa el marcador de un día para crear la primera sesión.${catalogNote}`
       }
       source={calendarSource}
+      planGroups={calendarPersonalizedGroups}
       headerAction={
         embedded ? undefined : (
           <Pressable
-            onPress={() => router.push({ pathname: '/trainer/athlete/[id]', params: { id: athlete.id } })}
+            onPress={() => router.push(getTrainerAthleteDetailsHref(athlete.id))}
             style={({ pressed }) => [styles.profileLink, pressed && styles.profileLinkPressed]}
           >
             <Text style={styles.profileLinkText}>Ver ficha del atleta</Text>
@@ -490,6 +518,9 @@ export function TrainerAthleteScheduleBoard({
   return (
     <ScreenWrapper scrollable={false} padded={false}>
       <View style={styles.screen}>
+        <View style={styles.backRow}>
+          <HeaderBackButton />
+        </View>
         {calendar}
         <TrainerAthleteChatWidget
           athleteId={athlete.id}
@@ -505,6 +536,11 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     position: 'relative',
+  },
+  backRow: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
   },
   loader: {
     marginTop: spacing.xl,

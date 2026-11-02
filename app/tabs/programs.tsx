@@ -5,19 +5,27 @@ import { CategoryTabs } from '@/components/program/CategoryTabs';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, typography } from '@/constants/theme';
+import { useAthleteCededAccess } from '@/hooks/useAthleteCededAccess';
+import { useAthletePreviewMode } from '@/hooks/useAthletePreviewMode';
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { usePrograms } from '@/hooks/usePrograms';
 import { isGymRole } from '@/lib/athleteService';
-import { filterPlansForUserRole } from '@/lib/programService';
+import { filterPlansForCededAthlete, filterPlansForUserRole } from '@/lib/programService';
 
 export default function ProgramsScreen() {
   const { user } = useAuth();
+  const preview = useAthletePreviewMode();
+  const effectiveRole = preview.enabled ? 'atleta' : user?.role;
+  const { isCeded: isCededAthlete } = useAthleteCededAccess();
   const { plans, isLoading, error, refresh } = usePrograms();
-  const visiblePlans = useMemo(
-    () => filterPlansForUserRole(plans, user?.role),
-    [plans, user?.role],
-  );
+  const visiblePlans = useMemo(() => {
+    const roleFiltered = filterPlansForUserRole(plans, effectiveRole);
+    if (isCededAthlete && effectiveRole === 'atleta') {
+      return filterPlansForCededAthlete(roleFiltered);
+    }
+    return roleFiltered;
+  }, [plans, effectiveRole, isCededAthlete]);
 
   useFocusRefresh(() => refresh());
 
@@ -31,7 +39,7 @@ export default function ProgramsScreen() {
       ) : error ? (
         <Text style={styles.error}>{error}</Text>
       ) : (
-        <CategoryTabs plans={visiblePlans} userRole={user?.role} />
+        <CategoryTabs plans={visiblePlans} userRole={effectiveRole} />
       )}
     </ScreenWrapper>
   );

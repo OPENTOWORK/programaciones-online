@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -18,6 +19,7 @@ import { Card } from '@/components/ui/Card';
 import { PromptModal } from '@/components/ui/PromptModal';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useSessionTemplates } from '@/hooks/useSessionTemplates';
+import { useTrainerMobileLayout } from '@/hooks/useTrainerMobileLayout';
 import type { SessionTemplate } from '@/lib/sessionTemplateService';
 import { CreateSessionTemplateModal } from '@/components/trainer/CreateSessionTemplateModal';
 import {
@@ -94,8 +96,11 @@ function TemplateRow({
 
 export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardProps) {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobileLayout = useTrainerMobileLayout();
   const { templates, isLoading, saving, persistent, error, isTrainer, create, update, remove } =
     useSessionTemplates();
+  const actionButtonStyle = isMobileLayout || width < 520 ? styles.actionButtonStacked : styles.actionButton;
   const [listOpen, setListOpen] = useState(false);
   const [optionsFor, setOptionsFor] = useState<SessionTemplate | null>(null);
   const [renaming, setRenaming] = useState<SessionTemplate | null>(null);
@@ -175,7 +180,7 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
           variant="outline"
           onPress={() => setListOpen(true)}
           disabled={isLoading || templates.length === 0}
-          style={styles.actionButton}
+          style={actionButtonStyle}
         />
         <Button
           title="Guardar bloques/ejercicios como plantilla"
@@ -183,13 +188,13 @@ export function SessionTemplatesCard({ draft, onChange }: SessionTemplatesCardPr
           onPress={() => setCreateOpen(true)}
           loading={saving || createSaving}
           disabled={!canSave || saving || createSaving}
-          style={styles.actionButton}
+          style={actionButtonStyle}
         />
         <Button
           title="Crear plantilla nueva"
           variant="outline"
           onPress={() => openTemplateEditor()}
-          style={styles.actionButton}
+          style={actionButtonStyle}
         />
       </View>
 
@@ -372,6 +377,11 @@ const styles = StyleSheet.create({
   actionButton: {
     flexGrow: 1,
     flexBasis: 200,
+    minWidth: 0,
+  },
+  actionButtonStacked: {
+    width: '100%',
+    flexGrow: 0,
   },
   hint: {
     ...typography.caption,

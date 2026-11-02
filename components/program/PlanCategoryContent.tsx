@@ -1,12 +1,9 @@
-import { useMemo } from 'react';
-import { useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { HomeTrainingCalendarPanel } from '@/components/homeTraining/HomeTrainingCalendarPanel';
 import { AthletePlanCard } from '@/components/program/AthletePlanCard';
-import { PersonalizedPlanGroupCard } from '@/components/program/PersonalizedPlanGroupCard';
 import { CatalogProgramList } from '@/components/program/CatalogProgramList';
+import { PersonalizedPlanGroupCard } from '@/components/program/PersonalizedPlanGroupCard';
 import { ProgramCard } from '@/components/program/ProgramCard';
 import { ServicePlanEmptyCard } from '@/components/program/ServicePlanEmptyCard';
-import { HomeTrainingCalendarPanel } from '@/components/homeTraining/HomeTrainingCalendarPanel';
 import { TrainerPlansPanel } from '@/components/trainer/TrainerPlansPanel';
 import { Card } from '@/components/ui/Card';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
@@ -14,30 +11,34 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { SUPPORT_ROUTE } from '@/constants/support';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
-import { useAuth } from '@/hooks/useAuth';
 import { useMyAthletePlans } from '@/hooks/useAthletePlans';
+import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { usePrograms } from '@/hooks/usePrograms';
-import { isTrainerOnlyRole, isTrainerRole, isGymRole } from '@/lib/athleteService';
+import { isGymRole, isTrainerOnlyRole, isTrainerRole } from '@/lib/athleteService';
 import { queueChatPrefill } from '@/lib/chatPrefill';
 import { partitionHypePlanPrograms } from '@/lib/hypeCatalog';
+import { filterActivePersonalizedPlanGroups, groupPersonalizedPlans } from '@/lib/personalizedPlanGroups';
+import { inferPlanValidityFromSessions, isPlanValidityEnded } from '@/lib/planValidity';
 import { isTrainerDesktopWeb } from '@/lib/platformAccess';
-import { groupPersonalizedPlans } from '@/lib/personalizedPlanGroups';
 import { type Plan } from '@/lib/programService';
-import { queueSupportPrefill } from '@/lib/supportPrefill';
 import { resolveStandardVenuePrograms } from '@/lib/standardVenueCatalog';
 import type { StandardVenueId } from '@/lib/standardVenues';
+import { queueSupportPrefill } from '@/lib/supportPrefill';
 import {
-  isServicePlanCategory,
-  isSessionBasedAthletePlanType,
-  isGymAthletePlanStaffCategory,
-  HOME_TRAINING_STAFF_JOIN,
-  getServicePlanContent,
-  PERSONALIZED_GYM_PLAN_CONTENT,
-  TRAINER_NUTRITION_STAFF_CONTENT,
-  usesAthleteServiceView,
-  type AthletePlanType,
+    getServicePlanContent,
+    HOME_TRAINING_STAFF_JOIN,
+    isGymAthletePlanStaffCategory,
+    isServicePlanCategory,
+    isSessionBasedAthletePlanType,
+    PERSONALIZED_GYM_PLAN_CONTENT,
+    TRAINER_NUTRITION_STAFF_CONTENT,
+    usesAthleteServiceView,
+    type AthletePlanType,
 } from '@/lib/trainerConstants';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
+import { useMemo } from 'react';
+import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 function serviceCategoryToPlanType(
   category: 'personalized' | 'nutrition' | 'gym_training',
@@ -52,7 +53,7 @@ interface PlanCategoryContentProps {
 }
 
 export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategoryContentProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const { width } = useWindowDimensions();
   const { user } = useAuth();
   const isTrainerDesktop = isTrainerDesktopWeb(user?.role);
@@ -186,10 +187,14 @@ export function PlanCategoryContent({ planId, plan, standardVenue }: PlanCategor
     openTrainerChat(prefill);
   };
 
-  const groupedPersonalizedPlans = groupPersonalizedPlans(
-    myAthletePlans.filter((item) => isSessionBasedAthletePlanType(item.planType)),
+  const groupedPersonalizedPlans = filterActivePersonalizedPlanGroups(
+    groupPersonalizedPlans(myAthletePlans.filter((item) => isSessionBasedAthletePlanType(item.planType))),
   );
-  const nutritionPlans = myAthletePlans.filter((item) => item.planType === 'nutrition');
+  const nutritionPlans = myAthletePlans.filter((item) => {
+    if (item.planType !== 'nutrition') return false;
+    const validity = inferPlanValidityFromSessions([item]);
+    return !isPlanValidityEnded(validity);
+  });
   const useFillCatalog =
     !useProgramGrid &&
     useAthleteView &&

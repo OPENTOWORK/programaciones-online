@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { colors, spacing, typography } from '@/constants/theme';
+import { useTrainerMobileLayout } from '@/hooks/useTrainerMobileLayout';
 import { formatScheduleSummary } from '@/lib/sessionSchedule';
 import type { SessionDraft } from '@/lib/trainerSessionDraft';
 
@@ -36,7 +37,8 @@ export function SessionEditorForm({
   showSchedule = true,
 }: SessionEditorFormProps) {
   const { width } = useWindowDimensions();
-  const isWide = width >= 720;
+  const isMobileLayout = useTrainerMobileLayout();
+  const isWide = !isMobileLayout && width >= 720;
 
   const updateField = (field: keyof SessionDraft, value: string) => {
     onChange({ ...draft, [field]: value });

@@ -17,13 +17,17 @@ import {
 } from 'react-native';
 
 import { ActionSheetModal, type ActionSheetAction } from '@/components/ui/ActionSheetModal';
+import { CrmFilterBar } from '@/components/crm/CrmFilterBar';
+import { CrmViewToggle, type CrmViewMode } from '@/components/crm/CrmViewToggle';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { PromptModal } from '@/components/ui/PromptModal';
 import { CrmColumn, CRM_COLUMN_WIDTH } from '@/components/trainer/CrmColumn';
 import { CreateClientModal } from '@/components/trainer/CreateClientModal';
+import { TrainerCrmGridView, TrainerCrmListView } from '@/components/trainer/TrainerCrmAlternateViews';
 import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useTrainerCrmBoard } from '@/hooks/useTrainerCrmBoard';
+import { useTrainerDesktopWebLayout, useTrainerMobileLayout } from '@/hooks/useTrainerMobileLayout';
 import { dropIndexForPosition, dropLineOffsetForIndex } from '@/lib/dragDropList';
 import { isCededClientStage, isGymsStage, isReadOnlyCrmStage } from '@/lib/trainerCrm';
 import { getTrainerAthleteProfileHref, getTrainerLeadProfileHref } from '@/lib/navigation';
@@ -41,8 +45,16 @@ type DropHint = { stageId: string; index: number; lineTop: number | null };
 
 const MIN_SCROLL_THUMB_WIDTH = 48;
 
-export function CrmBoard() {
+interface CrmBoardProps {
+  /** En scroll vertical (p. ej. dentro de un desplegable) sin ocupar toda la pantalla. */
+  embedded?: boolean;
+}
+
+export function CrmBoard({ embedded = false }: CrmBoardProps) {
+  const isDesktopTrainer = useTrainerDesktopWebLayout();
+  const isMobileTrainerLayout = useTrainerMobileLayout();
   const router = useRouter();
+
   const {
     columns,
     isLoading,
@@ -70,6 +82,10 @@ export function CrmBoard() {
   const [createClientOpen, setCreateClientOpen] = useState(false);
   const [createClientSaving, setCreateClientSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<CrmViewMode>('list');
+  const layoutDefaultAppliedRef = useRef(false);
+  const [stageFilter, setStageFilter] = useState<string | null>(null);
+  const [onlyPending, setOnlyPending] = useState(false);
 
   const [draggingAthleteId, setDraggingAthleteId] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<DropHint | null>(null);
@@ -98,6 +114,13 @@ export function CrmBoard() {
   const [thumbWidth, setThumbWidth] = useState(0);
   const [canScrollBoard, setCanScrollBoard] = useState(false);
   const [isDraggingThumb, setIsDraggingThumb] = useState(false);
+
+  useEffect(() => {
+    if (layoutDefaultAppliedRef.current) return;
+    if (!isDesktopTrainer && !isMobileTrainerLayout) return;
+    layoutDefaultAppliedRef.current = true;
+    setViewMode(isDesktopTrainer ? 'kanban' : 'list');
+  }, [isDesktopTrainer, isMobileTrainerLayout]);
 
   const stopAutoScroll = useCallback(() => {
     autoScrollDirRef.current = null;
@@ -438,23 +461,59 @@ export function CrmBoard() {
     [findLead, router],
   );
 
+  const leadHasAlerts = useCallback(
+    (athlete: AthleteSummary) => (athlete.alerts?.total ?? athlete.unansweredCount ?? 0) > 0,
+    [],
+  );
+
   const visibleColumns = useMemo(() => {
-    if (!normalizedQuery) return columns;
-    return columns.map((column) => ({
+    const byStage = stageFilter
+      ? columns.filter((column) => column.stage.id === stageFilter)
+      : columns;
+
+    if (!normalizedQuery && !onlyPending) return byStage;
+
+    return byStage.map((column) => ({
       ...column,
-      leads: column.leads.filter(
-        (athlete) =>
+      leads: column.leads.filter((athlete) => {
+        if (onlyPending && !leadHasAlerts(athlete)) return false;
+        if (!normalizedQuery) return true;
+        return (
           athlete.name.toLowerCase().includes(normalizedQuery) ||
-          athlete.email.toLowerCase().includes(normalizedQuery),
-      ),
-      gyms: column.gyms?.filter(
-        (row) =>
-          row.gym.name.toLowerCase().includes(normalizedQuery) ||
-          (row.gym.city ?? '').toLowerCase().includes(normalizedQuery) ||
-          (row.gym.email ?? '').toLowerCase().includes(normalizedQuery),
-      ),
+          athlete.email.toLowerCase().includes(normalizedQuery)
+        );
+      }),
+      gyms: onlyPending
+        ? []
+        : column.gyms?.filter(
+            (row) =>
+              !normalizedQuery ||
+              row.gym.name.toLowerCase().includes(normalizedQuery) ||
+              (row.gym.city ?? '').toLowerCase().includes(normalizedQuery) ||
+              (row.gym.email ?? '').toLowerCase().includes(normalizedQuery),
+          ),
     }));
-  }, [columns, normalizedQuery]);
+  }, [columns, leadHasAlerts, normalizedQuery, onlyPending, stageFilter]);
+
+  const filterOptions = useMemo(
+    () =>
+      columns.map((column) => ({
+        id: column.stage.id,
+        label: column.stage.name,
+        count: isGymsStage(column.stage) ? column.gyms?.length ?? 0 : column.leads.length,
+      })),
+    [columns],
+  );
+
+  const totalLeadCount = useMemo(
+    () => columns.reduce((total, column) => total + column.leads.length, 0),
+    [columns],
+  );
+
+  const pendingLeadCount = useMemo(
+    () => columns.reduce((total, column) => total + column.leads.filter(leadHasAlerts).length, 0),
+    [columns, leadHasAlerts],
+  );
 
   const dragSourceStageId = draggingAthleteId
     ? columns.find((column) => column.leads.some((lead) => lead.id === draggingAthleteId))?.stage.id
@@ -585,8 +644,61 @@ export function CrmBoard() {
     );
   }
 
+  const kanbanColumns = (
+    <>
+      {visibleColumns.map((column, index) => {
+        const isReadOnly = isReadOnlyCrmStage(column.stage);
+        const isCeded = isCededClientStage(column.stage);
+        const isGyms = isGymsStage(column.stage);
+        return (
+          <CrmColumn
+            key={column.stage.id}
+            stage={column.stage}
+            leads={column.leads}
+            gyms={column.gyms}
+            emptyText={
+              normalizedQuery
+                ? 'Sin resultados'
+                : isCeded
+                  ? 'Sin clientes cedidos'
+                  : isGyms
+                    ? 'Sin gimnasios todavía'
+                    : 'Sin atletas en esta columna'
+            }
+            canMoveLeft={!isReadOnly && index > 0}
+            canMoveRight={!isReadOnly && index < columns.length - 1}
+            isDropTarget={!isReadOnly && dropHint?.stageId === column.stage.id}
+            isDragSource={!isReadOnly && dragSourceStageId === column.stage.id}
+            dropLineTop={!isReadOnly && dropHint?.stageId === column.stage.id ? dropHint.lineTop : null}
+            columnRef={registerColumnRef(column.stage.id)}
+            cardRef={registerCardRef}
+            readOnly={isReadOnly}
+            onOpenColumnActions={() => setColumnActions({ stageId: column.stage.id })}
+            onOpenLead={openLeadProfile}
+            onOpenGym={(gymId) => router.push({ pathname: '/trainer/gyms/[id]', params: { id: gymId } })}
+            onOpenLeadActions={(athleteId) => setLeadActions({ athleteId, stageId: column.stage.id })}
+            onMoveLeadPrev={(athleteId) => moveLeadToAdjacentStage(athleteId, 'prev')}
+            onMoveLeadNext={(athleteId) => moveLeadToAdjacentStage(athleteId, 'next')}
+            onDismissLeadAlerts={(athleteId) => void dismissLeadAlerts(athleteId)}
+            onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+          />
+        );
+      })}
+
+      <Pressable
+        onPress={() => setPrompt({ mode: 'create' })}
+        style={({ pressed }) => [styles.addColumn, pressed && styles.addColumnPressed]}
+      >
+        <AppIcon name="add" size={20} color={colors.accent} />
+        <Text style={styles.addColumnText}>Nueva columna</Text>
+      </Pressable>
+    </>
+  );
+
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, embedded && styles.wrapperEmbedded]}>
       {!persistent ? (
         <View style={styles.warningBanner}>
           <AppIcon name="info" size={14} color={colors.warning} />
@@ -628,119 +740,138 @@ export function CrmBoard() {
           ) : null}
         </View>
 
-        <Pressable
-          onPress={() => setCreateClientOpen(true)}
-          style={({ pressed }) => [styles.createClientBtn, pressed && styles.createClientBtnPressed]}
-        >
-          <AppIcon name="add" size={16} color={colors.white} />
-          <Text style={styles.createClientBtnText}>Crear cliente</Text>
-        </Pressable>
-      </View>
-
-      <View ref={boardWrapperRef} collapsable={false} style={styles.boardWrapper}>
-        <ScrollView
-          style={styles.boardVerticalScroll}
-          contentContainerStyle={styles.boardVerticalContent}
-          scrollEnabled={!draggingAthleteId}
-          showsVerticalScrollIndicator
-        >
-          <ScrollView
-            ref={boardScrollRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            scrollEnabled={!draggingAthleteId}
-            onScroll={handleBoardScroll}
-            onLayout={handleBoardLayout}
-            onContentSizeChange={handleBoardContentSizeChange}
-            scrollEventThrottle={16}
-            style={styles.boardScroll}
-            contentContainerStyle={styles.board}
-          >
-            {visibleColumns.map((column, index) => {
-              const isReadOnly = isReadOnlyCrmStage(column.stage);
-              const isCeded = isCededClientStage(column.stage);
-              const isGyms = isGymsStage(column.stage);
-              return (
-              <CrmColumn
-                key={column.stage.id}
-                stage={column.stage}
-                leads={column.leads}
-                gyms={column.gyms}
-                emptyText={
-                  normalizedQuery
-                    ? 'Sin resultados'
-                    : isCeded
-                      ? 'Sin clientes cedidos'
-                      : isGyms
-                        ? 'Sin gimnasios todavía'
-                      : 'Sin atletas en esta columna'
-                }
-                canMoveLeft={!isReadOnly && index > 0}
-                canMoveRight={!isReadOnly && index < columns.length - 1}
-                isDropTarget={!isReadOnly && dropHint?.stageId === column.stage.id}
-                isDragSource={!isReadOnly && dragSourceStageId === column.stage.id}
-                dropLineTop={
-                  !isReadOnly && dropHint?.stageId === column.stage.id ? dropHint.lineTop : null
-                }
-                columnRef={registerColumnRef(column.stage.id)}
-                cardRef={registerCardRef}
-                readOnly={isReadOnly}
-                onOpenColumnActions={() => setColumnActions({ stageId: column.stage.id })}
-                onOpenLead={openLeadProfile}
-                onOpenGym={(gymId) => router.push({ pathname: '/trainer/gyms/[id]', params: { id: gymId } })}
-                onOpenLeadActions={(athleteId) => setLeadActions({ athleteId, stageId: column.stage.id })}
-                onMoveLeadPrev={(athleteId) => moveLeadToAdjacentStage(athleteId, 'prev')}
-                onMoveLeadNext={(athleteId) => moveLeadToAdjacentStage(athleteId, 'next')}
-                onDismissLeadAlerts={(athleteId) => void dismissLeadAlerts(athleteId)}
-                onDragStart={handleDragStart}
-                onDragMove={handleDragMove}
-                onDragEnd={handleDragEnd}
-              />
-              );
-            })}
-
-            <Pressable
-              onPress={() => setPrompt({ mode: 'create' })}
-              style={({ pressed }) => [styles.addColumn, pressed && styles.addColumnPressed]}
-            >
-              <AppIcon name="add" size={20} color={colors.accent} />
-              <Text style={styles.addColumnText}>Nueva columna</Text>
-            </Pressable>
-          </ScrollView>
-        </ScrollView>
-      </View>
-
-      {canScrollBoard ? (
-        <View style={styles.scrollbarRow}>
-          <Pressable
-            onPress={() => scrollByStep(-1)}
-            hitSlop={6}
-            style={({ pressed }) => [styles.scrollbarArrow, pressed && styles.scrollbarArrowPressed]}
-          >
-            <AppIcon name="chevronLeft" size={16} color={colors.textSecondary} />
-          </Pressable>
-
-          <View style={styles.scrollbarHitArea} {...trackPanResponder.panHandlers}>
-            <View ref={trackNodeRef} collapsable={false} style={styles.scrollbarTrack} onLayout={handleTrackLayout}>
-              <Animated.View
-                style={[
-                  styles.scrollbarThumb,
-                  isDraggingThumb && styles.scrollbarThumbActive,
-                  { width: thumbWidth, transform: [{ translateX: thumbTranslateX }] },
-                ]}
-              />
-            </View>
-          </View>
+        <View style={styles.toolbarActions}>
+          <CrmViewToggle mode={viewMode} onChange={setViewMode} />
 
           <Pressable
-            onPress={() => scrollByStep(1)}
-            hitSlop={6}
-            style={({ pressed }) => [styles.scrollbarArrow, pressed && styles.scrollbarArrowPressed]}
+            onPress={() => setCreateClientOpen(true)}
+            style={({ pressed }) => [styles.createClientBtn, pressed && styles.createClientBtnPressed]}
           >
-            <AppIcon name="chevronRight" size={16} color={colors.textSecondary} />
+            <AppIcon name="add" size={16} color={colors.white} />
+            <Text style={styles.createClientBtnText}>Crear cliente</Text>
           </Pressable>
         </View>
-      ) : null}
+      </View>
+
+      <CrmFilterBar
+        options={filterOptions}
+        value={stageFilter}
+        onChange={setStageFilter}
+        totalCount={totalLeadCount}
+        onlyPending={onlyPending}
+        onOnlyPendingChange={setOnlyPending}
+        pendingCount={pendingLeadCount}
+      />
+
+      {viewMode === 'kanban' ? (
+        <View
+          ref={boardWrapperRef}
+          collapsable={false}
+          style={[styles.boardWrapper, embedded && styles.boardWrapperEmbedded]}
+        >
+          <View style={embedded ? styles.boardCanvasEmbedded : undefined}>
+          {embedded ? (
+            <ScrollView
+              ref={boardScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              scrollEnabled={!draggingAthleteId}
+              onScroll={handleBoardScroll}
+              onLayout={handleBoardLayout}
+              onContentSizeChange={handleBoardContentSizeChange}
+              scrollEventThrottle={16}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              style={[
+                styles.boardScrollEmbedded,
+                Platform.OS === 'web' ? styles.boardScrollEmbeddedWeb : null,
+              ]}
+              contentContainerStyle={styles.board}
+            >
+              {kanbanColumns}
+            </ScrollView>
+          ) : (
+            <ScrollView
+              style={styles.boardVerticalScroll}
+              contentContainerStyle={styles.boardVerticalContent}
+              scrollEnabled={!draggingAthleteId}
+              showsVerticalScrollIndicator
+            >
+              <ScrollView
+                ref={boardScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                scrollEnabled={!draggingAthleteId}
+                onScroll={handleBoardScroll}
+                onLayout={handleBoardLayout}
+                onContentSizeChange={handleBoardContentSizeChange}
+                scrollEventThrottle={16}
+                style={styles.boardScroll}
+                contentContainerStyle={styles.board}
+              >
+                {kanbanColumns}
+              </ScrollView>
+            </ScrollView>
+          )}
+
+          {canScrollBoard ? (
+            <View style={[styles.scrollbarRow, embedded && styles.scrollbarRowEmbedded]}>
+              <Pressable
+                onPress={() => scrollByStep(-1)}
+                hitSlop={6}
+                style={({ pressed }) => [styles.scrollbarArrow, pressed && styles.scrollbarArrowPressed]}
+              >
+                <AppIcon name="chevronLeft" size={16} color={colors.textSecondary} />
+              </Pressable>
+
+              <View style={styles.scrollbarHitArea} {...trackPanResponder.panHandlers}>
+                <View ref={trackNodeRef} collapsable={false} style={styles.scrollbarTrack} onLayout={handleTrackLayout}>
+                  <Animated.View
+                    style={[
+                      styles.scrollbarThumb,
+                      isDraggingThumb && styles.scrollbarThumbActive,
+                      { width: thumbWidth, transform: [{ translateX: thumbTranslateX }] },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              <Pressable
+                onPress={() => scrollByStep(1)}
+                hitSlop={6}
+                style={({ pressed }) => [styles.scrollbarArrow, pressed && styles.scrollbarArrowPressed]}
+              >
+                <AppIcon name="chevronRight" size={16} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          ) : null}
+          </View>
+        </View>
+      ) : viewMode === 'list' ? (
+        <View style={embedded ? styles.alternateViewEmbedded : undefined}>
+        <TrainerCrmListView
+          columns={visibleColumns}
+          onOpenLead={openLeadProfile}
+          onOpenLeadActions={(athleteId, stageId) => setLeadActions({ athleteId, stageId })}
+          onMoveLeadPrev={(athleteId) => moveLeadToAdjacentStage(athleteId, 'prev')}
+          onMoveLeadNext={(athleteId) => moveLeadToAdjacentStage(athleteId, 'next')}
+          onDismissLeadAlerts={(athleteId) => void dismissLeadAlerts(athleteId)}
+          onOpenGym={(gymId) => router.push({ pathname: '/trainer/gyms/[id]', params: { id: gymId } })}
+        />
+        </View>
+      ) : (
+        <View style={embedded ? styles.alternateViewEmbedded : undefined}>
+        <TrainerCrmGridView
+          columns={visibleColumns}
+          onOpenLead={openLeadProfile}
+          onOpenLeadActions={(athleteId, stageId) => setLeadActions({ athleteId, stageId })}
+          onMoveLeadPrev={(athleteId) => moveLeadToAdjacentStage(athleteId, 'prev')}
+          onMoveLeadNext={(athleteId) => moveLeadToAdjacentStage(athleteId, 'next')}
+          onDismissLeadAlerts={(athleteId) => void dismissLeadAlerts(athleteId)}
+          onOpenGym={(gymId) => router.push({ pathname: '/trainer/gyms/[id]', params: { id: gymId } })}
+        />
+        </View>
+      )}
 
       <ActionSheetModal
         visible={Boolean(leadActions && activeLead)}
@@ -824,6 +955,10 @@ const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
   },
+  wrapperEmbedded: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   loader: {
     marginTop: spacing.xl,
   },
@@ -876,6 +1011,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
     marginBottom: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  toolbarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexShrink: 0,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
   },
   searchBar: {
     flex: 1,
@@ -920,9 +1064,46 @@ const styles = StyleSheet.create({
   },
   boardWrapper: {
     flex: 1,
+    minHeight: 0,
+    overflow: 'visible',
+    position: 'relative',
+  },
+  boardWrapperEmbedded: {
+    flexGrow: 0,
+    flexShrink: 0,
+    overflow: 'visible',
+    marginTop: spacing.xs,
+  },
+  boardCanvasEmbedded: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceGhost,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.sm,
+    overflow: 'hidden',
+    maxWidth: '100%',
+  },
+  boardScrollEmbeddedWeb: {
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
+    maxWidth: '100%',
+    overflowX: 'auto',
+    overflowY: 'visible',
+  } as object,
+  alternateViewEmbedded: {
+    marginTop: spacing.xs,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceGhost,
+    padding: spacing.sm,
   },
   boardVerticalScroll: {
     flex: 1,
+    minHeight: 0,
+    overflow: 'visible',
   },
   boardVerticalContent: {
     flexGrow: 1,
@@ -931,17 +1112,32 @@ const styles = StyleSheet.create({
   boardScroll: {
     flexGrow: 1,
     flexShrink: 0,
+    minHeight: 0,
+    overflow: 'visible',
+  },
+  boardScrollEmbedded: {
+    flexGrow: 0,
+    flexShrink: 0,
+    overflow: 'visible',
   },
   board: {
-    paddingBottom: spacing.md,
-    alignItems: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingBottom: spacing.sm,
+    paddingRight: spacing.xs,
   },
   scrollbarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginTop: spacing.xs,
-    marginRight: spacing.sm,
+    marginTop: spacing.sm,
+    marginRight: spacing.xs,
+  },
+  scrollbarRowEmbedded: {
+    marginTop: spacing.sm,
+    marginHorizontal: 0,
+    paddingBottom: spacing.xs,
   },
   scrollbarArrow: {
     width: 28,
@@ -981,7 +1177,8 @@ const styles = StyleSheet.create({
   },
   addColumn: {
     width: CRM_COLUMN_WIDTH,
-    minHeight: 56,
+    minHeight: 300,
+    alignSelf: 'stretch',
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border,
@@ -990,7 +1187,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     gap: spacing.xs,
-    marginRight: spacing.sm,
   },
   addColumnPressed: {
     backgroundColor: colors.surfaceLight,

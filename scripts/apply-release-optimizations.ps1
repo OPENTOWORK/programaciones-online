@@ -18,6 +18,8 @@ $lines = Get-Content $GradlePropertiesPath
 $settings = @{
   "android.enableMinifyInReleaseBuilds" = "true"
   "android.enableShrinkResourcesInReleaseBuilds" = "true"
+  "android.r8.optimizedResourceShrinking" = "true"
+  "android.enableR8.fullMode" = "true"
 }
 
 foreach ($key in $settings.Keys) {

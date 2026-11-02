@@ -125,6 +125,28 @@ export function moveScheduleToDate(schedule: SessionSchedule, date: Date): Sessi
   return { ...schedule, weekdays };
 }
 
+/** Desplaza la fecha ancla del horario (y el día si es puntual o semanal de un solo día). */
+export function shiftSessionScheduleByDays(
+  schedule: SessionSchedule,
+  dayDelta: number,
+): SessionSchedule {
+  if (dayDelta === 0 || !schedule.startDate) return schedule;
+
+  const shifted = startOfDay(new Date(`${schedule.startDate}T12:00:00`));
+  shifted.setDate(shifted.getDate() + dayDelta);
+  const newStart = toLocalDateString(shifted);
+
+  if (schedule.recurrence === 'once') {
+    return { ...schedule, startDate: newStart, weekdays: [toWeekdayIndex(shifted)] };
+  }
+
+  const next: SessionSchedule = { ...schedule, startDate: newStart };
+  if (schedule.weekdays.length === 1) {
+    next.weekdays = [toWeekdayIndex(shifted)];
+  }
+  return next;
+}
+
 export function defaultScheduleForSession(sessionIndex: number): SessionSchedule {
   const weekday = (sessionIndex % 5) as WeekdayIndex;
   return {

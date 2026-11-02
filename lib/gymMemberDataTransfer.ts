@@ -1,6 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { Platform } from 'react-native';
-import * as XLSX from 'xlsx';
 
 import type { GymMemberInput } from '@/lib/gymService';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -19,6 +18,13 @@ import {
 import { getWhatsAppUrl } from '@/lib/whatsappLink';
 
 export type GymMemberDataFormat = 'csv' | 'excel';
+
+/** `xlsx` pesa casi un mega: solo se descarga al importar o exportar en Excel. */
+let xlsxModule: Promise<typeof import('xlsx')> | null = null;
+function loadXlsx() {
+  xlsxModule ??= import('xlsx');
+  return xlsxModule;
+}
 
 export interface GymMemberImportRow extends GymMemberInput {
   memberId?: string;
@@ -283,7 +289,8 @@ export function memberRowsToCsv(rows: GymMemberExportRow[]) {
   return matrix.map((row) => row.map((cell) => escapeCsvCell(cell)).join(';')).join('\r\n');
 }
 
-export function memberRowsToExcelBuffer(rows: GymMemberExportRow[]) {
+export async function memberRowsToExcelBuffer(rows: GymMemberExportRow[]) {
+  const XLSX = await loadXlsx();
   const worksheet = XLSX.utils.aoa_to_sheet(rowsToMatrix(rows));
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Miembros');
@@ -403,7 +410,8 @@ function parseDelimitedText(text: string): GymMemberImportResult {
   return { rows, skipped };
 }
 
-function parseWorkbookBuffer(buffer: ArrayBuffer): GymMemberImportResult {
+async function parseWorkbookBuffer(buffer: ArrayBuffer): Promise<GymMemberImportResult> {
+  const XLSX = await loadXlsx();
   const workbook = XLSX.read(buffer, { type: 'array' });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return { rows: [], skipped: 0 };
@@ -465,7 +473,7 @@ export async function exportGymMembers(
     return { data: rows.length };
   }
 
-  const buffer = memberRowsToExcelBuffer(rows);
+  const buffer = await memberRowsToExcelBuffer(rows);
   if (
     !downloadOnWeb(
       `${fileStem}-${stamp}.xlsx`,

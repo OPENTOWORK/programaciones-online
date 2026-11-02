@@ -10,18 +10,17 @@ import type { PlanValidity } from '@/lib/planValidity';
 
 type ValidityField = 'from' | 'until';
 
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+}
+
 interface PlanValidityDatePickerModalProps {
   visible: boolean;
   validity: PlanValidity;
   initialField?: ValidityField;
   onClose: () => void;
   onConfirm: (validity: PlanValidity) => void;
-}
-
-function dateFromIso(value?: string) {
-  if (!value) return new Date();
-  const parsed = new Date(`${value}T12:00:00`);
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
 export function PlanValidityDatePickerModal({
@@ -32,31 +31,15 @@ export function PlanValidityDatePickerModal({
   onConfirm,
 }: PlanValidityDatePickerModalProps) {
   const [activeField, setActiveField] = useState<ValidityField>(initialField);
-  const [selectedDate, setSelectedDate] = useState(() => dateFromIso(validity.validFrom));
+  const [selectedDate, setSelectedDate] = useState(startOfToday);
   const [indefiniteUntil, setIndefiniteUntil] = useState(validity.validUntil === null);
 
   useEffect(() => {
     if (!visible) return;
     setActiveField(initialField);
     setIndefiniteUntil(validity.validUntil === null);
-    setSelectedDate(
-      dateFromIso(
-        initialField === 'from' ? validity.validFrom : validity.validUntil ?? validity.validFrom,
-      ),
-    );
-  }, [visible, initialField, validity.validFrom, validity.validUntil]);
-
-  useEffect(() => {
-    if (activeField === 'from') {
-      setSelectedDate(dateFromIso(validity.validFrom));
-      return;
-    }
-    if (validity.validUntil === null) {
-      setSelectedDate(dateFromIso(validity.validFrom));
-      return;
-    }
-    setSelectedDate(dateFromIso(validity.validUntil ?? validity.validFrom));
-  }, [activeField, validity.validFrom, validity.validUntil]);
+    setSelectedDate(startOfToday());
+  }, [visible, initialField, validity.validUntil]);
 
   const handleConfirm = () => {
     if (activeField === 'from') {
@@ -85,13 +68,13 @@ export function PlanValidityDatePickerModal({
 
   const handleSelectUntilTab = () => {
     setActiveField('until');
-    if (validity.validUntil && validity.validUntil !== null) {
-      setIndefiniteUntil(false);
-      setSelectedDate(dateFromIso(validity.validUntil));
-      return;
-    }
-    setIndefiniteUntil(false);
-    setSelectedDate(dateFromIso(validity.validFrom));
+    setIndefiniteUntil(validity.validUntil === null);
+    setSelectedDate(startOfToday());
+  };
+
+  const handleSelectFromTab = () => {
+    setActiveField('from');
+    setSelectedDate(startOfToday());
   };
 
   return (
@@ -103,7 +86,7 @@ export function PlanValidityDatePickerModal({
 
           <View style={styles.fieldSwitch}>
             <Pressable
-              onPress={() => setActiveField('from')}
+              onPress={handleSelectFromTab}
               style={[styles.fieldChip, activeField === 'from' && styles.fieldChipActive]}
             >
               <Text style={[styles.fieldChipText, activeField === 'from' && styles.fieldChipTextActive]}>

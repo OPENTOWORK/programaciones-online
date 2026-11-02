@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { SessionVideoPlayer } from '@/components/workout/SessionVideoPlayer';
 import { colors, spacing, typography } from '@/constants/theme';
@@ -82,7 +82,7 @@ export function SessionVideoCarouselModal({
     return null;
   }
 
-  const title = current.exerciseName?.trim() || 'Vídeo de la sesión';
+  const title = current.exerciseName?.trim() || 'Sin ejercicio';
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   panel: {
     width: '100%',

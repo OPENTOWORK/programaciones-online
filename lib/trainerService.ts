@@ -146,14 +146,18 @@ export async function fetchTrainerChatPreviews(
   if (athleteIds.length === 0) return {};
 
   const { getSupabase } = await import('@/lib/supabase');
+  const { fetchTrainerAthleteAlerts } = await import('@/lib/trainerAthleteAlerts');
   const supabase = getSupabase();
   if (!supabase) return {};
 
-  const { data, error } = await supabase
-    .from('trainer_messages')
-    .select('user_id, sender, text, created_at')
-    .in('user_id', athleteIds)
-    .order('created_at', { ascending: true });
+  const [{ data, error }, alertsByAthlete] = await Promise.all([
+    supabase
+      .from('trainer_messages')
+      .select('user_id, sender, text, created_at')
+      .in('user_id', athleteIds)
+      .order('created_at', { ascending: true }),
+    fetchTrainerAthleteAlerts(athleteIds),
+  ]);
 
   if (error || !data) return {};
 
@@ -162,15 +166,13 @@ export async function fetchTrainerChatPreviews(
   for (const row of data) {
     const athleteId = String(row.user_id);
     const lastSender = row.sender === 'trainer' ? 'trainer' : 'user';
-    const existing = previews[athleteId];
-    const unread = lastSender === 'user' ? (existing?.unread ?? 0) + 1 : 0;
 
     previews[athleteId] = {
       athleteId,
       lastText: String(row.text ?? '').trim(),
       lastAt: String(row.created_at),
       lastSender,
-      unread,
+      unread: alertsByAthlete[athleteId]?.chatCount ?? 0,
     };
   }
 

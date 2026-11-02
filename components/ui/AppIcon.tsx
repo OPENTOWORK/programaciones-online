@@ -2,7 +2,7 @@ import { StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { colors, withAlpha } from '@/constants/theme';
 import { resolveIconName, type AppIconName } from '@/constants/icons';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 interface AppIconProps {
   name: AppIconName;

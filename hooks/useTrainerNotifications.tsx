@@ -302,6 +302,12 @@ function TrainerNotificationsProviderInner({ children }: { children: ReactNode }
         });
       }
 
+      setChatPreviews((current) => {
+        const preview = current[athleteId];
+        if (!preview || preview.unread === 0) return current;
+        return { ...current, [athleteId]: { ...preview, unread: 0 } };
+      });
+
       await markAthleteAlertRead(athleteId, 'chat');
       await refreshAthletes(true);
       await loadChatPreviews();

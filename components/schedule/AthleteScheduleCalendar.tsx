@@ -6,6 +6,7 @@ import { ProgramSchedulePreview } from '@/components/trainer/ProgramSchedulePrev
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing } from '@/constants/theme';
+import { useAthletePreviewEffectiveUser } from '@/hooks/useAthletePreviewMode';
 import { useAuth } from '@/hooks/useAuth';
 import { loadAthleteScheduleSources } from '@/lib/athleteSchedule';
 import { createEmptySessionDraft } from '@/lib/trainerSessionDraft';
@@ -31,7 +32,9 @@ export function AthleteScheduleCalendar({
   hideHeader = false,
 }: AthleteScheduleCalendarProps) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user: authUser } = useAuth();
+  const previewUser = useAthletePreviewEffectiveUser();
+  const scheduleUserId = previewUser?.id ?? authUser?.id;
   const [loading, setLoading] = useState(true);
   const [loadedPlans, setLoadedPlans] = useState<AthletePlan[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -43,7 +46,7 @@ export function AthleteScheduleCalendar({
     let cancelled = false;
 
     async function load() {
-      if (!user?.id) {
+      if (!scheduleUserId) {
         setLoadedPlans([]);
         setWorkouts([]);
         setLoading(false);
@@ -52,7 +55,7 @@ export function AthleteScheduleCalendar({
 
       setLoading(true);
       try {
-        const data = await loadAthleteScheduleSources(user.id, program?.id, {
+        const data = await loadAthleteScheduleSources(scheduleUserId, program?.id, {
           skipPlans: useAssignedOverride,
         });
         if (cancelled) return;
@@ -79,7 +82,7 @@ export function AthleteScheduleCalendar({
     return () => {
       cancelled = true;
     };
-  }, [program?.id, useAssignedOverride, user?.id]);
+  }, [program?.id, scheduleUserId, useAssignedOverride]);
 
   const calendarProgram = program ?? createPersonalizedPlanPreviewProgram('Mis entrenos');
   const emptyDraft = useMemo(() => createEmptySessionDraft(0), []);

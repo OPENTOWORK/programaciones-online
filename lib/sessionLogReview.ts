@@ -20,3 +20,19 @@ export function pendingSessionLogIds(
   if (!feedback || feedback.isLoading) return new Set();
   return new Set(logIds.filter((logId) => isSessionLogPendingReview(logId, feedback)));
 }
+
+/** Marca de «revisado» sin comentario ni adjuntos (botón Revisado en la ficha). */
+export function isReviewMarkerFeedback(
+  entry: Pick<TrainerAthleteFeedback, 'message' | 'attachments'>,
+): boolean {
+  return !entry.message.trim() && (entry.attachments?.length ?? 0) === 0;
+}
+
+export function canUnmarkSessionLogReview(
+  logId: string,
+  entries: readonly TrainerAthleteFeedback[],
+): boolean {
+  const sessionEntries = entries.filter((entry) => entry.sessionLogId === logId);
+  if (sessionEntries.length === 0) return false;
+  return sessionEntries.every(isReviewMarkerFeedback);
+}

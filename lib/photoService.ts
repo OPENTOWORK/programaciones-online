@@ -1,3 +1,4 @@
+import { prepareImageForUpload, preparedToArrayBuffer } from '@/lib/prepareUploadMedia';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export type PhotoTipo = 'antes' | 'mensual';
@@ -48,13 +49,6 @@ function extensionFromMime(mimeType?: string) {
   return 'jpg';
 }
 
-async function uriToArrayBuffer(uri: string) {
-  const response = await fetch(uri);
-  if (!response.ok) {
-    throw new Error('No se pudo leer la imagen seleccionada');
-  }
-  return response.arrayBuffer();
-}
 
 async function signedUrlForPath(supabase: NonNullable<ReturnType<typeof getSupabase>>, storagePath: string) {
   const { data, error } = await supabase.storage.from(FOTOS_BUCKET).createSignedUrl(storagePath, SIGNED_URL_TTL);
@@ -135,15 +129,17 @@ export async function uploadProgressPhoto(
   }
 
   const mes = tipo === 'mensual' ? currentMonthKey() : null;
-  const ext = extensionFromMime(mimeType);
-  const fileName = tipo === 'antes' ? `antes.${ext}` : `${mes}.${ext}`;
-  const storagePath = `${userId}/${fileName}`;
 
   try {
-    const fileData = await uriToArrayBuffer(imageUri);
+    const prepared = await prepareImageForUpload(imageUri, mimeType, 'progress');
+    const uploadMime = prepared.mimeType;
+    const ext = extensionFromMime(uploadMime);
+    const fileName = tipo === 'antes' ? `antes.${ext}` : `${mes}.${ext}`;
+    const storagePath = `${userId}/${fileName}`;
+    const fileData = await preparedToArrayBuffer(prepared);
     const { error: uploadError } = await supabase.storage.from(FOTOS_BUCKET).upload(storagePath, fileData, {
       upsert: true,
-      contentType: mimeType,
+      contentType: uploadMime,
     });
 
     if (uploadError) {

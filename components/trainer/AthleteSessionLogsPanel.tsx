@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -7,7 +7,7 @@ import {
   sessionLogsForDate,
 } from '@/components/trainer/AthleteSessionLogCalendar';
 import { AthleteSessionLogCard } from '@/components/trainer/AthleteSessionLogCard';
-import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography } from '@/constants/theme';
 import { useSessionLogFavorites } from '@/hooks/useSessionLogFavorites';
 import type { useTrainerAthleteFeedback } from '@/hooks/useTrainerAthleteFeedback';
 import type { SessionLogRecord } from '@/lib/sessionLogService';
@@ -18,14 +18,6 @@ type SessionLogViewMode = 'list' | 'calendar';
 type TrainerAthleteFeedbackState = ReturnType<typeof useTrainerAthleteFeedback>;
 
 const SESSION_LOGS_PAGE_SIZE = 10;
-
-function formatSelectedDayLabel(date: Date) {
-  return date.toLocaleDateString('es-ES', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-}
 
 function latestLogDate(logs: readonly SessionLogRecord[]) {
   if (logs.length === 0) return new Date();
@@ -104,6 +96,7 @@ export function AthleteSessionLogsPanel({
   const [focusDate, setFocusDate] = useState(() => latestLogDate(logs));
   const [selectedDate, setSelectedDate] = useState(() => latestLogDate(logs));
   const [listPage, setListPage] = useState(0);
+  const [reviewingLogId, setReviewingLogId] = useState<string | null>(null);
   const logIds = useMemo(() => logs.map((log) => log.id), [logs]);
   const pendingReviewLogIds = useMemo(
     () => pendingSessionLogIds(logIds, feedback),
@@ -143,6 +136,12 @@ export function AthleteSessionLogsPanel({
     [logs, selectedDate],
   );
 
+  const handleToggleReviewed = async (logId: string) => {
+    setReviewingLogId(logId);
+    await feedback.toggleSessionReviewed(logId);
+    setReviewingLogId(null);
+  };
+
   const renderLogCard = (log: SessionLogRecord, last: boolean) => (
     <AthleteSessionLogCard
       key={log.id}
@@ -150,6 +149,8 @@ export function AthleteSessionLogsPanel({
       feedback={feedback}
       favorite={isFavorite(log.id)}
       last={last}
+      markingReviewed={reviewingLogId === log.id}
+      onToggleReviewed={() => void handleToggleReviewed(log.id)}
       onToggleFavorite={() => void toggleFavorite(log.id)}
       onPress={() => onOpenLog(log.id)}
     />
@@ -277,19 +278,15 @@ export function AthleteSessionLogsPanel({
         onSelectDate={setSelectedDate}
       />
 
-      <View style={styles.selectedDayHeader}>
-        <View style={styles.selectedDayTitleWrap}>
-          <Text style={styles.selectedDayTitle}>{formatSelectedDayLabel(selectedDate)}</Text>
-          {selectedDayLogs.some((log) => pendingReviewLogIds.has(log.id)) ? (
-            <View style={styles.pendingPill}>
-              <Text style={styles.pendingPillText}>Por revisar</Text>
-            </View>
-          ) : null}
-        </View>
-        <Pressable onPress={() => onViewModeChange('list')} hitSlop={8}>
-          <Text style={styles.viewAllLink}>Ver todo en lista</Text>
-        </Pressable>
-      </View>
+      <Pressable
+        onPress={() => onViewModeChange('list')}
+        hitSlop={8}
+        style={styles.viewAllRow}
+        accessibilityRole="button"
+        accessibilityLabel="Ver todo en lista"
+      >
+        <Text style={styles.viewAllLink}>Ver todo en lista</Text>
+      </Pressable>
 
       {selectedDayLogs.length === 0 ? (
         <Text style={styles.emptyDayText}>
@@ -396,38 +393,8 @@ const styles = StyleSheet.create({
   calendarWrap: {
     gap: spacing.md,
   },
-  selectedDayHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  selectedDayTitleWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  selectedDayTitle: {
-    ...typography.bodySmall,
-    color: colors.text,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-  pendingPill: {
-    borderRadius: borderRadius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    backgroundColor: withAlpha(colors.warning, '18'),
-  },
-  pendingPillText: {
-    ...typography.caption,
-    color: colors.warning,
-    fontWeight: '700',
-    fontSize: 10,
-    letterSpacing: 0.2,
+  viewAllRow: {
+    alignSelf: 'flex-end',
   },
   viewAllLink: {
     ...typography.caption,

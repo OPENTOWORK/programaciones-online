@@ -41,7 +41,9 @@ export function PlanCoverCard({
         >
           <PlanBrandSilverIcon name={icon} />
           <View style={styles.copy}>
-            <Text style={planBrandStyles.lead}>{lead}</Text>
+            <Text style={planBrandStyles.lead} numberOfLines={1}>
+              {lead}
+            </Text>
             {tag ? <Text style={planBrandStyles.tag}>{tag}</Text> : null}
             {subtitle ? <Text style={planBrandStyles.subtitle}>{subtitle}</Text> : null}
           </View>

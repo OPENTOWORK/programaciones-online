@@ -1,11 +1,15 @@
+import { useRouter, type Href } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ClientStatusBadge } from '@/components/trainer/ClientStatusBadge';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { SkeletonBlock } from '@/components/ui/SkeletonBlock';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
+import type { AppIconName } from '@/constants/icons';
+import { getTrainerAthleteDetailsHref } from '@/lib/navigation';
 import { formatPlanDateDisplay } from '@/lib/planValidity';
+import { pendingAlertSources } from '@/lib/trainerAthleteAlerts';
 import type { TrainerClientRow, TrainerClientStatus } from '@/lib/trainerOverview';
 
 type ClientFilter = 'all' | 'active' | 'no_plan' | 'ending_soon' | 'ended';
@@ -44,17 +48,71 @@ function formatValidFrom(client: TrainerClientRow) {
   return formatPlanDateDisplay(client.validFrom) || '—';
 }
 
+function clientAlertHref(client: TrainerClientRow): Href {
+  const athleteId = client.athlete.id;
+  const alerts = client.athlete.alerts;
+  const sources = pendingAlertSources(alerts);
+  if (sources.length === 1 && sources[0] === 'chat') {
+    return { pathname: '/trainer/chat/[id]', params: { id: athleteId } };
+  }
+  if (sources.length === 1 && sources[0] === 'sessions' && alerts?.lastSessionLogId) {
+    return {
+      pathname: '/trainer/athlete/[id]/log/[logId]',
+      params: { id: athleteId, logId: alerts.lastSessionLogId },
+    };
+  }
+  return getTrainerAthleteDetailsHref(athleteId);
+}
+
+function RowIconAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: AppIconName;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={(event) => {
+        event.stopPropagation?.();
+        onPress();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={6}
+      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+        styles.actionBtn,
+        (hovered || pressed) && styles.actionBtnActive,
+      ]}
+    >
+      <AppIcon name={icon} size={17} color={colors.accentDark} />
+    </Pressable>
+  );
+}
+
 export function TrainerClientsTable({
   clients,
   loading = false,
   wide,
   onOpenClient,
+  onOpenClientDetails,
+  onOpenClientCalendar,
 }: {
   clients: readonly TrainerClientRow[];
   loading?: boolean;
   wide: boolean;
   onOpenClient: (athleteId: string) => void;
+  onOpenClientDetails?: (athleteId: string) => void;
+  onOpenClientCalendar?: (athleteId: string) => void;
 }) {
+  const router = useRouter();
+  const openDetails = onOpenClientDetails ?? onOpenClient;
+  const openCalendar = onOpenClientCalendar ?? onOpenClient;
+  const openAlert = (client: TrainerClientRow) => {
+    router.push(clientAlertHref(client));
+  };
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ClientFilter>('all');
 
@@ -165,12 +223,13 @@ export function TrainerClientsTable({
         <View style={styles.table}>
           <View style={styles.headerRow}>
             <Text style={[styles.headerCell, styles.colClient]}>Cliente</Text>
+            <Text style={[styles.headerCell, styles.colAlerts]}>Alertas</Text>
             <Text style={[styles.headerCell, styles.colStatus]}>Estado</Text>
             <Text style={[styles.headerCell, styles.colProgram]}>Programa actual</Text>
             <Text style={[styles.headerCell, styles.colDate]}>Inicio</Text>
             <Text style={[styles.headerCell, styles.colDate]}>Fin</Text>
             <Text style={[styles.headerCell, styles.colLast]}>Último entreno</Text>
-            <View style={styles.colChevron} />
+            <Text style={[styles.headerCell, styles.colActions]}>Acciones</Text>
           </View>
 
           {visible.length === 0 ? (
@@ -179,13 +238,12 @@ export function TrainerClientsTable({
             visible.map((client, index) => (
               <Pressable
                 key={client.athlete.id}
-                onPress={() => onOpenClient(client.athlete.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`Abrir ficha de ${client.athlete.name}`}
+                onPress={() => openCalendar(client.athlete.id)}
+                accessibilityLabel={`Calendario de entrenamiento de ${client.athlete.name}`}
                 style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
                   styles.bodyRow,
                   index === visible.length - 1 && styles.bodyRowLast,
-                  hovered && styles.bodyRowHovered,
+                  (hovered || pressed) && styles.bodyRowHovered,
                   pressed && styles.bodyRowPressed,
                 ]}
               >
@@ -201,13 +259,30 @@ export function TrainerClientsTable({
                       {client.athlete.email}
                     </Text>
                   </View>
+                </View>
+
+                <View style={styles.colAlerts}>
                   {client.pendingAlerts > 0 ? (
-                    <View style={styles.alertBadge}>
+                    <Pressable
+                      onPress={(event) => {
+                        event.stopPropagation?.();
+                        openAlert(client);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Ver alerta de ${client.athlete.name}`}
+                      hitSlop={8}
+                      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+                        styles.alertBadge,
+                        (hovered || pressed) && styles.alertBadgeActive,
+                      ]}
+                    >
                       <Text style={styles.alertBadgeText}>
                         {client.pendingAlerts > 99 ? '99+' : client.pendingAlerts}
                       </Text>
-                    </View>
-                  ) : null}
+                    </Pressable>
+                  ) : (
+                    <Text style={styles.cell}>—</Text>
+                  )}
                 </View>
 
                 <View style={styles.colStatus}>
@@ -226,8 +301,17 @@ export function TrainerClientsTable({
                 <Text style={[styles.cell, styles.colLast]} numberOfLines={1}>
                   {formatShortDate(client.lastWorkoutDate)}
                 </Text>
-                <View style={styles.colChevron}>
-                  <AppIcon name="chevronRight" size={16} color={colors.textMuted} />
+                <View style={styles.colActions}>
+                  <RowIconAction
+                    icon="profile"
+                    label={`Ficha de ${client.athlete.name}`}
+                    onPress={() => openDetails(client.athlete.id)}
+                  />
+                  <RowIconAction
+                    icon="calendar"
+                    label={`Calendario de ${client.athlete.name}`}
+                    onPress={() => openCalendar(client.athlete.id)}
+                  />
                 </View>
               </Pressable>
             ))
@@ -242,8 +326,7 @@ export function TrainerClientsTable({
               <Pressable
                 key={client.athlete.id}
                 onPress={() => onOpenClient(client.athlete.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`Abrir ficha de ${client.athlete.name}`}
+                accessibilityLabel={`Calendario de entrenamiento de ${client.athlete.name}`}
                 style={({ pressed }) => [styles.card, pressed && styles.bodyRowPressed]}
               >
                 <View style={styles.cardHeader}>
@@ -271,6 +354,29 @@ export function TrainerClientsTable({
                   <Text style={styles.cardMetaText}>
                     Último entreno: {formatShortDate(client.lastWorkoutDate)}
                   </Text>
+                </View>
+
+                <View style={styles.cardActions}>
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation?.();
+                      openDetails(client.athlete.id);
+                    }}
+                    style={({ pressed }) => [styles.cardActionBtn, pressed && styles.cardActionBtnPressed]}
+                  >
+                    <AppIcon name="profile" size={16} color={colors.accentDark} />
+                    <Text style={styles.cardActionText}>Ficha</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation?.();
+                      openCalendar(client.athlete.id);
+                    }}
+                    style={({ pressed }) => [styles.cardActionBtn, pressed && styles.cardActionBtnPressed]}
+                  >
+                    <AppIcon name="calendar" size={16} color={colors.accentDark} />
+                    <Text style={styles.cardActionText}>Calendario</Text>
+                  </Pressable>
                 </View>
               </Pressable>
             ))
@@ -394,7 +500,13 @@ const styles = StyleSheet.create({
     opacity: 0.82,
   },
   colClient: {
-    flex: 2.4,
+    flex: 2.2,
+  },
+  colAlerts: {
+    width: 84,
+    flexShrink: 0,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   colStatus: {
     flex: 1.2,
@@ -408,9 +520,56 @@ const styles = StyleSheet.create({
   colLast: {
     flex: 1.1,
   },
-  colChevron: {
-    width: 20,
-    alignItems: 'flex-end',
+  colActions: {
+    width: 88,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
+    flexShrink: 0,
+  },
+  actionBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '18'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
+  },
+  actionBtnActive: {
+    borderColor: colors.accent,
+    backgroundColor: withAlpha(colors.accent, '30'),
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  cardActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    minHeight: 38,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '18'),
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
+  },
+  cardActionBtnPressed: {
+    opacity: 0.9,
+    borderColor: colors.accent,
+    backgroundColor: withAlpha(colors.accent, '30'),
+  },
+  cardActionText: {
+    ...typography.caption,
+    color: colors.accentDark,
+    fontWeight: '700',
   },
   clientCell: {
     flexDirection: 'row',
@@ -447,21 +606,30 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   alertBadge: {
-    minWidth: 18,
-    height: 18,
+    minWidth: 40,
+    height: 32,
+    paddingHorizontal: 12,
     borderRadius: borderRadius.full,
     backgroundColor: colors.danger,
+    borderWidth: 1,
+    borderColor: '#FF8A80',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
     flexShrink: 0,
+    ...(Platform.OS === 'web'
+      ? ({ cursor: 'pointer', boxShadow: '0 1px 4px rgba(255, 82, 82, 0.45)' } as object)
+      : null),
+  },
+  alertBadgeActive: {
+    backgroundColor: '#E53935',
+    borderColor: '#FFCDD2',
+    transform: [{ scale: 0.96 }],
   },
   alertBadgeText: {
-    ...typography.caption,
     color: colors.white,
-    fontWeight: '700',
-    fontSize: 10,
-    lineHeight: 12,
+    fontWeight: '800',
+    fontSize: 16,
+    lineHeight: 18,
   },
   cardList: {
     gap: spacing.sm,

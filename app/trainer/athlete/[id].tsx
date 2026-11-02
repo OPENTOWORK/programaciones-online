@@ -1,4 +1,6 @@
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { useEmbeddedRouteParams } from '@/hooks/useEmbeddedRouteParams';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -13,7 +15,7 @@ import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAthleteIntakeForms } from '@/hooks/useAthleteIntakeForms';
 import { useAuth } from '@/hooks/useAuth';
 import { useCanManageAthleteChat } from '@/hooks/useCanManageAthleteChat';
-import { isAdminRole } from '@/lib/athleteService';
+import { isTrainerRole } from '@/lib/athleteService';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { usePhysicalProfile } from '@/hooks/usePhysicalProfile';
 import { useTrainerAthletePlans } from '@/hooks/useAthletePlans';
@@ -27,8 +29,19 @@ import {
   serializePersonalizedPlanContent,
   validatePersonalizedPlanDraft,
 } from '@/lib/personalizedPlanContent';
-import { getNextSessionNumber, groupPersonalizedPlans, splitAssignedPlans, type PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
-import { applyPlanValidityToContent, countSessionsOutsidePlanValidity, earliestScheduledDateForPlans, formatPlanDateDisplay, type PlanValidity } from '@/lib/planValidity';
+import {
+  buildPlanGroupExerciseNoteSections,
+  countPlanGroupExerciseNotes,
+  sessionLogIdsForPlanGroup,
+} from '@/lib/planGroupExerciseNotes';
+import {
+  filterActivePersonalizedPlanGroups,
+  findPlanGroup,
+  getNextSessionNumber,
+  splitAssignedPlans,
+  type PersonalizedPlanGroup,
+} from '@/lib/personalizedPlanGroups';
+import { buildPlanGroupSessionContentsForValidityChange, countSessionsOutsidePlanValidity, earliestScheduledDateForPlans, formatPlanDateDisplay, type PlanValidity } from '@/lib/planValidity';
 import { convertSessionContentToWeeklyRecurrence } from '@/lib/planGroupRecurrence';
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import type { ScheduleCalendarSource } from '@/lib/scheduleCalendarItems';
@@ -51,6 +64,7 @@ import {
   formatMeasured,
   primaryGoalLabels,
 } from '@/lib/bodyMetrics';
+import { getTrainerAthleteProfileHref } from '@/lib/navigation';
 import { openTrainerPreviewSession } from '@/lib/sessionNavigation';
 import { fetchAthleteSessionLogs } from '@/lib/sessionLogService';
 import {
@@ -59,15 +73,16 @@ import {
   type AlertSource,
 } from '@/lib/trainerAthleteAlerts';
 import type { AthletePlan } from '@/lib/types';
+import { fetchAthleteExerciseNotes } from '@/lib/trainerExerciseNoteService';
 import { AlertDismissButton } from '@/components/trainer/AlertDismissButton';
 import { AthleteSessionLogsPanel } from '@/components/trainer/AthleteSessionLogsPanel';
-import { AthleteFeedbackPanel } from '@/components/trainer/AthleteFeedbackPanel';
 import { AthleteProgressPanel } from '@/components/trainer/AthleteProgressPanel';
 import {
   ScheduleCalendarModal,
   type CalendarSessionSaveInput,
 } from '@/components/trainer/ScheduleCalendarModal';
 import { AssignedPlansList } from '@/components/program/AssignedPlansList';
+import { PlanGroupPrivateNotesModal } from '@/components/trainer/PlanGroupPrivateNotesModal';
 import { IntakeAnswersTable } from '@/components/trainer/IntakeAnswersTable';
 import { DynamicIntakeAnswersTable } from '@/components/intake/DynamicIntakeAnswersTable';
 
@@ -99,11 +114,10 @@ type PendingDelete = {
 };
 
 export default function AthleteDetailScreen() {
-  const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
+  const { id: rawId } = useEmbeddedRouteParams<{ id?: string | string[] }>();
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
-  const router = useRouter();
+  const router = useAppNavigation();
   const { user } = useAuth();
-  const canOpenAthleteCalendar = isAdminRole(user?.role);
   const canChat = useCanManageAthleteChat(id ?? '');
   const { removePlan, createPlan, updatePlan } = useTrainerAthletePlans();
   const { athlete, isLoading, refresh: refreshAthlete } = useAthlete(id ?? '');
@@ -127,12 +141,14 @@ export default function AthleteDetailScreen() {
   const [noteText, setNoteText] = useState('');
   const [assignedPlans, setAssignedPlans] = useState<AthletePlan[]>([]);
   const [sessionLogs, setSessionLogs] = useState<Awaited<ReturnType<typeof fetchAthleteSessionLogs>>>([]);
-  const [sessionLogViewMode, setSessionLogViewMode] = useState<'list' | 'calendar'>('list');
+  const [sessionLogViewMode, setSessionLogViewMode] = useState<'list' | 'calendar'>('calendar');
   const [dismissedAlertSources, setDismissedAlertSources] = useState<AlertSource[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [logsLoading, setLogsLoading] = useState(true);
   const [planActionError, setPlanActionError] = useState<string | null>(null);
-  const [calendarGroup, setCalendarGroup] = useState<PersonalizedPlanGroup | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [privateNotesGroup, setPrivateNotesGroup] = useState<PersonalizedPlanGroup | null>(null);
+  const [planPrivateNotesCounts, setPlanPrivateNotesCounts] = useState<Record<string, number>>({});
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [sectionsKey, setSectionsKey] = useState(0);
 
@@ -208,6 +224,16 @@ export default function AthleteDetailScreen() {
     );
   }, [athlete?.alerts, canChat, dismissedAlertSources]);
 
+  const latestSessionLogId = useMemo(() => {
+    if (athlete?.alerts?.lastSessionLogId) return athlete.alerts.lastSessionLogId;
+    const latest = [...sessionLogs].sort((left, right) =>
+      (right.updatedAt ?? right.completedAt ?? right.scheduledDate).localeCompare(
+        left.updatedAt ?? left.completedAt ?? left.scheduledDate,
+      ),
+    )[0];
+    return latest?.id;
+  }, [athlete?.alerts?.lastSessionLogId, sessionLogs]);
+
   const dismissAlert = useCallback(
     (source: AlertSource) => {
       setDismissedAlertSources((current) => (current.includes(source) ? current : [...current, source]));
@@ -259,19 +285,30 @@ export default function AthleteDetailScreen() {
   const handleUpdateGroupValidity = async (group: PersonalizedPlanGroup, validity: PlanValidity) => {
     setPlanActionError(null);
 
-    const hiddenCount = countSessionsOutsidePlanValidity(group.sessions, validity);
+    const updatedContents = buildPlanGroupSessionContentsForValidityChange(
+      group.sessions,
+      group.validity,
+      validity,
+    );
+
+    const shiftedSessions = group.sessions.map((session, index) => ({
+      ...session,
+      content: updatedContents[index] ?? session.content,
+    }));
+
+    const hiddenCount = countSessionsOutsidePlanValidity(shiftedSessions, validity);
     if (hiddenCount > 0) {
-      const earliest = earliestScheduledDateForPlans(group.sessions);
+      const earliest = earliestScheduledDateForPlans(shiftedSessions);
       setPlanActionError(
-        `La vigencia ocultaría ${hiddenCount} sesión${hiddenCount === 1 ? '' : 'es'} del calendario. ` +
-          `La primera sesión programada es el ${earliest ? formatPlanDateDisplay(earliest) : '—'}: ajusta "Desde" a esa fecha o anterior.`,
+        `Tras mover las sesiones, ${hiddenCount} quedarían fuera de la vigencia. ` +
+          `La primera sesión programada es el ${earliest ? formatPlanDateDisplay(earliest) : '—'}: ajusta «Desde» o «Hasta».`,
       );
       return;
     }
 
-    for (const session of group.sessions) {
-      const sessionNumber = session.sessionNumber ?? 1;
-      const content = applyPlanValidityToContent(session.content, validity);
+    for (const [index, session] of group.sessions.entries()) {
+      const content = updatedContents[index];
+      if (!content) continue;
       const result = await updatePlan(session.id, {
         athleteId: session.athleteId,
         planType: session.planType,
@@ -325,24 +362,49 @@ export default function AthleteDetailScreen() {
     });
   };
 
+  const openPlanGroupSessions = (group: PersonalizedPlanGroup) => {
+    const firstSession = group.sessions[0];
+    if (!firstSession) return;
+    router.push({ pathname: '/trainer/plan/[id]', params: { id: firstSession.id } });
+  };
+
+  const calendarPersonalizedGroups = useMemo(
+    () => splitAssignedPlans(assignedPlans, { includeEnded: true }).personalizedGroups,
+    [assignedPlans],
+  );
+
+  const allCalendarPlans = useMemo(
+    () => calendarPersonalizedGroups.flatMap((group) => group.sessions),
+    [calendarPersonalizedGroups],
+  );
+
+  const defaultCalendarPlanGroup = useMemo(() => {
+    const active = filterActivePersonalizedPlanGroups(calendarPersonalizedGroups);
+    return active[0] ?? calendarPersonalizedGroups[0];
+  }, [calendarPersonalizedGroups]);
+
   const calendarSource = useMemo<ScheduleCalendarSource>(
     () => ({
-      program: createPersonalizedPlanPreviewProgram(calendarGroup?.title ?? 'Plan personalizado'),
+      program: createPersonalizedPlanPreviewProgram(
+        athlete?.name ? `Programación de ${athlete.name}` : 'Programación del atleta',
+      ),
       workouts: [],
       draft: createEmptySessionDraft(0),
       isNewSession: false,
-      athleteSchedule: { plans: calendarGroup?.sessions ?? [], workouts: [] },
+      athleteSchedule: { plans: allCalendarPlans, workouts: [] },
     }),
-    [calendarGroup],
+    [allCalendarPlans, athlete?.name],
   );
 
-  /** El calendario del atleta identifica cada sesión como `plan:<id>:<fecha>`. */
-  const loadCalendarSessionDraft = (item: SchedulePreviewItem) => {
-    const planId = item.id.startsWith('plan:') ? item.id.split(':')[1] : undefined;
-    const session = calendarGroup?.sessions.find((entry) => entry.id === planId);
-    if (!session) return null;
-    return parsePersonalizedPlanContent(session.content, (session.sessionNumber ?? 1) - 1);
-  };
+  const findCalendarPlan = useCallback(
+    (planId?: string) => allCalendarPlans.find((plan) => plan.id === planId),
+    [allCalendarPlans],
+  );
+
+  const findCalendarPlanGroup = useCallback(
+    (planId?: string) => findPlanGroup(calendarPersonalizedGroups, planId ?? ''),
+    [calendarPersonalizedGroups],
+  );
 
   const planIdFromCalendarItem = (item: SchedulePreviewItem) => {
     if (!item.id.startsWith('plan:')) return undefined;
@@ -350,18 +412,37 @@ export default function AthleteDetailScreen() {
     return rest.replace(/:\d{4}-\d{2}-\d{2}$/, '') || undefined;
   };
 
-  const refreshCalendarGroup = useCallback(async () => {
-    if (!calendarGroup || !id || !user?.id) return;
+  /** El calendario del atleta identifica cada sesión como `plan:<id>:<fecha>`. */
+  const loadCalendarSessionDraft = (item: SchedulePreviewItem) => {
+    const planId = planIdFromCalendarItem(item);
+    const session = findCalendarPlan(planId);
+    if (!session) return null;
+    return parsePersonalizedPlanContent(session.content, (session.sessionNumber ?? 1) - 1);
+  };
 
-    const plans = await fetchAthletePlansForAthlete(id);
-    setAssignedPlans(plans);
+  const refreshCalendarPlans = useCallback(async () => {
+    await loadAssignedPlans();
+  }, [loadAssignedPlans]);
 
-    const group = groupPersonalizedPlans(plans).find(
-      (entry) => entry.id === calendarGroup.id || entry.planGroupId === calendarGroup.planGroupId,
-    );
-    if (group) setCalendarGroup(group);
-    else setCalendarGroup(null);
-  }, [calendarGroup, id, user?.id]);
+  const resolveCalendarSessionNumber = useCallback(
+    (date: Date, draft: SessionDraft) => {
+      if (isActivationSessionDraft(draft) && defaultCalendarPlanGroup) {
+        const weekday = toWeekdayIndex(date);
+        const matchingSession = defaultCalendarPlanGroup.sessions.find((plan) => {
+          const planDraft = parsePersonalizedPlanContent(plan.content, (plan.sessionNumber ?? 1) - 1);
+          return (
+            !isActivationSessionDraft(planDraft) && planDraft.schedule.weekdays.includes(weekday)
+          );
+        });
+        if (matchingSession?.sessionNumber) return matchingSession.sessionNumber;
+      }
+
+      return defaultCalendarPlanGroup
+        ? getNextSessionNumber(defaultCalendarPlanGroup.sessions)
+        : 1;
+    },
+    [defaultCalendarPlanGroup],
+  );
 
   const handleCalendarDelete = async (item: SchedulePreviewItem) => {
     const planId = planIdFromCalendarItem(item);
@@ -370,19 +451,17 @@ export default function AthleteDetailScreen() {
     const result = await removePlan(planId);
     if (result.error) return result.error;
 
-    await refreshCalendarGroup();
+    await refreshCalendarPlans();
     return null;
   };
 
   const handleCalendarCopy = async (item: SchedulePreviewItem, targetDate: Date) => {
-    if (!calendarGroup) return 'No hay plan cargado.';
-
     const error = await copyCalendarSession({
       item,
       targetDate,
       planIdFromItem: planIdFromCalendarItem,
-      findPlan: (planId) => calendarGroup.sessions.find((session) => session.id === planId),
-      findPlanGroup: () => calendarGroup,
+      findPlan: findCalendarPlan,
+      findPlanGroup: findCalendarPlanGroup,
       loadDraft: loadCalendarSessionDraft,
       applyDateToDraft,
       createPlan: async (input) => {
@@ -394,7 +473,7 @@ export default function AthleteDetailScreen() {
 
     if (error) return error;
 
-    await refreshCalendarGroup();
+    await refreshCalendarPlans();
     return null;
   };
 
@@ -403,14 +482,12 @@ export default function AthleteDetailScreen() {
     targetDate: Date,
     items: SchedulePreviewItem[],
   ) => {
-    if (!calendarGroup) return 'No hay plan cargado.';
-
     const error = await copyCalendarDaySessions({
       items,
       targetDate,
       planIdFromItem: planIdFromCalendarItem,
-      findPlan: (planId) => calendarGroup.sessions.find((session) => session.id === planId),
-      findPlanGroup: () => calendarGroup,
+      findPlan: findCalendarPlan,
+      findPlanGroup: findCalendarPlanGroup,
       loadDraft: loadCalendarSessionDraft,
       applyDateToDraft,
       createPlan: async (input) => {
@@ -421,7 +498,7 @@ export default function AthleteDetailScreen() {
     });
 
     if (error) return error;
-    await refreshCalendarGroup();
+    await refreshCalendarPlans();
     return null;
   };
 
@@ -431,8 +508,9 @@ export default function AthleteDetailScreen() {
     dayItems?: SchedulePreviewItem[],
   ) => {
     const planId = planIdFromCalendarItem(item);
-    const sessions = calendarGroup?.sessions;
-    const source = sessions?.find((session) => session.id === planId);
+    const group = planId ? findCalendarPlanGroup(planId) : undefined;
+    const source = findCalendarPlan(planId);
+    const sessions = group?.sessions;
     if (!sessions || !source) return 'No se pudo mover la sesión.';
 
     const error = await moveCalendarSessionToDate({
@@ -449,38 +527,50 @@ export default function AthleteDetailScreen() {
     });
 
     if (error) return error;
-    await refreshCalendarGroup();
+    await refreshCalendarPlans();
     return null;
   };
 
   const handleCalendarReorderDay = async (_date: Date, orderedItems: SchedulePreviewItem[]) => {
-    const sessions = calendarGroup?.sessions;
-    if (!sessions) return 'No se pudo reordenar el día.';
-
     const orderedIds = orderedItems
       .map((item) => planIdFromCalendarItem(item))
       .filter((planId): planId is string => Boolean(planId));
-    const updates = buildDayOrderUpdates(orderedIds, sessions);
-    if (updates.length === 0) return null;
+    const touchedGroupIds = new Set<string>();
 
-    for (const update of updates) {
-      const result = await updatePlan(update.id, {
-        athleteId: update.athleteId,
-        planType: 'personalized',
-        title: update.title,
-        content: update.content,
-      });
-      if (result.error) return result.error;
+    for (const planId of orderedIds) {
+      const group = findCalendarPlanGroup(planId);
+      if (group) touchedGroupIds.add(group.id);
     }
 
-    await refreshCalendarGroup();
+    for (const groupId of touchedGroupIds) {
+      const group = calendarPersonalizedGroups.find((entry) => entry.id === groupId);
+      if (!group) continue;
+
+      const dayIds = orderedIds.filter((planId) =>
+        group.sessions.some((session) => session.id === planId),
+      );
+      const updates = buildDayOrderUpdates(dayIds, group.sessions);
+      if (updates.length === 0) continue;
+
+      for (const update of updates) {
+        const result = await updatePlan(update.id, {
+          athleteId: update.athleteId,
+          planType: 'personalized',
+          title: update.title,
+          content: update.content,
+        });
+        if (result.error) return result.error;
+      }
+    }
+
+    await refreshCalendarPlans();
     return null;
   };
 
   const openCalendarSession = (item: SchedulePreviewItem) => {
-    const planId = item.id.startsWith('plan:') ? item.id.split(':')[1] : undefined;
+    const planId = planIdFromCalendarItem(item);
     if (!planId) return;
-    setCalendarGroup(null);
+    setCalendarOpen(false);
     router.push({ pathname: '/trainer/plan/[id]', params: { id: planId, edit: '1' } });
   };
 
@@ -497,7 +587,7 @@ export default function AthleteDetailScreen() {
 
     const scheduledDraft = applyDateToDraft(draft, date);
     const planId = item ? planIdFromCalendarItem(item) : undefined;
-    const source = calendarGroup?.sessions.find((session) => session.id === planId);
+    const source = findCalendarPlan(planId);
 
     if (source) {
       const result = await updatePlan(source.id, {
@@ -507,24 +597,24 @@ export default function AthleteDetailScreen() {
         content: serializePersonalizedPlanContent(scheduledDraft, source.sessionNumber ?? 1),
       });
       if (result.error) return result.error;
-      await refreshCalendarGroup();
+      await refreshCalendarPlans();
       return null;
     }
 
-    if (!calendarGroup || !id) return 'No se pudo guardar la sesión.';
+    if (!defaultCalendarPlanGroup || !id) return 'No se pudo guardar la sesión.';
 
-    const sessionNumber = getNextSessionNumber(calendarGroup.sessions);
+    const sessionNumber = resolveCalendarSessionNumber(date, scheduledDraft);
     const result = await createPlan({
       athleteId: id,
-      planType: calendarGroup.sessions[0]?.planType ?? 'personalized',
-      title: calendarGroup.title,
+      planType: defaultCalendarPlanGroup.sessions[0]?.planType ?? 'personalized',
+      title: defaultCalendarPlanGroup.title,
       content: serializePersonalizedPlanContent(scheduledDraft, sessionNumber),
-      planGroupId: calendarGroup.planGroupId,
+      planGroupId: defaultCalendarPlanGroup.planGroupId,
       sessionNumber,
       athleteName: athlete?.name,
     });
     if (result.error) return result.error;
-    await refreshCalendarGroup();
+    await refreshCalendarPlans();
     return null;
   };
 
@@ -545,6 +635,29 @@ export default function AthleteDetailScreen() {
       onConfirm: () => void removeActivityEntry(entryId),
     });
   };
+
+  const planGroupsForNotes = calendarPersonalizedGroups;
+
+  const refreshPlanPrivateNotesCounts = useCallback(async () => {
+    if (!user?.id || !isTrainerRole(user.role) || !id || planGroupsForNotes.length === 0) {
+      setPlanPrivateNotesCounts({});
+      return;
+    }
+
+    const notes = await fetchAthleteExerciseNotes({ trainerId: user.id, athleteId: id });
+    const counts: Record<string, number> = {};
+    for (const group of planGroupsForNotes) {
+      const scope = { sessionLogIds: sessionLogIdsForPlanGroup(group, sessionLogs) };
+      counts[group.id] = countPlanGroupExerciseNotes(
+        buildPlanGroupExerciseNoteSections(group, notes, scope),
+      );
+    }
+    setPlanPrivateNotesCounts(counts);
+  }, [id, planGroupsForNotes, sessionLogs, user?.id, user?.role]);
+
+  useEffect(() => {
+    void refreshPlanPrivateNotesCounts();
+  }, [refreshPlanPrivateNotesCounts]);
 
   if (isLoading) {
     return (
@@ -568,7 +681,9 @@ export default function AthleteDetailScreen() {
     );
   }
 
-  const { personalizedGroups, nutritionPlans } = splitAssignedPlans(assignedPlans);
+  const { personalizedGroups, nutritionPlans } = splitAssignedPlans(assignedPlans, {
+    includeEnded: true,
+  });
 
   return (
     <ScreenWrapper>
@@ -585,11 +700,9 @@ export default function AthleteDetailScreen() {
             style={styles.chatBtnHeader}
           />
         ) : null}
-        {canOpenAthleteCalendar ? (
+        {isTrainerRole(user?.role) ? (
           <Pressable
-            onPress={() =>
-              router.push({ pathname: '/trainer/athlete/[id]/calendar', params: { id: athlete.id } })
-            }
+            onPress={() => router.push(getTrainerAthleteProfileHref(athlete.id))}
             style={({ pressed }) => [styles.calendarLink, pressed && styles.calendarLinkPressed]}
           >
             <Text style={styles.calendarLinkText}>Ver calendario del atleta</Text>
@@ -612,7 +725,6 @@ export default function AthleteDetailScreen() {
         <CollapsibleSection
           style={styles.alertCard}
           title={`${visibleAlerts.total} alerta${visibleAlerts.total === 1 ? '' : 's'} pendiente${visibleAlerts.total === 1 ? '' : 's'}`}
-          subtitle="Origen de las novedades de este atleta"
         >
           {visibleAlerts.chatCount > 0 ? (
             <View style={styles.alertRow}>
@@ -630,6 +742,9 @@ export default function AthleteDetailScreen() {
                   </Text>
                   <Text style={styles.alertText}>Ábrelo para responder o márcalo como visto.</Text>
                 </View>
+                <View style={styles.alertAction}>
+                  <Text style={styles.alertActionText}>Ver mensaje</Text>
+                </View>
               </Pressable>
               <AlertDismissButton onPress={() => dismissAlert('chat')} />
             </View>
@@ -637,14 +752,29 @@ export default function AthleteDetailScreen() {
 
           {visibleAlerts.sessionCount > 0 ? (
             <View style={styles.alertRow}>
-              <AppIcon name="stats" size={20} color={colors.warning} />
-              <View style={styles.alertCopy}>
-                <Text style={styles.alertTitle}>
-                  {visibleAlerts.sessionCount} registro{visibleAlerts.sessionCount === 1 ? '' : 's'} de entreno nuevo
-                  {visibleAlerts.sessionCount === 1 ? '' : 's'}
-                </Text>
-                <Text style={styles.alertText}>Puedes revisarlo en “Registro de entrenos” más abajo.</Text>
-              </View>
+              <Pressable
+                onPress={() => {
+                  if (!latestSessionLogId) return;
+                  router.push({
+                    pathname: '/trainer/athlete/[id]/log/[logId]',
+                    params: { id: athlete.id, logId: latestSessionLogId },
+                  });
+                }}
+                disabled={!latestSessionLogId}
+                style={({ pressed }) => [styles.alertRowMain, pressed && styles.alertRowPressed]}
+              >
+                <AppIcon name="stats" size={20} color={colors.warning} />
+                <View style={styles.alertCopy}>
+                  <Text style={styles.alertTitle}>
+                    {visibleAlerts.sessionCount} registro{visibleAlerts.sessionCount === 1 ? '' : 's'} de entreno nuevo
+                    {visibleAlerts.sessionCount === 1 ? '' : 's'}
+                  </Text>
+                  <Text style={styles.alertText}>Puedes revisarlo en “Registro de entrenos” más abajo.</Text>
+                </View>
+                <View style={[styles.alertAction, !latestSessionLogId && styles.alertActionDisabled]}>
+                  <Text style={styles.alertActionText}>Ver entrenamiento</Text>
+                </View>
+              </Pressable>
               <AlertDismissButton onPress={() => dismissAlert('sessions')} />
             </View>
           ) : null}
@@ -666,9 +796,131 @@ export default function AthleteDetailScreen() {
 
       <CollapsibleSection
         style={styles.programCard}
-        title="Seguimiento"
-        subtitle="Notas, columnas, planes y mensajes por fecha"
+        title="Programación"
+        hideHeaderActionsWhenCollapsed
+        headerActions={
+          !plansLoading && personalizedGroups.length > 0 ? (
+            <Pressable
+              onPress={() => setCalendarOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Ver calendario de todos los planes"
+              style={({ pressed }) => [
+                styles.programCalendarBtn,
+                pressed && styles.programCalendarBtnPressed,
+              ]}
+            >
+              <AppIcon name="calendar" size={15} color={colors.accent} />
+              <Text style={styles.programCalendarBtnText}>Ver calendario</Text>
+            </Pressable>
+          ) : null
+        }
       >
+        {plansLoading ? (
+          <ActivityIndicator color={colors.accent} />
+        ) : personalizedGroups.length === 0 ? (
+          <Text style={styles.emptyProgram}>Todavía no has asignado una programación a este atleta.</Text>
+        ) : (
+          <>
+            {planActionError ? <Text style={styles.planActionError}>{planActionError}</Text> : null}
+            <AssignedPlansList
+              personalizedGroups={personalizedGroups}
+              nutritionPlans={[]}
+              planPrivateNotesCounts={planPrivateNotesCounts}
+              onOpenPrivateNotes={setPrivateNotesGroup}
+              onOpenSession={(planId) =>
+                router.push({ pathname: '/trainer/plan/[id]', params: { id: planId } })
+              }
+              onOpenNutritionPlan={(planId) =>
+                router.push({ pathname: '/trainer/plan/[id]', params: { id: planId } })
+              }
+              onViewGroupCalendar={openPlanGroupSessions}
+              onEditGroup={openPlanGroupEditor}
+              onUpdateGroupValidity={handleUpdateGroupValidity}
+              onRepeatGroupWeekly={handleRepeatGroupWeekly}
+              onDeleteSession={handleDeleteSession}
+              onDeleteGroup={handleDeleteGroup}
+            />
+          </>
+        )}
+
+        <View style={styles.planActions}>
+          <Button
+            title="Crear plan personalizado"
+            variant="outline"
+            onPress={() =>
+              router.push({
+                pathname: '/trainer/plan/create',
+                params: { type: 'personalized', athleteId: athlete.id },
+              })
+            }
+            style={styles.planActionBtn}
+          />
+        </View>
+      </CollapsibleSection>
+
+      {!plansLoading && nutritionPlans.length > 0 ? (
+        <CollapsibleSection style={styles.programCard} title="Plan nutricional">
+          {planActionError ? <Text style={styles.planActionError}>{planActionError}</Text> : null}
+          <AssignedPlansList
+            personalizedGroups={[]}
+            nutritionPlans={nutritionPlans}
+            onOpenSession={(planId) =>
+              router.push({ pathname: '/trainer/plan/[id]', params: { id: planId } })
+            }
+            onOpenNutritionPlan={(planId) =>
+              router.push({ pathname: '/trainer/plan/[id]', params: { id: planId } })
+            }
+            onEditNutritionPlan={openNutritionPlanEditor}
+            onDeleteNutritionPlan={handleDeleteNutritionPlan}
+          />
+        </CollapsibleSection>
+      ) : null}
+
+      <CollapsibleSection style={styles.programCard} title="Registro de entrenos">
+        <AthleteSessionLogsPanel
+          logs={sessionLogs}
+          loading={logsLoading}
+          feedback={athleteFeedback}
+          viewMode={sessionLogViewMode}
+          onViewModeChange={setSessionLogViewMode}
+          onOpenLog={(logId) =>
+            router.push({
+              pathname: '/trainer/athlete/[id]/log/[logId]',
+              params: { id: athlete.id, logId },
+            })
+          }
+        />
+      </CollapsibleSection>
+
+      <AthleteProgressPanel
+        athleteId={athlete.id}
+        metricHistory={physicalHistory}
+        style={styles.programCard}
+      />
+
+      <CollapsibleSection style={styles.programCard} title="Datos físicos">
+        <InfoRow label="Edad" value={formatDerived(physicalDerived.age, ' años', 0)} />
+        <InfoRow label="Altura" value={formatMeasured(physicalBasics.heightCm, ' cm')} />
+        <InfoRow label="Peso" value={formatMeasured(physicalMeasured.weightKg, ' kg')} />
+        <InfoRow label="IMC" value={formatBmi(physicalDerived.bmi)} />
+        <InfoRow label="FC en reposo" value={formatMeasured(physicalMeasured.restingHeartRate, ' lpm')} />
+        <InfoRow label="Grasa corporal" value={formatMeasured(physicalMeasured.bodyFatPercentage, ' %')} />
+        <InfoRow label="Masa grasa" value={formatDerived(physicalDerived.fatMassKg, ' kg')} />
+        <InfoRow label="Masa libre de grasa" value={formatDerived(physicalDerived.leanBodyMassKg, ' kg')} />
+        <InfoRow label="Masa muscular" value={formatMeasured(physicalMeasured.muscleMassKg, ' kg')} />
+        <InfoRow label="Metabolismo basal" value={formatKcal(physicalDerived.bmrKcal)} />
+        <InfoRow
+          label="Gasto diario estimado"
+          value={formatKcal(physicalDerived.estimatedDailyExpenditureKcal)}
+        />
+        <InfoRow
+          label="Objetivo principal"
+          value={physicalBasics.primaryGoal ? primaryGoalLabels[physicalBasics.primaryGoal] : 'No indicado'}
+        />
+        <InfoRow label="Limitaciones" value={formatOptionalValue(athlete.injuries)} />
+      </CollapsibleSection>
+
+      <CollapsibleSection style={styles.programCard} title="Seguimiento">
         {!activityPersistent ? (
           <Text style={styles.activityWarning}>
             Este historial se guarda solo en esta sesión (falta ejecutar la migración SQL del CRM en Supabase).
@@ -723,33 +975,7 @@ export default function AthleteDetailScreen() {
         )}
       </CollapsibleSection>
 
-      <CollapsibleSection style={styles.programCard} title="Datos físicos">
-        <InfoRow label="Edad" value={formatDerived(physicalDerived.age, ' años', 0)} />
-        <InfoRow label="Altura" value={formatMeasured(physicalBasics.heightCm, ' cm')} />
-        <InfoRow label="Peso" value={formatMeasured(physicalMeasured.weightKg, ' kg')} />
-        <InfoRow label="IMC" value={formatBmi(physicalDerived.bmi)} />
-        <InfoRow label="FC en reposo" value={formatMeasured(physicalMeasured.restingHeartRate, ' lpm')} />
-        <InfoRow label="Grasa corporal" value={formatMeasured(physicalMeasured.bodyFatPercentage, ' %')} />
-        <InfoRow label="Masa grasa" value={formatDerived(physicalDerived.fatMassKg, ' kg')} />
-        <InfoRow label="Masa libre de grasa" value={formatDerived(physicalDerived.leanBodyMassKg, ' kg')} />
-        <InfoRow label="Masa muscular" value={formatMeasured(physicalMeasured.muscleMassKg, ' kg')} />
-        <InfoRow label="Metabolismo basal" value={formatKcal(physicalDerived.bmrKcal)} />
-        <InfoRow
-          label="Gasto diario estimado"
-          value={formatKcal(physicalDerived.estimatedDailyExpenditureKcal)}
-        />
-        <InfoRow
-          label="Objetivo principal"
-          value={physicalBasics.primaryGoal ? primaryGoalLabels[physicalBasics.primaryGoal] : 'No indicado'}
-        />
-        <InfoRow label="Limitaciones" value={formatOptionalValue(athlete.injuries)} />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        style={styles.programCard}
-        title="Formularios del atleta"
-        subtitle="Respuestas de los cuestionarios personalizados"
-      >
+      <CollapsibleSection style={styles.programCard} title="Formularios">
         {intakeLoading || intakeStatusesLoading ? (
           <ActivityIndicator color={colors.accent} style={styles.loader} />
         ) : usesCustomForms && intakeStatuses.length > 0 ? (
@@ -782,114 +1008,44 @@ export default function AthleteDetailScreen() {
           </Text>
         )}
       </CollapsibleSection>
-
-      <CollapsibleSection
-        style={styles.programCard}
-        title="Programación"
-        subtitle="Programación personalizada de este atleta"
-      >
-        {plansLoading ? (
-          <ActivityIndicator color={colors.accent} />
-        ) : personalizedGroups.length === 0 ? (
-          <Text style={styles.emptyProgram}>Todavía no has asignado una programación a este atleta.</Text>
-        ) : (
-          <>
-            {planActionError ? <Text style={styles.planActionError}>{planActionError}</Text> : null}
-            <AssignedPlansList
-              personalizedGroups={personalizedGroups}
-              nutritionPlans={[]}
-              onOpenSession={(planId) =>
-                router.push({ pathname: '/trainer/plan/[id]', params: { id: planId } })
-              }
-              onOpenNutritionPlan={(planId) =>
-                router.push({ pathname: '/trainer/plan/[id]', params: { id: planId } })
-              }
-              onViewGroupCalendar={setCalendarGroup}
-              onEditGroup={openPlanGroupEditor}
-              onUpdateGroupValidity={handleUpdateGroupValidity}
-              onRepeatGroupWeekly={handleRepeatGroupWeekly}
-              onDeleteSession={handleDeleteSession}
-              onDeleteGroup={handleDeleteGroup}
-            />
-          </>
-        )}
-
-        <View style={styles.planActions}>
-          <Button
-            title="Crear plan personalizado"
-            variant="outline"
-            onPress={() =>
-              router.push({
-                pathname: '/trainer/plan/create',
-                params: { type: 'personalized', athleteId: athlete.id },
-              })
-            }
-            style={styles.planActionBtn}
-          />
-        </View>
-      </CollapsibleSection>
-
-      {!plansLoading && nutritionPlans.length > 0 ? (
-        <CollapsibleSection style={styles.programCard} title="Plan nutricional">
-          {planActionError ? <Text style={styles.planActionError}>{planActionError}</Text> : null}
-          <AssignedPlansList
-            personalizedGroups={[]}
-            nutritionPlans={nutritionPlans}
-            onOpenSession={(planId) =>
-              router.push({ pathname: '/trainer/plan/[id]', params: { id: planId } })
-            }
-            onOpenNutritionPlan={(planId) =>
-              router.push({ pathname: '/trainer/plan/[id]', params: { id: planId } })
-            }
-            onEditNutritionPlan={openNutritionPlanEditor}
-            onDeleteNutritionPlan={handleDeleteNutritionPlan}
-          />
-        </CollapsibleSection>
-      ) : null}
-
-      <CollapsibleSection
-        style={styles.programCard}
-        title="Registro de entrenos"
-        subtitle="Sensaciones, progreso y videos por sesión"
-      >
-        <AthleteSessionLogsPanel
-          logs={sessionLogs}
-          loading={logsLoading}
-          feedback={athleteFeedback}
-          viewMode={sessionLogViewMode}
-          onViewModeChange={setSessionLogViewMode}
-          onOpenLog={(logId) =>
-            router.push({
-              pathname: '/trainer/athlete/[id]/log/[logId]',
-              params: { id: athlete.id, logId },
-            })
-          }
-        />
-      </CollapsibleSection>
-
-      <AthleteFeedbackPanel feedback={athleteFeedback} style={styles.programCard} />
-
-      <AthleteProgressPanel
-        athleteId={athlete.id}
-        metricHistory={physicalHistory}
-        style={styles.programCard}
-      />
       </View>
 
+      {privateNotesGroup ? (
+        <PlanGroupPrivateNotesModal
+          visible
+          group={privateNotesGroup}
+          athleteId={athlete.id}
+          athleteName={athlete.name}
+          sessionLogs={sessionLogs}
+          onClose={() => setPrivateNotesGroup(null)}
+          onNotesChanged={() => void refreshPlanPrivateNotesCounts()}
+        />
+      ) : null}
+
       <ScheduleCalendarModal
-        visible={calendarGroup !== null}
-        onClose={() => setCalendarGroup(null)}
-        title={calendarGroup?.title ?? 'Calendario del plan'}
-        subtitle={`Sesiones programadas de ${athlete.name}.`}
+        visible={calendarOpen}
+        onClose={() => setCalendarOpen(false)}
+        title="Programación"
+        subtitle={`de ${athlete.name}, según sus fechas de vigencia.`}
+        planGroups={calendarPersonalizedGroups}
         source={calendarSource}
         loadSessionDraft={loadCalendarSessionDraft}
         buildSessionDraft={(date) =>
           applyDateToDraft(
-            createEmptySessionDraft(getNextSessionNumber(calendarGroup?.sessions ?? []) - 1),
+            createEmptySessionDraft(resolveCalendarSessionNumber(date, createEmptySessionDraft(0)) - 1),
             date,
           )
         }
-        buildRestDayDraft={(date) => applyDateToDraft(createRestDayDraft(0), date)}
+        buildRestDayDraft={(date) =>
+          applyDateToDraft(
+            createRestDayDraft(
+              (defaultCalendarPlanGroup
+                ? getNextSessionNumber(defaultCalendarPlanGroup.sessions)
+                : 1) - 1,
+            ),
+            date,
+          )
+        }
         saveSession={saveCalendarSession}
         onSessionPreview={(item) => openTrainerPreviewSession(router, item, calendarSource)}
         onSessionEdit={openCalendarSession}
@@ -1018,7 +1174,44 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
+  alertAction: {
+    flexShrink: 0,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '14'),
+  },
+  alertActionDisabled: {
+    opacity: 0.45,
+  },
+  alertActionText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
+  },
   programCard: { marginTop: spacing.md },
+  programCalendarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '14'),
+    marginTop: 2,
+  },
+  programCalendarBtnPressed: {
+    backgroundColor: withAlpha(colors.accent, '26'),
+  },
+  programCalendarBtnText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
+  },
   emptyProgram: { ...typography.bodySmall, color: colors.textMuted },
   intakeFormsList: { gap: spacing.md },
   intakeFormBlock: { gap: spacing.sm },

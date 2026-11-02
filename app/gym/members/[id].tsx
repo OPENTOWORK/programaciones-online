@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { GymMemberShopSaleModal } from '@/components/gym/GymMemberShopSaleModal';
 import { GymMemberAssignMembershipModal } from '@/components/gym/GymMemberAssignMembershipModal';

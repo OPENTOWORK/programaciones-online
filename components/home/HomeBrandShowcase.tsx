@@ -1,4 +1,6 @@
 import { useRouter } from 'expo-router';
+
+import { useTrainerMobilePreviewMode } from '@/hooks/useTrainerMobilePreview';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -14,10 +16,19 @@ interface HomeBrandShowcaseProps {
 
 export function HomeBrandShowcase({ fillAvailable = false }: HomeBrandShowcaseProps) {
   const router = useRouter();
+  const trainerPreview = useTrainerMobilePreviewMode();
+
+  const openPrograms = () => {
+    if (trainerPreview.enabled) {
+      trainerPreview.setActiveTab('programs');
+      return;
+    }
+    router.push('/tabs/programs');
+  };
 
   return (
     <Pressable
-      onPress={() => router.push('/tabs/programs')}
+      onPress={openPrograms}
       accessibilityRole="button"
       accessibilityLabel="Explorar programaciones"
       style={({ pressed }) => [
@@ -42,7 +53,9 @@ export function HomeBrandShowcase({ fillAvailable = false }: HomeBrandShowcasePr
             <Text style={styles.heroBrandTagline}>Programaciones a tu medida</Text>
           </View>
 
-          <Text style={styles.heroTitle}>Tu entrenamiento,{'\n'}organizado</Text>
+          <View style={styles.heroMain}>
+            <Text style={styles.heroTitle}>Tu entrenamiento,{'\n'}organizado</Text>
+          </View>
 
           <View style={styles.heroCta}>
             <Text style={styles.heroCtaText}>Explorar catálogo</Text>
@@ -83,21 +96,26 @@ const styles = StyleSheet.create({
     minHeight: 220,
   },
   heroImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   heroGradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   heroOverlay: {
     position: 'relative',
     zIndex: 1,
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     padding: spacing.lg,
     height: 240,
-    gap: spacing.sm,
+  },
+  heroMain: {
+    flex: 1,
+    justifyContent: 'center',
   },
   heroOverlayFill: {
     height: undefined,

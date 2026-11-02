@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { PlanValidityDatePickerModal } from '@/components/program/PlanValidityDatePickerModal';

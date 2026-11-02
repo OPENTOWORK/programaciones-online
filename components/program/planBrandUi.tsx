@@ -2,6 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, View, type TextStyle, type ViewStyle } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
+import { fontPlanBrandDisplay } from '@/constants/fonts';
 import { borderRadius, brandColors, colors, shadows, spacing, typography, withAlpha } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 
@@ -92,11 +93,13 @@ export const planBrandStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   lead: {
-    ...typography.h3,
+    fontFamily: fontPlanBrandDisplay,
     color: brandColors.orangeHighlight,
-    fontWeight: '800',
+    fontWeight: '400',
     fontSize: 22,
-    letterSpacing: 0.35,
+    lineHeight: 28,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
     textShadowColor: withAlpha(brandColors.orangeHighlight, '55'),
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
@@ -132,8 +135,9 @@ export const planBrandCatalogStyles = StyleSheet.create({
   },
   lead: {
     ...planBrandStyles.lead,
-    fontSize: 21,
-    letterSpacing: 0.25,
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: 0.3,
     textShadowRadius: 10,
   },
   tag: {

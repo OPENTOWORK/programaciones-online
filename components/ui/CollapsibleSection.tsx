@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
@@ -15,6 +15,8 @@ interface CollapsibleSectionProps {
   headerStatusTone?: 'default' | 'warning';
   /** Controles en la cabecera que no deben desplegar/contraer la sección. */
   headerActions?: ReactNode;
+  /** Si es true, `headerActions` solo se muestran con la sección desplegada. */
+  hideHeaderActionsWhenCollapsed?: boolean;
   children: ReactNode;
   style?: ViewStyle;
   defaultExpanded?: boolean;
@@ -32,6 +34,7 @@ export function CollapsibleSection({
   headerStatus,
   headerStatusTone = 'default',
   headerActions,
+  hideHeaderActionsWhenCollapsed = false,
   children,
   style,
   defaultExpanded = false,
@@ -72,7 +75,7 @@ export function CollapsibleSection({
           </View>
         </Pressable>
         <View style={styles.headerTrailing}>
-          {headerActions ? (
+          {headerActions && (!hideHeaderActionsWhenCollapsed || expanded) ? (
             <View
               onStartShouldSetResponder={() => true}
               onTouchEnd={(event) => event.stopPropagation()}
@@ -143,7 +146,7 @@ const styles = StyleSheet.create({
   },
   headerTrailing: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.sm,
   },
   headerMetaCol: {

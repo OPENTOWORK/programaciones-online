@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -6,18 +6,23 @@ import { AppLogo } from '@/components/ui/AppLogo';
 import { Button } from '@/components/ui/Button';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { AppUpdateStatus } from '@/lib/appUpdateService';
-import { openExternalUrl } from '@/lib/openExternalUrl';
+import { currentStorePlatform, openStoreListing } from '@/lib/appVersion';
 
 interface UpdateRequiredScreenProps {
   status: AppUpdateStatus;
   onRetry: () => void;
 }
 
-const DEFAULT_MESSAGE =
-  'Hay una versión nueva de Training ProgLine. Actualiza desde la tienda para seguir entrenando con tus programaciones al día.';
+const DEFAULT_ANDROID_MESSAGE =
+  'Oye, hay una versión nueva en Google Play. Actualiza para seguir usando Training ProgLine con tus programaciones al día.';
+const DEFAULT_IOS_MESSAGE =
+  'Hay una versión nueva en la App Store. Actualiza para seguir usando Training ProgLine.';
 
 export function UpdateRequiredScreen({ status, onRetry }: UpdateRequiredScreenProps) {
   const storeUrl = status.storeUrl;
+  const platform = currentStorePlatform();
+  const defaultMessage = platform === 'ios' ? DEFAULT_IOS_MESSAGE : DEFAULT_ANDROID_MESSAGE;
+  const storeButtonTitle = platform === 'android' ? 'Ir a Google Play' : 'Actualizar ahora';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -28,8 +33,8 @@ export function UpdateRequiredScreen({ status, onRetry }: UpdateRequiredScreenPr
           <Ionicons name="cloud-download-outline" size={30} color={colors.accent} />
         </View>
 
-        <Text style={styles.title}>Actualización necesaria</Text>
-        <Text style={styles.message}>{status.updateMessage?.trim() || DEFAULT_MESSAGE}</Text>
+        <Text style={styles.title}>Oye, actualiza</Text>
+        <Text style={styles.message}>{status.updateMessage?.trim() || defaultMessage}</Text>
 
         {status.currentVersion || status.latestVersion ? (
           <View style={styles.versionBox}>
@@ -42,10 +47,10 @@ export function UpdateRequiredScreen({ status, onRetry }: UpdateRequiredScreenPr
           </View>
         ) : null}
 
-        {storeUrl ? (
+        {storeUrl && platform ? (
           <Button
-            title="Actualizar ahora"
-            onPress={() => void openExternalUrl(storeUrl)}
+            title={storeButtonTitle}
+            onPress={() => void openStoreListing(platform, storeUrl)}
             style={styles.action}
           />
         ) : null}

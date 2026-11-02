@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { BlockTimerButton } from '@/components/workout/BlockTimerButton';
 import { Card } from '@/components/ui/Card';
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import {
   parseFreeTextBlockContent,
@@ -53,6 +53,8 @@ interface WorkoutSectionProps {
   renderAfterBlock?: (blockKey: string, blockIndex: number) => ReactNode;
   /** Cronos dentro de cada bloque: solo en la sesión que el atleta está haciendo. */
   showBlockTimers?: boolean;
+  /** Contenido propio bajo cada ejercicio, p. ej. los apuntes privados del entrenador. */
+  renderExerciseExtra?: (exerciseName: string) => ReactNode;
 }
 
 function TimingPartPill({ part }: { part: TimingDisplayPart }) {
@@ -87,6 +89,7 @@ interface BlockItemsProps {
   onSendExerciseVideo?: (exerciseKey: string, exerciseName: string) => void;
   uploadingExerciseKey?: string | null;
   sentExerciseKeys?: Set<string> | string[];
+  renderExerciseExtra?: (exerciseName: string) => ReactNode;
 }
 
 function hasSentVideo(sentExerciseKeys: Set<string> | string[] | undefined, key: string) {
@@ -107,6 +110,7 @@ function BlockItems({
   onSendExerciseVideo,
   uploadingExerciseKey,
   sentExerciseKeys,
+  renderExerciseExtra,
 }: BlockItemsProps) {
   if (items.length === 0) return null;
 
@@ -137,10 +141,22 @@ function BlockItems({
             ? 'Enviar otro vídeo'
             : 'Enviar vídeo';
 
+        const metricParts = [
+          display.quantity?.trim(),
+          display.load
+            ? `${display.loadLabel ? `${display.loadLabel}: ` : ''}${display.load}`.trim()
+            : '',
+        ].filter(Boolean);
+        const metricLine = metricParts.join(' · ');
+
         return (
           <View
             key={`${item}-${index}`}
-            style={[styles.itemRow, isActive && styles.itemRowActive, isChecked && styles.itemRowChecked]}
+            style={[
+              styles.itemRow,
+              isActive && styles.itemRowActive,
+              isChecked && styles.itemRowChecked,
+            ]}
           >
             {showCheckbox ? (
               onToggleItem ? (
@@ -164,55 +180,56 @@ function BlockItems({
             ) : (
               <View style={styles.itemBullet} />
             )}
-            <View style={styles.itemCopy}>
-              <View style={styles.itemHeader}>
-                <Pressable
-                  onPress={() => {
-                    if (onToggleItem && itemKey) {
-                      onToggleItem(itemKey);
-                    }
-                  }}
-                  disabled={!onToggleItem || !itemKey}
-                  style={styles.itemNamePressable}
+
+            <View style={styles.itemMainLine}>
+              <Pressable
+                onPress={() => {
+                  if (onToggleItem && itemKey) onToggleItem(itemKey);
+                }}
+                disabled={!onToggleItem || !itemKey}
+                style={styles.itemNamePressable}
+              >
+                <Text
+                  style={[styles.itemName, isChecked && styles.itemNameChecked]}
+                  numberOfLines={1}
                 >
-                  <Text style={styles.itemName}>{display.name}</Text>
-                </Pressable>
-                {showVideo || canSendVideo ? (
-                  <View style={styles.itemIconRow}>
-                    {showVideo ? (
-                      <Pressable
-                        onPress={openVideo}
-                        style={[styles.itemIconBtn, isActive && styles.itemIconBtnActive]}
-                        accessibilityRole="button"
-                        accessibilityLabel={isActive ? 'Ocultar vídeo' : 'Ver vídeo'}
-                      >
-                        <AppIcon name="play" size={16} color={colors.textSecondary} outlined />
-                      </Pressable>
-                    ) : null}
-                    {canSendVideo ? (
-                      <Pressable
-                        onPress={() => onSendExerciseVideo?.(itemKey, exerciseName)}
-                        disabled={isUploadingThis}
-                        style={[styles.itemIconBtn, isUploadingThis && styles.itemIconBtnMuted]}
-                        accessibilityRole="button"
-                        accessibilityLabel={sendLabel}
-                      >
-                        <AppIcon name="camera" size={16} color={colors.textSecondary} outlined />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
-              </View>
-              {display.quantity || display.load ? (
-                <View style={styles.itemMetrics}>
-                  {display.quantity ? (
-                    <Text style={styles.itemMetricText}>{display.quantity}</Text>
+                  {display.name}
+                </Text>
+              </Pressable>
+
+              {metricLine ? (
+                <>
+                  <Text style={styles.itemSep}>·</Text>
+                  <Text style={styles.itemMetricInline} numberOfLines={1}>
+                    {metricLine}
+                  </Text>
+                </>
+              ) : null}
+
+              {renderExerciseExtra?.(exerciseName)}
+
+              {showVideo || canSendVideo ? (
+                <View style={styles.itemIconRow}>
+                  {showVideo ? (
+                    <Pressable
+                      onPress={openVideo}
+                      style={[styles.itemIconBtn, isActive && styles.itemIconBtnActive]}
+                      accessibilityRole="button"
+                      accessibilityLabel={isActive ? 'Ocultar vídeo' : 'Ver vídeo'}
+                    >
+                      <AppIcon name="play" size={16} color={colors.textSecondary} outlined />
+                    </Pressable>
                   ) : null}
-                  {display.load ? (
-                    <Text style={styles.itemMetricText}>
-                      {display.loadLabel ? `${display.loadLabel}: ` : ''}
-                      {display.load}
-                    </Text>
+                  {canSendVideo ? (
+                    <Pressable
+                      onPress={() => onSendExerciseVideo?.(itemKey, exerciseName)}
+                      disabled={isUploadingThis}
+                      style={[styles.itemIconBtn, isUploadingThis && styles.itemIconBtnMuted]}
+                      accessibilityRole="button"
+                      accessibilityLabel={sendLabel}
+                    >
+                      <AppIcon name="camera" size={16} color={colors.textSecondary} outlined />
+                    </Pressable>
                   ) : null}
                 </View>
               ) : null}
@@ -422,6 +439,7 @@ export function WorkoutSection({
   sentExerciseKeys,
   renderAfterBlock,
   showBlockTimers = false,
+  renderExerciseExtra,
 }: WorkoutSectionProps) {
   if (!content?.trim()) return null;
 
@@ -438,6 +456,7 @@ export function WorkoutSection({
     onSendExerciseVideo,
     uploadingExerciseKey,
     sentExerciseKeys,
+    renderExerciseExtra,
   };
 
   return (
@@ -581,32 +600,37 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   itemsList: {
-    gap: spacing.sm,
+    gap: 6,
     marginTop: spacing.xs,
   },
   itemRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.sm,
+    paddingVertical: 9,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   itemRowPressed: {
     opacity: 0.85,
   },
   itemRowActive: {
-    backgroundColor: colors.surfaceLight,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.xs,
-    marginHorizontal: -spacing.xs,
+    borderColor: withAlpha(colors.accent, '66'),
+    backgroundColor: withAlpha(colors.accent, '0C'),
   },
   itemRowChecked: {
-    opacity: 0.92,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '0A'),
   },
   itemCheckbox: {
-    marginTop: 2,
+    flexShrink: 0,
   },
   checkbox: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     borderRadius: borderRadius.sm,
     borderWidth: 2,
     borderColor: colors.border,
@@ -627,25 +651,38 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
   },
-  itemCopy: {
+  itemMainLine: {
     flex: 1,
     minWidth: 0,
-    gap: spacing.xs,
-  },
-  itemHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: 6,
   },
   itemNamePressable: {
-    flex: 1,
-    minWidth: 0,
+    flexShrink: 1,
+    maxWidth: '34%',
+    minWidth: 72,
   },
   itemName: {
-    ...typography.body,
+    ...typography.bodySmall,
     color: colors.text,
-    fontWeight: '600',
-    lineHeight: 22,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  itemNameChecked: {
+    color: colors.textMuted,
+  },
+  itemSep: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    flexShrink: 0,
+  },
+  itemMetricInline: {
+    flex: 1,
+    minWidth: 0,
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
   itemIconRow: {
     flexDirection: 'row',
@@ -670,19 +707,10 @@ const styles = StyleSheet.create({
   itemIconBtnMuted: {
     opacity: 0.5,
   },
-  itemMetrics: {
-    gap: 2,
-  },
-  itemMetricText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
   itemBullet: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    marginTop: 9,
     backgroundColor: colors.textMuted,
   },
   noteCard: {

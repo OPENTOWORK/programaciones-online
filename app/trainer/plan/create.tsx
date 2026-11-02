@@ -1,4 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEmbeddedRouteParams } from '@/hooks/useEmbeddedRouteParams';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -18,7 +19,6 @@ import { fetchAthletePlansForAthlete } from '@/lib/athletePlanService';
 import { isGymRole } from '@/lib/athleteService';
 import { createEmptyNutritionPlan } from '@/lib/nutritionPlanContent';
 import { moveCalendarSessionToDate } from '@/lib/moveCalendarSession';
-import { safeGoBack } from '@/lib/navigation';
 import { SUPPORT_ROUTE } from '@/constants/support';
 import { pickPlanPdf, type PickedPlanPdf } from '@/lib/planPdfPicker';
 import { importAthletePlanPdfToCalendar, previewPlanPdfSessions, resolvePlanPdfWeekStartDate } from '@/lib/planPdfImportService';
@@ -73,8 +73,8 @@ function parseSessionNumber(value?: string | string[]) {
 }
 
 export default function CreateAthletePlanScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams<{
+  const router = useAppNavigation();
+  const params = useEmbeddedRouteParams<{
     type?: string | string[];
     athleteId?: string | string[];
     planGroupId?: string | string[];
@@ -583,7 +583,7 @@ export default function CreateAthletePlanScreen() {
             return;
           }
 
-          safeGoBack(router, '/tabs/programs');
+          router.back('/tabs/programs');
         } catch (submitError) {
           setError(submitError instanceof Error ? submitError.message : 'No se pudo guardar el plan');
         } finally {
@@ -636,7 +636,7 @@ export default function CreateAthletePlanScreen() {
           return;
         }
 
-        safeGoBack(router, '/tabs/programs');
+        router.back('/tabs/programs');
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : 'No se pudo guardar el plan');
       } finally {
@@ -669,7 +669,7 @@ export default function CreateAthletePlanScreen() {
         return;
       }
 
-      safeGoBack(router, '/tabs/programs');
+      router.back('/tabs/programs');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'No se pudo guardar el plan');
     } finally {
@@ -792,7 +792,7 @@ export default function CreateAthletePlanScreen() {
         <Button
           title="Volver"
           variant="secondary"
-          onPress={() => safeGoBack(router, '/tabs/programs')}
+          onPress={() => router.back('/tabs/programs')}
           style={styles.backButton}
         />
       </ScreenWrapper>

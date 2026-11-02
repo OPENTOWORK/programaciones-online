@@ -3,6 +3,13 @@ workflows:
     name: Training ProgLine iOS App Store
     instance_type: mac_mini_m2
     max_build_duration: 120
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
 
     integrations:
       app_store_connect: Codemagic Training ProgLine
@@ -16,10 +23,9 @@ workflows:
       cocoapods: default
       vars:
         BUNDLE_ID: "com.trainingprogline.app"
-        # Tiene que coincidir con la versión abierta en App Store Connect para
-        # que el build entre como respuesta al envío rechazado en vez de crear
-        # una versión nueva. El build number lo pone Codemagic.
-        APP_STORE_VERSION: "1.0"
+        # Versión pública de App Store. El build number lo pone Codemagic
+        # y tiene que ser nuevo para esta versión.
+        APP_STORE_VERSION: "1.0.21"
 
     scripts:
       - name: Install dependencies
@@ -103,5 +109,9 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
+        # Sube el .ipa a App Store Connect y lo envía a revisión.
+        # La publicación en la tienda queda en manual: hay que pulsar
+        # «liberar» en App Store Connect cuando Apple lo apruebe.
         submit_to_testflight: false
-        submit_to_app_store: false
+        submit_to_app_store: true
+        cancel_previous_submissions: true

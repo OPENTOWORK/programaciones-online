@@ -7,12 +7,13 @@ import { AppIcon } from '@/components/ui/AppIcon';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { NavCountBadge } from '@/components/ui/NavCountBadge';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, withAlpha } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import { useTrainerNotifications } from '@/hooks/useTrainerNotifications';
 import {
   formatNotificationWhen,
   notificationDismissalKey,
+  trainerNotificationActionLabel,
   type TrainerNotification,
   type TrainerNotificationKind,
 } from '@/lib/trainerNotifications';
@@ -133,6 +134,7 @@ export function ProfileNotificationsCard() {
             const done = Boolean(item.done);
             const tint = done ? DONE_GREEN : colors.warning;
             const when = formatNotificationWhen(item.occurredAt);
+            const actionLabel = trainerNotificationActionLabel(item.kind);
             const key = notificationDismissalKey(item);
             const checked = selectedKeys.includes(key);
             return (
@@ -171,6 +173,13 @@ export function ProfileNotificationsCard() {
                       {item.subtitle}
                     </Text>
                   </View>
+                  {actionLabel ? (
+                    <View style={styles.actionPill}>
+                      <Text style={styles.actionPillText} numberOfLines={1}>
+                        {actionLabel}
+                      </Text>
+                    </View>
+                  ) : null}
                   {when ? (
                     <View style={styles.when} accessibilityElementsHidden>
                       <Text
@@ -335,6 +344,21 @@ const styles = StyleSheet.create({
   rowCopy: {
     flex: 1,
     minWidth: 0,
+  },
+  actionPill: {
+    flexShrink: 0,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, '55'),
+    backgroundColor: withAlpha(colors.accent, '14'),
+  },
+  actionPillText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
   },
   when: {
     flexShrink: 0,

@@ -22,7 +22,7 @@ function Sync-ProjectToShortPath {
   Write-Host "Sincronizando proyecto a ruta corta: $buildRoot"
   New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
 
-  $freshDirs = @("app", "components", "constants", "data", "hooks", "lib", "assets", "scripts", "supabase")
+  $freshDirs = @("app", "components", "constants", "data", "hooks", "lib", "assets", "scripts", "supabase", "plugins")
   foreach ($dir in $freshDirs) {
     $target = Join-Path $buildRoot $dir
     if (Test-Path $target) {
@@ -63,7 +63,16 @@ function Sync-ProjectToShortPath {
 
       Write-Host "Copiando dependencia nueva: $dependency"
       New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
-      Copy-Item -Path $source -Destination $target -Recurse -Force
+      try {
+        Copy-Item -Path $source -Destination $target -Recurse -Force -ErrorAction Stop
+      }
+      catch {
+        Write-Warning "No se pudo copiar $dependency (ruta larga u omitida). Se continua: $($_.Exception.Message)"
+        robocopy $source $target /E /NFL /NDL /NJH /NJS /NC /NS /NP /R:1 /W:1 | Out-Null
+        if ($LASTEXITCODE -ge 8) {
+          Write-Warning "robocopy devolvio $LASTEXITCODE para $dependency; el build puede seguir si el paquete ya existia."
+        }
+      }
     }
   }
 

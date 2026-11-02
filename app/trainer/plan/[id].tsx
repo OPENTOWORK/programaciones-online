@@ -1,5 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useEmbeddedRouteParams } from '@/hooks/useEmbeddedRouteParams';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -31,7 +32,7 @@ import {
   type SchedulePreviewItem,
 } from '@/lib/programSchedulePreview';
 import { normalizeRouteParam } from '@/lib/routeParams';
-import { getTrainerAthleteProfileHref, safeGoBack } from '@/lib/navigation';
+import { getTrainerAthleteProfileHref } from '@/lib/navigation';
 import {
   findPlanGroup,
   getNextSessionNumber,
@@ -94,8 +95,8 @@ function formatDate(isoDate: string) {
 }
 
 export default function TrainerPlanDetailScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string | string[]; edit?: string | string[] }>();
+  const router = useAppNavigation();
+  const params = useEmbeddedRouteParams<{ id?: string | string[]; edit?: string | string[] }>();
   const planId = Array.isArray(params.id) ? params.id[0] : params.id ?? '';
   const editParam = normalizeRouteParam(params.edit);
   const wantsSessionEdit = editParam === '1';
@@ -239,6 +240,11 @@ export default function TrainerPlanDetailScreen() {
     [groupSessions, plan?.title],
   );
 
+  const viewCalendarPlanGroups = useMemo(
+    () => (plan && groupSessions.length > 0 ? groupPersonalizedPlans(groupSessions) : []),
+    [groupSessions, plan],
+  );
+
   const planIdFromCalendarItem = (item: SchedulePreviewItem) =>
     item.id.startsWith('plan:') ? item.id.split(':')[1] : parseSchedulePreviewItemKey(item.id).sourceId;
 
@@ -269,7 +275,7 @@ export default function TrainerPlanDetailScreen() {
 
     if (sessionId === plan?.id) {
       setCalendarOpen(false);
-      safeGoBack(router, getTrainerAthleteProfileHref(plan.athleteId));
+      router.back(getTrainerAthleteProfileHref(plan.athleteId));
       return null;
     }
 
@@ -645,7 +651,7 @@ export default function TrainerPlanDetailScreen() {
         return;
       }
 
-      safeGoBack(router, getTrainerAthleteProfileHref(plan.athleteId));
+      router.back(getTrainerAthleteProfileHref(plan.athleteId));
     };
 
     if (Platform.OS === 'web') {
@@ -864,6 +870,7 @@ export default function TrainerPlanDetailScreen() {
                 hasVideo={hasVideo}
                 preview
                 allowFeedbackVideos={allowsTrainerFeedbackVideos({ planType: plan.planType })}
+                trainerNotes={{ athleteId: plan.athleteId, athletePlanId: plan.id }}
                 attachment={
                   plan.pdfUrl ? (
                     <SessionPdfCard fileName={plan.pdfFileName} url={plan.pdfUrl} />
@@ -1049,6 +1056,7 @@ export default function TrainerPlanDetailScreen() {
           onClose={() => setCalendarOpen(false)}
           title={plan.title}
           subtitle={`Sesiones programadas de ${plan.athleteName ?? 'este atleta'}.`}
+          planGroups={viewCalendarPlanGroups}
           source={viewCalendarSource}
           loadSessionDraft={loadViewCalendarSessionDraft}
           buildSessionDraft={(date) =>

@@ -1,4 +1,7 @@
-import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
+import type { PersonalizedPlanGroup } from '@/lib/personalizedPlanGroups';
+import { parsePersonalizedPlanContent, serializePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
+import { getWeekDays, type ScheduleViewMode } from '@/lib/programSchedulePreview';
+import { formatScheduleSummary, shiftSessionScheduleByDays, toLocalDateString } from '@/lib/sessionSchedule';
 import type { AthletePlan } from '@/lib/types';
 
 const META_START = '@@plan-meta:v1';
@@ -148,15 +151,81 @@ export function formatPlanValidityLabel(validity: PlanValidity) {
 }
 
 export function isDateWithinPlanValidity(date: Date, validity: PlanValidity) {
-  const dateKey = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
+  const dateKey = toLocalDateString(date);
 
   if (validity.validFrom && dateKey < validity.validFrom) return false;
   if (validity.validUntil && dateKey > validity.validUntil) return false;
   return true;
+}
+
+/** `true` cuando la fecha «Hasta» ya pasó (el último día de vigencia sigue contando como activo). */
+export function isPlanValidityEnded(
+  validity: PlanValidity,
+  referenceDate: Date = new Date(),
+): boolean {
+  if (!validity.validUntil) return false;
+  return validity.validUntil < toLocalDateString(referenceDate);
+}
+
+export function schedulePeriodBounds(focusDate: Date, viewMode: ScheduleViewMode) {
+  if (viewMode === 'day') {
+    const key = toLocalDateString(focusDate);
+    return { start: key, end: key };
+  }
+
+  if (viewMode === 'week') {
+    const days = getWeekDays(focusDate);
+    return { start: toLocalDateString(days[0]), end: toLocalDateString(days[6]) };
+  }
+
+  const year = focusDate.getFullYear();
+  const month = focusDate.getMonth();
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month + 1, 0);
+  return { start: toLocalDateString(monthStart), end: toLocalDateString(monthEnd) };
+}
+
+export function planValidityOverlapsRange(validity: PlanValidity, rangeStart: string, rangeEnd: string) {
+  if (validity.validFrom && rangeEnd < validity.validFrom) return false;
+  if (validity.validUntil && rangeStart > validity.validUntil) return false;
+  return true;
+}
+
+/** Un solo plan por periodo visible (semana / mes / día), según fechas de vigencia. */
+export function selectPlanGroupForSchedulePeriod(
+  groups: PersonalizedPlanGroup[],
+  focusDate: Date,
+  viewMode: ScheduleViewMode,
+): PersonalizedPlanGroup | null {
+  if (groups.length === 0) return null;
+
+  const { start, end } = schedulePeriodBounds(focusDate, viewMode);
+  const overlapping = groups.filter((group) => planValidityOverlapsRange(group.validity, start, end));
+  if (overlapping.length === 0) return null;
+  if (overlapping.length === 1) return overlapping[0];
+
+  const periodStart = new Date(`${start}T12:00:00`);
+  const coveringStart = overlapping.filter((group) =>
+    isDateWithinPlanValidity(periodStart, group.validity),
+  );
+  const pool = coveringStart.length > 0 ? coveringStart : overlapping;
+
+  return [...pool].sort((left, right) => {
+    const leftFrom = left.validity.validFrom ?? '';
+    const rightFrom = right.validity.validFrom ?? '';
+    return rightFrom.localeCompare(leftFrom);
+  })[0];
+}
+
+/** Activo / caducado respecto al final del periodo que se está mirando en el calendario. */
+export function isPlanGroupActiveForSchedulePeriod(
+  group: PersonalizedPlanGroup,
+  focusDate: Date,
+  viewMode: ScheduleViewMode,
+) {
+  const { end } = schedulePeriodBounds(focusDate, viewMode);
+  const periodEnd = new Date(`${end}T12:00:00`);
+  return isDateWithinPlanValidity(periodEnd, group.validity);
 }
 
 export function earliestScheduledDateForPlans(sessions: AthletePlan[]) {
@@ -179,6 +248,53 @@ export function countSessionsOutsidePlanValidity(
     if (!startDate || !isValidPlanDate(startDate)) return false;
     return !isDateWithinPlanValidity(new Date(`${startDate}T12:00:00`), validity);
   }).length;
+}
+
+function daysBetweenIsoDates(fromIso: string, toIso: string) {
+  const from = new Date(`${fromIso}T12:00:00`);
+  const to = new Date(`${toIso}T12:00:00`);
+  return Math.round((to.getTime() - from.getTime()) / 86_400_000);
+}
+
+/**
+ * Al cambiar «Desde» (o la vigencia), mueve las fechas programadas de cada sesión el mismo
+ * número de días para que el plan quede alineado con la nueva fecha de inicio.
+ */
+export function buildPlanGroupSessionContentsForValidityChange(
+  sessions: AthletePlan[],
+  previousValidity: PlanValidity,
+  nextValidity: PlanValidity,
+): string[] {
+  const earliest = earliestScheduledDateForPlans(sessions);
+  const oldFrom =
+    previousValidity.validFrom && isValidPlanDate(previousValidity.validFrom)
+      ? previousValidity.validFrom
+      : earliest;
+  const newFrom =
+    nextValidity.validFrom && isValidPlanDate(nextValidity.validFrom)
+      ? nextValidity.validFrom
+      : undefined;
+
+  let dayDelta = 0;
+  if (oldFrom && newFrom) {
+    dayDelta = daysBetweenIsoDates(oldFrom, newFrom);
+  }
+
+  return sessions.map((session, index) => {
+    const sessionNumber = session.sessionNumber ?? index + 1;
+    const draft = parsePersonalizedPlanContent(session.content, sessionNumber - 1);
+    const schedule =
+      dayDelta !== 0 ? shiftSessionScheduleByDays(draft.schedule, dayDelta) : draft.schedule;
+    const serialized = serializePersonalizedPlanContent(
+      {
+        ...draft,
+        schedule,
+        dayLabel: formatScheduleSummary(schedule),
+      },
+      sessionNumber,
+    );
+    return applyPlanValidityToContent(serialized, nextValidity);
+  });
 }
 
 export function buildPlanGroupValidityMap(plans: AthletePlan[]) {

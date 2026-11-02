@@ -106,7 +106,7 @@ export async function pickSessionVideo(
       mediaTypes: ['videos'],
       allowsEditing,
       videoMaxDuration: MAX_VIDEO_DURATION_SEC,
-      quality: 1,
+      quality: 0.72,
       cameraType: ImagePicker.CameraType.back,
     });
 
@@ -122,7 +122,7 @@ export async function pickSessionVideo(
     mediaTypes: ['videos'],
     allowsEditing,
     videoMaxDuration: MAX_VIDEO_DURATION_SEC,
-    quality: allowsEditing ? 1 : 0.8,
+    quality: allowsEditing ? 0.78 : 0.72,
   });
 
   return assetFromResult(result);

@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   placeholder: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,

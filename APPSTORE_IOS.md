@@ -6,9 +6,8 @@
 | --- | --- |
 | Nombre en App Store Connect | Training ProgLine |
 | Bundle ID | `com.trainingprogline.app` |
-| Versión (iOS) | 1.0 (`APP_STORE_VERSION` en `codemagic.yaml`, sobreescribe `expo.version`) |
-| Versión (Android y web) | 1.0.15 (`expo.version`) |
-| Build | Lo asigna Codemagic (`PROJECT_BUILD_NUMBER`); en local, `expo.ios.buildNumber` |
+| Versión | 1.0.21 (`expo.version`) |
+| Build iOS | 1 (`expo.ios.buildNumber`). En Codemagic lo sustituye `PROJECT_BUILD_NUMBER`. |
 | Política de privacidad (URL pública) | `https://carlosgarciacano87-dev.github.io/app-progras/privacy.html` |
 | Eliminación de cuenta (en la app) | Perfil → **Eliminar cuenta** (`/profile/delete-account`) |
 | Eliminación de cuenta (URL pública) | `https://carlosgarciacano87-dev.github.io/app-progras/account-deletion.html` |
@@ -86,7 +85,7 @@ npx eas-cli device:create
 
 ## Iconos y assets
 
-El icono de iOS es distinto al de Android porque **Apple rechaza iconos con canal alfa**. Se genera automáticamente aplanado sobre el fondo de marca:
+Los iconos se generan desde los maestros vectoriales de `assets/brand/`. El de iOS se guarda sin transparencia porque **Apple rechaza iconos con canal alfa**:
 
 ```bash
 npm run assets:icons

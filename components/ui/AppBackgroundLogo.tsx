@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react';
-import { Image, Platform, StyleSheet, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import { Image, Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { useAppTheme } from '@/hooks/useAppTheme';
 
 const logoWatermark = require('@/assets/logo-watermark.png');
+const logoWatermarkOnLight = require('@/assets/logo-watermark-on-light.png');
 
-/** Proporción del emblema recortado (974x788). */
-const MARK_ASPECT = 1.236;
+/** Proporción de la TP del logotipo (1200x837). */
+const MARK_ASPECT = 1200 / 837;
 
 interface AppBackgroundScaffoldProps {
   children: ReactNode;
@@ -28,31 +29,19 @@ export function AppBackgroundScaffold({ children, style }: AppBackgroundScaffold
 
 export function AppBackgroundLogo() {
   const { scheme } = useAppTheme();
-  const { height: windowHeight } = useWindowDimensions();
-  const isNative = Platform.OS !== 'web';
   const isLight = scheme === 'light';
 
   return (
     <View
-      style={[
-        styles.layer,
-        isNative && {
-          justifyContent: 'flex-start',
-          paddingTop: Math.min(windowHeight * 0.035, 24),
-        },
-      ]}
+      style={styles.layer}
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      <View style={[styles.markWrap, isNative && styles.markWrapNative]}>
+      <View style={styles.markWrap}>
         <Image
-          source={logoWatermark}
-          style={[
-            styles.mark,
-            isLight ? styles.markLight : styles.markDark,
-            isNative && (isLight ? styles.markNativeLight : styles.markNativeDark),
-          ]}
+          source={isLight ? logoWatermarkOnLight : logoWatermark}
+          style={[styles.mark, isLight ? styles.markLight : styles.markDark]}
           resizeMode="contain"
           accessibilityIgnoresInvertColors
         />
@@ -71,42 +60,40 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     zIndex: 1,
-    ...(Platform.OS === 'web'
-      ? ({ height: '100%', overflow: 'hidden' } as const)
-      : null),
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+    ...(Platform.OS === 'web' ? ({ height: '100%' } as const) : null),
   },
   layer: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 0,
   },
   markWrap: {
+    position: 'absolute',
     width: '54%',
     maxWidth: 460,
     aspectRatio: MARK_ASPECT,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  markWrapNative: {
-    width: '36%',
-    maxWidth: 180,
-  },
   mark: {
-    width: '100%',
-    height: '100%',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   markDark: {
-    opacity: 0.13,
+    opacity: 0.08,
   },
   markLight: {
-    opacity: 0.1,
-  },
-  markNativeDark: {
-    opacity: 0.055,
-  },
-  markNativeLight: {
-    opacity: 0.045,
+    opacity: 0.06,
   },
 });

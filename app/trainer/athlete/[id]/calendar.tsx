@@ -2,14 +2,15 @@ import { Redirect, useLocalSearchParams } from 'expo-router';
 
 import { TrainerAthleteScheduleBoard } from '@/components/trainer/TrainerAthleteScheduleBoard';
 import { useAuth } from '@/hooks/useAuth';
-import { isAdminRole } from '@/lib/athleteService';
+import { isTrainerRole } from '@/lib/athleteService';
+import { getTrainerAthleteDetailsHref } from '@/lib/navigation';
 
 export default function TrainerAthleteCalendarScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
 
-  if (!isAdminRole(user?.role)) {
-    return <Redirect href={{ pathname: '/trainer/athlete/[id]', params: { id: id ?? '' } }} />;
+  if (!isTrainerRole(user?.role)) {
+    return <Redirect href={getTrainerAthleteDetailsHref(id ?? '')} />;
   }
 
   return <TrainerAthleteScheduleBoard athleteId={id ?? ''} />;

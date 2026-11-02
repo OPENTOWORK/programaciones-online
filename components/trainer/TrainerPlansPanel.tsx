@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { TrainerAthleteScheduleBoard } from '@/components/trainer/TrainerAthleteScheduleBoard';
@@ -95,7 +95,7 @@ function TrainerAthleteCalendarCard({
   group: AthleteCalendarGroup;
   audience?: 'trainer' | 'gym';
 }) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const [expanded, setExpanded] = useState(false);
   const sessionCount = group.sessions.length;
 
@@ -152,7 +152,7 @@ function TrainerAthleteCalendarCard({
 }
 
 function NutritionPlanList({ plans }: { plans: AthletePlan[] }) {
-  const router = useRouter();
+  const router = useAppNavigation();
 
   return (
     <View style={styles.list}>
@@ -255,7 +255,7 @@ export function TrainerPlansPanel({
   audience = 'trainer',
   allowCreate = true,
 }: TrainerPlansPanelProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const { user } = useAuth();
   const { members } = useGymMembers();
   const { plans, isLoading, refresh } = useTrainerAthletePlans(activePlanType);

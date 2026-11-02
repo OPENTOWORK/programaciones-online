@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import {
-  deleteSessionVideo,
-  fetchSessionVideos,
-  uploadSessionVideo,
-  type SessionLogVideo,
-} from '@/lib/sessionVideoService';
-import {
-  editSessionVideoBeforeSend,
-  pickSessionVideo,
-  type SessionVideoAsset,
-  type SessionVideoSource,
+    editSessionVideoBeforeSend,
+    pickSessionVideo,
+    type SessionVideoAsset,
+    type SessionVideoSource,
 } from '@/lib/sessionVideoPicker';
+import {
+    deleteSessionVideo,
+    fetchSessionVideos,
+    uploadSessionVideo,
+    type SessionLogVideo,
+} from '@/lib/sessionVideoService';
 
 export type UploadSessionVideoOptions = {
   source?: SessionVideoSource;

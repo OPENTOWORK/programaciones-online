@@ -1,3 +1,4 @@
+import { prepareMediaForUpload, preparedToArrayBuffer } from '@/lib/prepareUploadMedia';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { TrainerFeedbackAttachment, TrainerFeedbackAttachmentKind } from '@/lib/types';
 
@@ -69,14 +70,6 @@ function localList(feedbackId: string) {
   return created;
 }
 
-async function uriToArrayBuffer(uri: string) {
-  const response = await fetch(uri);
-  if (!response.ok) {
-    throw new Error('No se pudo leer el archivo adjunto');
-  }
-  return response.arrayBuffer();
-}
-
 export function localFeedbackAttachments(feedbackId: string): TrainerFeedbackAttachment[] {
   return [...localList(feedbackId)];
 }
@@ -140,9 +133,6 @@ export async function uploadFeedbackAttachment(input: {
   const { draft } = input;
   const fallbackName = draft.kind === 'audio' ? 'nota-de-voz.m4a' : 'video.mp4';
   const safeName = sanitizeFileName(draft.fileName, fallbackName);
-  const ext = extensionFor(draft.kind, draft.mimeType);
-  const storageFileName = `${Date.now()}-${safeName.includes('.') ? safeName : `${safeName}.${ext}`}`;
-  const storagePath = `${input.athleteId}/${input.feedbackId}/${storageFileName}`;
 
   if (input.useLocalStore || !isSupabaseConfigured) {
     const existing = localList(input.feedbackId);
@@ -168,11 +158,19 @@ export async function uploadFeedbackAttachment(input: {
   if (!supabase) return { error: 'Supabase no está disponible.' };
 
   try {
-    const fileData = draft.file
-      ? await draft.file.arrayBuffer()
-      : await uriToArrayBuffer(draft.uri);
+    const prepared = await prepareMediaForUpload({
+      uri: draft.uri,
+      mimeType: draft.mimeType,
+      kind: draft.kind,
+      file: draft.file instanceof File ? draft.file : undefined,
+    });
+    const uploadMime = prepared.mimeType;
+    const ext = extensionFor(draft.kind, uploadMime);
+    const storageFileName = `${Date.now()}-${safeName.includes('.') ? safeName : `${safeName}.${ext}`}`;
+    const storagePath = `${input.athleteId}/${input.feedbackId}/${storageFileName}`;
+    const fileData = await preparedToArrayBuffer(prepared);
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, fileData, {
-      contentType: draft.mimeType,
+      contentType: uploadMime,
       upsert: false,
     });
 
@@ -187,7 +185,7 @@ export async function uploadFeedbackAttachment(input: {
         kind: draft.kind,
         storage_path: storagePath,
         file_name: safeName,
-        mime_type: draft.mimeType,
+        mime_type: uploadMime,
         duration_seconds: draft.durationSeconds ?? null,
       })
       .select('id, feedback_id, kind, storage_path, file_name, mime_type, duration_seconds, created_at')

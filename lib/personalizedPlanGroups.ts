@@ -1,5 +1,5 @@
 import { parsePersonalizedPlanContent } from '@/lib/personalizedPlanContent';
-import { inferPlanValidityFromSessions, type PlanValidity } from '@/lib/planValidity';
+import { inferPlanValidityFromSessions, isPlanValidityEnded, type PlanValidity } from '@/lib/planValidity';
 import {
   formatScheduleSummary,
   formatScheduleWeekdays,
@@ -208,8 +208,34 @@ export function getNextSessionNumber(sessions: AthletePlan[]) {
   return Math.max(...sessions.map((session, index) => getSessionNumber(session, index))) + 1;
 }
 
-export function splitAssignedPlans(plans: AthletePlan[]) {
-  const personalizedGroups = groupPersonalizedPlans(plans);
-  const nutritionPlans = plans.filter((plan) => plan.planType === 'nutrition');
+export function filterActivePersonalizedPlanGroups(
+  groups: PersonalizedPlanGroup[],
+  referenceDate: Date = new Date(),
+) {
+  return groups.filter((group) => !isPlanValidityEnded(group.validity, referenceDate));
+}
+
+export function splitAssignedPlans(
+  plans: AthletePlan[],
+  options?: { includeEnded?: boolean },
+) {
+  const allGroups = groupPersonalizedPlans(plans);
+  const personalizedGroups = (options?.includeEnded
+    ? allGroups
+    : filterActivePersonalizedPlanGroups(allGroups)
+  ).slice().sort((left, right) => {
+    const leftEnded = isPlanValidityEnded(left.validity);
+    const rightEnded = isPlanValidityEnded(right.validity);
+    if (leftEnded !== rightEnded) return leftEnded ? 1 : -1;
+    return left.title.localeCompare(right.title, 'es');
+  });
+
+  let nutritionPlans = plans.filter((plan) => plan.planType === 'nutrition');
+  if (!options?.includeEnded) {
+    nutritionPlans = nutritionPlans.filter(
+      (plan) => !isPlanValidityEnded(inferPlanValidityFromSessions([plan])),
+    );
+  }
+
   return { personalizedGroups, nutritionPlans };
 }

@@ -1,4 +1,5 @@
 import type { ChatAttachmentDraft } from '@/lib/chatAttachments';
+import { prepareMediaForUpload, preparedToArrayBuffer } from '@/lib/prepareUploadMedia';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { ChatAttachmentKind, TrainerChatAttachment } from '@/lib/types';
 
@@ -75,14 +76,6 @@ function localList(messageId: string) {
   return created;
 }
 
-async function uriToArrayBuffer(uri: string) {
-  const response = await fetch(uri);
-  if (!response.ok) {
-    throw new Error('No se pudo leer el archivo adjunto');
-  }
-  return response.arrayBuffer();
-}
-
 export function localChatAttachments(messageId: string): TrainerChatAttachment[] {
   return [...localList(messageId)];
 }
@@ -149,9 +142,6 @@ export async function uploadChatAttachment(input: {
           ? 'archivo.pdf'
           : 'video.mp4';
   const safeName = sanitizeFileName(draft.fileName, fallbackName);
-  const ext = extensionFor(draft.kind, draft.mimeType);
-  const storageFileName = `${Date.now()}-${safeName.includes('.') ? safeName : `${safeName}.${ext}`}`;
-  const storagePath = `${input.athleteUserId}/${input.messageId}/${storageFileName}`;
 
   if (input.useLocalStore || !isSupabaseConfigured) {
     const existing = localList(input.messageId);
@@ -177,9 +167,18 @@ export async function uploadChatAttachment(input: {
   if (!supabase) return { error: 'Supabase no está disponible.' };
 
   try {
-    const fileData = await uriToArrayBuffer(draft.uri);
+    const prepared = await prepareMediaForUpload({
+      uri: draft.uri,
+      mimeType: draft.mimeType,
+      kind: draft.kind,
+    });
+    const uploadMime = prepared.mimeType;
+    const ext = extensionFor(draft.kind, uploadMime);
+    const storageFileName = `${Date.now()}-${safeName.includes('.') ? safeName : `${safeName}.${ext}`}`;
+    const storagePath = `${input.athleteUserId}/${input.messageId}/${storageFileName}`;
+    const fileData = await preparedToArrayBuffer(prepared);
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, fileData, {
-      contentType: draft.mimeType,
+      contentType: uploadMime,
       upsert: false,
     });
 
@@ -194,7 +193,7 @@ export async function uploadChatAttachment(input: {
         kind: draft.kind,
         storage_path: storagePath,
         file_name: safeName,
-        mime_type: draft.mimeType,
+        mime_type: uploadMime,
         duration_seconds: draft.durationSeconds ?? null,
       })
       .select('id, message_id, kind, storage_path, file_name, mime_type, duration_seconds, created_at')
