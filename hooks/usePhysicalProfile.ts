@@ -16,6 +16,7 @@ import {
   savePhysicalProfile,
   type PhysicalProfileInput,
 } from '@/lib/physicalProfileService';
+import { userFacingRequestError } from '@/lib/transientNetwork';
 
 export interface PhysicalDataUpdate {
   basics: PhysicalProfileInput;
@@ -155,18 +156,22 @@ export function usePhysicalProfile(
       if (!activeUserId) return { error: 'No hay sesión activa' };
 
       emit({ userId: activeUserId, saving: true });
-      const [profileResult, measurementResult] = await Promise.all([
-        savePhysicalProfile(activeUserId, nextBasics),
-        recordBodyMeasurement(activeUserId, nextMeasured, source),
-      ]);
-      emit({ saving: false });
+      try {
+        const profileResult = await savePhysicalProfile(activeUserId, nextBasics);
+        const measurementResult = await recordBodyMeasurement(activeUserId, nextMeasured, source);
+        emit({ saving: false });
 
-      const error = profileResult.error ?? measurementResult.error;
-      if (error) return { error };
+        const error = profileResult.error ?? measurementResult.error;
+        if (error) return { error };
 
-      const warning = profileResult.warning ?? measurementResult.warning;
-      await load({ silent: true });
-      return { warning };
+        const warning = profileResult.warning ?? measurementResult.warning;
+        await load({ silent: true });
+        return { warning };
+      } catch (error) {
+        emit({ saving: false });
+        const message = error instanceof Error ? error.message : '';
+        return { error: userFacingRequestError(message, 'No se pudieron guardar las mediciones.') };
+      }
     },
     [load],
   );

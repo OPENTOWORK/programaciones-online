@@ -3,7 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { isAdminRole, fetchProfileNamesByIds } from '@/lib/athleteService';
-import { fetchAllSupportTickets, type SupportTicket } from '@/lib/supportService';
+import {
+  fetchAllSupportTickets,
+  markSupportTicketRead,
+  type SupportTicket,
+} from '@/lib/supportService';
 import {
   computeSupportKpis,
   filterSupportTickets,
@@ -35,8 +39,19 @@ export function useAdminSupportTickets() {
 
       const result = await fetchAllSupportTickets();
       const loaded = result.data ?? [];
-      setTickets(loaded);
+      const unreadIds = loaded.filter((ticket) => ticket.unreadForAdmin > 0).map((ticket) => ticket.id);
+      setTickets(
+        unreadIds.length === 0
+          ? loaded
+          : loaded.map((ticket) =>
+              unreadIds.includes(ticket.id) ? { ...ticket, unreadForAdmin: 0 } : ticket,
+            ),
+      );
       setError(result.error ?? null);
+
+      if (unreadIds.length > 0) {
+        await Promise.all(unreadIds.map((ticketId) => markSupportTicketRead(ticketId)));
+      }
 
       const assignedIds = [
         ...new Set(

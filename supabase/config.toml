@@ -8,3 +8,13 @@ verify_jwt = true
 
 [functions.invite-gym-coach]
 verify_jwt = true
+
+[functions.iap-verify]
+verify_jwt = true
+
+# Webhooks de las tiendas: se autentican por firma (Apple) o token OIDC de Pub/Sub (Google).
+[functions.iap-google-rtdn]
+verify_jwt = false
+
+[functions.iap-apple-notifications]
+verify_jwt = false

@@ -1,10 +1,12 @@
 import {
   DEFAULT_WORKOUT_TIMER_SETTINGS,
   formatWorkoutTimer,
+  workoutTimerRouteParams,
   type WorkoutTimerSettings,
 } from '@/lib/athleteWorkoutTimer';
 import type { WorkoutContentBlock } from '@/lib/workoutContentParser';
-import { splitBlockTimingMetadata } from '@/lib/workoutDisplayFormat';
+import { isStructuredTimingPart, splitBlockTimingMetadata } from '@/lib/workoutDisplayFormat';
+import { buildWorkoutSequence, sequenceWorkCount, type WorkoutSequence } from '@/lib/workoutSequence';
 
 export interface WorkoutBlockTimerPlan {
   settings: WorkoutTimerSettings;
@@ -12,6 +14,8 @@ export interface WorkoutBlockTimerPlan {
   buttonLabel: string;
   /** Cabecera del crono a pantalla completa, con el nombre del bloque. */
   title: string;
+  /** Series del bloque paso a paso: trabajo, «Continuar» y descanso. */
+  sequence?: WorkoutSequence;
 }
 
 function normalize(text: string) {
@@ -46,12 +50,47 @@ function parseTimingRounds(timing: string | undefined): number | null {
   return match ? Number(match[1]) : null;
 }
 
+/**
+ * Duración del bloque sacada solo de las partes de la cabecera que son un tiempo («14 min»):
+ * en las notas, «cada 2'30"» o «descansa 90 s» no son lo que dura el bloque.
+ */
+function parseBlockDurationSeconds(timing: string | undefined): number | null {
+  for (const part of (timing ?? '').split('·')) {
+    if (!isStructuredTimingPart(part) || parseTimingRounds(part)) continue;
+    const seconds = parseTimingSeconds(part);
+    if (seconds) return seconds;
+  }
+  return null;
+}
+
 function formatDuration(seconds: number) {
   return seconds % 60 === 0 ? `${seconds / 60} min` : formatWorkoutTimer(seconds);
 }
 
+function formatInterval(seconds: number) {
+  if (seconds % 60 === 0) return `${seconds / 60} min`;
+  if (seconds < 60) return `${seconds} s`;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
 function formatRounds(rounds: number) {
   return rounds === 1 ? '1 ronda' : `${rounds} rondas`;
+}
+
+function sequenceButtonLabel(sequence: WorkoutSequence, durationSeconds: number | null) {
+  const count = sequence.rounds.length;
+  const prefix = durationSeconds ? `Crono ${formatDuration(durationSeconds)}` : 'Crono';
+
+  if (count === 1) {
+    const exercises = sequenceWorkCount(sequence);
+    return `${prefix} · ${exercises === 1 ? '1 ejercicio' : `${exercises} ejercicios`}`;
+  }
+
+  const rounds = sequence.circuit ? formatRounds(count) : `${count} series`;
+  if (!durationSeconds && sequence.intervalSeconds) {
+    return `${prefix} · ${rounds} cada ${formatInterval(sequence.intervalSeconds)}`;
+  }
+  return `${prefix} · ${rounds}`;
 }
 
 function timerSettings(overrides: Partial<WorkoutTimerSettings>): WorkoutTimerSettings {
@@ -71,7 +110,8 @@ const CRONO_LABELS = [
 
 /**
  * Elige el crono que le toca al bloque: AMRAP, For time, EMOM y Tabata se deducen de la
- * etiqueta, y el resto del trabajo con duración declarada se resuelve con un crono simple.
+ * etiqueta. El resto del trabajo va serie a serie si hay series, tiempos o descansos que
+ * guiar, y si no, con un crono simple de la duración declarada.
  * Devuelve null para notas y texto libre, donde un crono solo estorbaría.
  */
 export function resolveWorkoutBlockTimer(block: WorkoutContentBlock): WorkoutBlockTimerPlan | null {
@@ -129,13 +169,57 @@ export function resolveWorkoutBlockTimer(block: WorkoutContentBlock): WorkoutBlo
   }
 
   if (CRONO_LABELS.some((known) => label.includes(known))) {
-    if (!seconds) return null;
+    const duration = parseBlockDurationSeconds(block.timing);
+    const sequence = buildWorkoutSequence(block, { durationSeconds: duration, rounds });
+
+    if (sequence) {
+      return withTitle({
+        settings: duration
+          ? timerSettings({ mode: 'crono', direction: 'down', durationSeconds: duration })
+          : timerSettings({ mode: 'crono', direction: 'up' }),
+        buttonLabel: sequenceButtonLabel(sequence, duration),
+        sequence,
+      });
+    }
+
+    if (!duration) return null;
 
     return withTitle({
-      settings: timerSettings({ mode: 'crono', direction: 'down', durationSeconds: seconds }),
-      buttonLabel: `Crono ${formatDuration(seconds)}`,
+      settings: timerSettings({ mode: 'crono', direction: 'down', durationSeconds: duration }),
+      buttonLabel: `Crono ${formatDuration(duration)}`,
     });
   }
 
   return null;
+}
+
+/** El bloque viaja entero hasta `/timer` para rehacer allí las series del crono guiado. */
+export function workoutBlockTimerRouteParams(plan: WorkoutBlockTimerPlan, block: WorkoutContentBlock) {
+  const params = workoutTimerRouteParams(plan.settings, plan.title);
+  if (!plan.sequence) return params;
+
+  return {
+    ...params,
+    block: JSON.stringify({ label: block.label, timing: block.timing, items: block.items }),
+  };
+}
+
+export function workoutBlockTimerFromRouteParam(value: string | undefined): WorkoutBlockTimerPlan | null {
+  if (!value) return null;
+
+  try {
+    const raw: unknown = JSON.parse(value);
+    if (!raw || typeof raw !== 'object') return null;
+
+    const { label, timing, items } = raw as Record<string, unknown>;
+    if (typeof label !== 'string' || !Array.isArray(items)) return null;
+
+    return resolveWorkoutBlockTimer({
+      label,
+      timing: typeof timing === 'string' ? timing : undefined,
+      items: items.filter((item): item is string => typeof item === 'string'),
+    });
+  } catch {
+    return null;
+  }
 }

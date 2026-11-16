@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/Input';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SkeletonBlock } from '@/components/ui/SkeletonBlock';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
+import { useAuth } from '@/hooks/useAuth';
 import { useGym } from '@/hooks/useGym';
 import { useGymFinance } from '@/hooks/useGymFinance';
 import {
@@ -63,6 +64,7 @@ type FinanceFormInitial = {
 type AppIconName = 'wallet' | 'calendar' | 'stats';
 
 export default function GymFinanceScreen() {
+  const { user } = useAuth();
   const { gym, permissions } = useGym();
   const [period, setPeriod] = useState<GymFinancePeriod>('this_month');
   const { entries, paidPayments, pendingPayments, summary, isLoading, error, refresh } = useGymFinance(period);

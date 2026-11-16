@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import {
+  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -17,6 +18,8 @@ import { PRIVACY_POLICY_ROUTE } from '@/constants/legal';
 import { borderRadius, colors, shadows, spacing, typography, withAlpha } from '@/constants/theme';
 
 const ANDROID_APP_URL = 'https://play.google.com/store/apps/details?id=com.trainingprogline.app';
+const IOS_APP_URL = 'https://apps.apple.com/es/app/training-progline/id6810687197';
+const appStoreBadge = require('@/assets/store/app-store-badge.png');
 
 const FEATURES = [
   {
@@ -50,6 +53,9 @@ export function LandingScreen() {
   const openAndroidApp = () => {
     void Linking.openURL(ANDROID_APP_URL);
   };
+  const openIosApp = () => {
+    void Linking.openURL(IOS_APP_URL);
+  };
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
@@ -68,23 +74,39 @@ export function LandingScreen() {
             Tu entrenamiento, siempre contigo
           </Text>
           <Text style={styles.heroText}>
-            Descarga la app para Android y entrena con la planificación que tu entrenador prepara
-            para ti. Si ya tienes cuenta, entra directamente desde aquí.
+            Descarga la app y entrena con la planificación que tu entrenador prepara para ti. Si ya
+            tienes cuenta, entra directamente desde aquí.
           </Text>
 
           <View style={[styles.heroActions, isWide && styles.heroActionsWide]}>
-            <Pressable
-              onPress={openAndroidApp}
-              accessibilityRole="button"
-              accessibilityLabel="Descargar la app para Android en Google Play"
-              style={({ pressed }) => [styles.storeButton, pressed && styles.pressed]}
-            >
-              <Ionicons name="logo-google-playstore" size={24} color={colors.white} />
-              <View>
-                <Text style={styles.storeButtonEyebrow}>Descárgala en</Text>
-                <Text style={styles.storeButtonText}>Google Play</Text>
-              </View>
-            </Pressable>
+            <View style={styles.storeRow}>
+              <Pressable
+                onPress={openAndroidApp}
+                accessibilityRole="button"
+                accessibilityLabel="Descargar la app para Android en Google Play"
+                style={({ pressed }) => [styles.storeButton, pressed && styles.pressed]}
+              >
+                <Ionicons name="logo-google-playstore" size={24} color={colors.white} />
+                <View>
+                  <Text style={styles.storeButtonEyebrow}>Descárgala en</Text>
+                  <Text style={styles.storeButtonText}>Google Play</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={openIosApp}
+                accessibilityRole="link"
+                accessibilityLabel="Descargar en App Store"
+                style={({ pressed }) => [styles.appStoreButton, pressed && styles.pressed]}
+              >
+                <Image
+                  source={appStoreBadge}
+                  style={styles.appStoreBadge}
+                  resizeMode="contain"
+                  accessibilityIgnoresInvertColors
+                />
+              </Pressable>
+            </View>
 
             <Pressable
               onPress={goToLogin}
@@ -210,6 +232,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.xs,
   },
+  storeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   storeButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -234,6 +262,14 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '600',
     letterSpacing: 0.35,
+  },
+  appStoreButton: {
+    height: 52,
+    justifyContent: 'center',
+  },
+  appStoreBadge: {
+    width: 156,
+    height: 52,
   },
   ghostButton: {
     alignItems: 'center',

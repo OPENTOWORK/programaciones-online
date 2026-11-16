@@ -7,6 +7,7 @@ import {
 } from '@/lib/bodyMetrics';
 import { readPersistedRecord, writePersistedRecord } from '@/lib/localUserDataStorage';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { isTransientNetworkMessage, retryOnTransient, userFacingRequestError } from '@/lib/transientNetwork';
 
 const TABLE = 'body_measurements';
 const LOCAL_STORAGE_KEY = 'body-measurements-v1';
@@ -151,7 +152,30 @@ export async function recordBodyMeasurement(
     source,
   };
 
-  const { data, error } = await supabase.from(TABLE).insert(payload).select('id').maybeSingle();
+  let result: { data: { id?: string } | null; error: { message?: string; code?: string } | null };
+  try {
+    result = await retryOnTransient(async () => {
+      const inserted = await supabase.from(TABLE).insert(payload).select('id').maybeSingle();
+      if (!inserted.error || !isTransientNetworkMessage(inserted.error.message)) return inserted;
+
+      const existing = await supabase
+        .from(TABLE)
+        .select('id')
+        .eq('user_id', userId)
+        .eq('measured_at', measurement.measuredAt)
+        .maybeSingle();
+      if (!existing.error && existing.data?.id) {
+        return { data: existing.data, error: null };
+      }
+      return inserted;
+    }, (value) => value.error?.message);
+  } catch (error) {
+    await persistLocal(measurement);
+    const message = error instanceof Error ? error.message : '';
+    return { error: userFacingRequestError(message, 'No se pudo guardar la medición.'), measurement };
+  }
+
+  const { data, error } = result;
 
   if (error) {
     await persistLocal(measurement);
@@ -162,7 +186,10 @@ export async function recordBodyMeasurement(
           'Mediciones guardadas en este dispositivo. Ejecuta npm run supabase:physical-profile para sincronizar.',
       };
     }
-    return { error: error.message, measurement };
+    return {
+      error: userFacingRequestError(error.message, 'No se pudo guardar la medición.'),
+      measurement,
+    };
   }
 
   const saved = { ...measurement, id: data?.id ? String(data.id) : measurement.id };

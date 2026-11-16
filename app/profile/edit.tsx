@@ -33,6 +33,7 @@ import {
 } from '@/lib/bodyMetrics';
 import type { FitnessLevel, ProgramGoal } from '@/lib/types';
 import { safeGoBack } from '@/lib/navigation';
+import { userFacingRequestError } from '@/lib/transientNetwork';
 
 const fitnessLevels: FitnessLevel[] = ['principiante', 'intermedio', 'avanzado'];
 const programGoals: ProgramGoal[] = ['fuerza', 'hipertrofia', 'pérdida de grasa', 'rendimiento', 'movilidad'];
@@ -161,44 +162,46 @@ export default function EditProfileScreen() {
     setSuccessMessage('');
     setSubmitting(true);
 
-    const { error: profileError } = await updateProfile({
-      name: name.trim(),
-      fitnessLevel,
-      mainGoal,
-      height: parseMetricInput(height),
-      weight: parseMetricInput(weight),
-    });
+    try {
+      const { error: profileError } = await updateProfile({
+        name: name.trim(),
+        fitnessLevel,
+        mainGoal,
+        height: parseMetricInput(height),
+        weight: parseMetricInput(weight),
+      });
 
-    if (profileError) {
+      if (profileError) {
+        setError(userFacingRequestError(profileError, 'No se pudo guardar el perfil.'));
+        return;
+      }
+
+      const { error: physicalError, warning } = await save({
+        basics: {
+          birthDate: validated.birthDate,
+          biologicalSex,
+          activityLevel,
+          primaryGoal,
+          targetWeightKg: parseMetricInput(targetWeight),
+        },
+        measured: draftMeasured,
+      });
+
+      if (physicalError) {
+        setError(userFacingRequestError(physicalError, 'No se pudieron guardar las mediciones.'));
+        return;
+      }
+
+      await refreshUser(true);
+
+      setSuccessMessage(warning ?? 'Perfil actualizado correctamente.');
+      setTimeout(() => safeGoBack(router, '/tabs/profile'), 800);
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : '';
+      setError(userFacingRequestError(message, 'No se pudieron guardar los datos.'));
+    } finally {
       setSubmitting(false);
-      setError(profileError);
-      return;
     }
-
-    const { error: physicalError, warning } = await save({
-      basics: {
-        birthDate: validated.birthDate,
-        biologicalSex,
-        activityLevel,
-        primaryGoal,
-        targetWeightKg: parseMetricInput(targetWeight),
-      },
-      measured: draftMeasured,
-    });
-
-    setSubmitting(false);
-
-    if (physicalError) {
-      setError(physicalError);
-      return;
-    }
-
-    await refreshUser(true);
-
-    setSuccessMessage(
-      warning ?? 'Perfil actualizado correctamente.',
-    );
-    setTimeout(() => safeGoBack(router, '/tabs/profile'), 800);
   };
 
   return (

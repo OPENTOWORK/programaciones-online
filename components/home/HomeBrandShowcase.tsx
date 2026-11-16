@@ -1,12 +1,18 @@
-import { useRouter } from 'expo-router';
-
-import { useTrainerMobilePreviewMode } from '@/hooks/useTrainerMobilePreview';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { AppIcon } from '@/components/ui/AppIcon';
 import { AppLogo } from '@/components/ui/AppLogo';
-import { borderRadius, colors, shadows, spacing, typography, withAlpha } from '@/constants/theme';
+import {
+  borderRadius,
+  colors,
+  darkSurfacePalette,
+  shadows,
+  spacing,
+  typography,
+  withAlpha,
+} from '@/constants/theme';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
+import { usePrograms } from '@/hooks/usePrograms';
 
 const heroBackground = require('@/assets/home-hero-banner.jpg');
 
@@ -15,26 +21,27 @@ interface HomeBrandShowcaseProps {
 }
 
 export function HomeBrandShowcase({ fillAvailable = false }: HomeBrandShowcaseProps) {
-  const router = useRouter();
-  const trainerPreview = useTrainerMobilePreviewMode();
+  const navigation = useAppNavigation();
+  const { plans } = usePrograms();
 
-  const openPrograms = () => {
-    if (trainerPreview.enabled) {
-      trainerPreview.setActiveTab('programs');
+  const openCatalog = () => {
+    const catalog = plans.find((plan) => plan.category === 'hype');
+    if (catalog) {
+      navigation.push(`/plan/${catalog.id}`);
       return;
     }
-    router.push('/tabs/programs');
+    navigation.push('/tabs/programs');
   };
 
   return (
     <Pressable
-      onPress={openPrograms}
+      onPress={openCatalog}
       accessibilityRole="button"
-      accessibilityLabel="Explorar programaciones"
+      accessibilityLabel="Programaciones a tu medida"
       style={({ pressed }) => [
         styles.heroCard,
         fillAvailable && styles.heroCardFill,
-        pressed && styles.pressed,
+        pressed && styles.heroPressed,
       ]}
     >
       <View style={[styles.heroBackground, fillAvailable && styles.heroBackgroundFill]}>
@@ -49,17 +56,10 @@ export function HomeBrandShowcase({ fillAvailable = false }: HomeBrandShowcasePr
         />
         <View style={[styles.heroOverlay, fillAvailable && styles.heroOverlayFill]} pointerEvents="none">
           <View style={styles.heroBrandRow}>
-            <AppLogo size={48} />
-            <Text style={styles.heroBrandTagline}>Programaciones a tu medida</Text>
-          </View>
-
-          <View style={styles.heroMain}>
-            <Text style={styles.heroTitle}>Tu entrenamiento,{'\n'}organizado</Text>
-          </View>
-
-          <View style={styles.heroCta}>
-            <Text style={styles.heroCtaText}>Explorar catálogo</Text>
-            <AppIcon name="programs" size={16} color={colors.white} />
+            <AppLogo size={36} />
+            <Text style={styles.heroBrandTagline} numberOfLines={1}>
+              Programaciones a tu medida
+            </Text>
           </View>
         </View>
       </View>
@@ -68,9 +68,6 @@ export function HomeBrandShowcase({ fillAvailable = false }: HomeBrandShowcasePr
 }
 
 const styles = StyleSheet.create({
-  pressed: {
-    opacity: 0.94,
-  },
   heroCard: {
     width: '100%',
     borderRadius: borderRadius.xl,
@@ -80,20 +77,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     ...shadows.card,
   },
+  heroPressed: {
+    opacity: 0.88,
+  },
   heroCardFill: {
     flex: 1,
-    minHeight: 220,
+    minHeight: 84,
   },
   heroBackground: {
     position: 'relative',
     width: '100%',
-    height: 240,
+    height: 84,
     overflow: 'hidden',
   },
   heroBackgroundFill: {
     flex: 1,
     height: undefined,
-    minHeight: 220,
+    minHeight: 84,
   },
   heroImage: {
     position: 'absolute',
@@ -109,67 +109,27 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 1,
     flex: 1,
-    justifyContent: 'space-between',
-    padding: spacing.lg,
-    height: 240,
-  },
-  heroMain: {
-    flex: 1,
     justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    height: 84,
   },
   heroOverlayFill: {
     height: undefined,
-    minHeight: 220,
+    minHeight: 84,
   },
   heroBrandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm + 2,
-    marginBottom: spacing.xs,
-  },
-  heroBrandCopy: {
-    flex: 1,
-  },
-  heroEyebrow: {
-    ...typography.caption,
-    color: colors.accent,
-    fontWeight: '700',
-    letterSpacing: 0.6,
   },
   heroBrandTagline: {
-    ...typography.bodySmall,
-    color: colors.text,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  heroTitle: {
-    ...typography.h2,
-    color: colors.text,
-    fontSize: 24,
-    lineHeight: 30,
-    textShadowColor: 'rgba(0,0,0,0.45)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
-  },
-  heroCta: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: 42,
-    marginTop: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.accentDark,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
-  },
-  heroCtaText: {
-    ...typography.button,
-    color: colors.white,
-    fontWeight: '600',
-    fontSize: 14,
-    letterSpacing: 0.4,
+    ...typography.h3,
+    flex: 1,
+    // Va sobre la foto oscurecida: siempre claro, también con la paleta clara.
+    color: darkSurfacePalette.text,
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '700',
   },
 });

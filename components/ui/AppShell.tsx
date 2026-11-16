@@ -54,15 +54,13 @@ export function AppShell({ children }: AppShellProps) {
   const segments = useSegments();
   const pathname = usePathname();
   const isGymPanel = !isLoading && Boolean(user) && usesGymPanel(user?.role);
-  const isImmersiveAthleteRoute = pathname.startsWith('/timer');
   const showAthleteTabs =
     !isLoading &&
     Boolean(user) &&
     !isAuthRoute(segments) &&
     !isLandingRoute(segments) &&
     !isTrainerDesktopWeb(user?.role) &&
-    !isGymPanel &&
-    !isImmersiveAthleteRoute;
+    !isGymPanel;
 
   const gymRoleBlockedRoute =
     !isLoading &&

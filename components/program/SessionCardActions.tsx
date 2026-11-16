@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useState } from 'react';
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 
@@ -21,7 +21,7 @@ export function SessionCardActions({
   canManage = false,
   onDeleted,
 }: SessionCardActionsProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const [deleting, setDeleting] = useState(false);
 
   const openView = () => router.push(`/workout/${workoutId}`);

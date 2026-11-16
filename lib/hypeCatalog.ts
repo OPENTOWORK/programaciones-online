@@ -173,10 +173,6 @@ export function canEnterHypeCatalogProgram(role?: UserRole) {
   return isAdminRole(role);
 }
 
-export const HYPE_CATALOG_PURCHASE_PENDING_TITLE = 'Compra próximamente';
-export const HYPE_CATALOG_PURCHASE_PENDING_MESSAGE =
-  'Esta programación se podrá comprar cuando conectemos la pasarela de pagos.';
-
 export function isHypeWeeklyChallengeProgram(program: Pick<Program, 'category' | 'name'>): boolean {
   if (program.category !== 'hype') return false;
   return namesMatchCatalog(program.name, HYPE_WEEKLY_CHALLENGE.matchNames);

@@ -1,4 +1,4 @@
-import { Redirect, Stack, useLocalSearchParams } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { TrainerChatPanel } from '@/components/trainer/TrainerChatPanel';
@@ -7,17 +7,22 @@ import { colors, spacing, typography } from '@/constants/theme';
 import { useChatComposer } from '@/hooks/useChatComposer';
 import { useProgram } from '@/hooks/usePrograms';
 import { useProgramChatMessages } from '@/hooks/useProgramChatMessages';
+import { useProgramEntitlement } from '@/hooks/usePurchases';
+import { useAthletePreviewMode } from '@/hooks/useAthletePreviewMode';
 import { useAuth } from '@/hooks/useAuth';
+import { useEmbeddedRouteParams } from '@/hooks/useEmbeddedRouteParams';
 import { isTrainerRole } from '@/lib/athleteService';
 import { canEnterHypeCatalogProgram, isPaidHypeCatalogProgram } from '@/lib/hypeCatalog';
 import { HypeCatalogAccessGate } from '@/components/program/HypeCatalogAccessGate';
 import { normalizeRouteParam } from '@/lib/routeParams';
 
 export default function ProgramGroupChatScreen() {
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const params = useEmbeddedRouteParams<{ id?: string | string[] }>();
   const programId = normalizeRouteParam(params.id) ?? '';
+  const preview = useAthletePreviewMode();
   const { user } = useAuth();
   const { program, isLoading: loadingProgram } = useProgram(programId);
+  const hasProgramEntitlement = useProgramEntitlement();
   const { messages, isEmpty, isLoading, canAccess, persistent, sendMessage } =
     useProgramChatMessages(programId);
 
@@ -35,10 +40,21 @@ export default function ProgramGroupChatScreen() {
   }
 
   if (!program) {
+    if (preview.enabled) {
+      return (
+        <ScreenWrapper>
+          <Text style={styles.error}>Programación no encontrada</Text>
+        </ScreenWrapper>
+      );
+    }
     return <Redirect href="/tabs/programs" />;
   }
 
-  if (isPaidHypeCatalogProgram(program) && !canEnterHypeCatalogProgram(user?.role)) {
+  if (
+    isPaidHypeCatalogProgram(program) &&
+    !canEnterHypeCatalogProgram(user?.role) &&
+    !hasProgramEntitlement(program.id)
+  ) {
     return <HypeCatalogAccessGate program={program} />;
   }
 
@@ -52,7 +68,7 @@ export default function ProgramGroupChatScreen() {
     );
   }
 
-  const isStaff = isTrainerRole(user?.role);
+  const isStaff = !preview.enabled && isTrainerRole(user?.role);
 
   return (
     <>

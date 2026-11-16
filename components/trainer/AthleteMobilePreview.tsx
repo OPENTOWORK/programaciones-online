@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import HomeScreen from '@/app/tabs/home';
@@ -6,12 +6,26 @@ import ProfileScreen from '@/app/tabs/profile';
 import ProgramsScreen from '@/app/tabs/programs';
 import ProgressScreen from '@/app/tabs/progress';
 import TrainerScreen from '@/app/tabs/trainer';
+import { AthleteMobilePreviewStack } from '@/components/trainer/AthleteMobilePreviewStack';
+import { DevicePreviewPair } from '@/components/trainer/DevicePreviewFrame';
 import { AppIcon } from '@/components/ui/AppIcon';
+import { AthleteColorStripe } from '@/components/ui/AthleteColorStripe';
 import { HeaderBackButton } from '@/components/ui/HeaderBackButton';
 import { MobileShell } from '@/components/ui/MobileShell';
+import {
+  ATHLETE_COLORS_DEFAULT,
+  ATHLETE_COLOR_OPTIONS,
+  getAthleteColors,
+  type AthleteColorsId,
+} from '@/constants/athleteColors';
 import { colors, spacing, typography } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
-import { AthletePreviewProvider, useAthletePreviewMode, type AthletePreviewTab } from '@/hooks/useAthletePreviewMode';
+import {
+  AthletePreviewProvider,
+  useAthletePreviewMode,
+  useAthletePreviewNavigation,
+  type AthletePreviewTab,
+} from '@/hooks/useAthletePreviewMode';
 import { CEDED_ATHLETE_MOBILE_PREVIEW_EMAIL } from '@/lib/athleteMobilePreview';
 import { useAthleteTabBarHeight } from '@/lib/mobileInsets';
 
@@ -34,6 +48,7 @@ function PreviewTabBar() {
 
   return (
     <View style={styles.tabBar}>
+      <AthleteColorStripe />
       {PREVIEW_TABS.map((tab) => {
         const focused = activeTab === tab.id;
         return (
@@ -64,9 +79,12 @@ function PreviewTabBar() {
 function PreviewTabContent() {
   const { activeTab, simulateCededAthlete, previewSubjectLoading, previewSubject } =
     useAthletePreviewMode();
+  const navigation = useAthletePreviewNavigation();
+  const route = navigation?.stack[navigation.stack.length - 1];
   const tabBarHeight = useAthleteTabBarHeight();
   const waitingForCededSubject = simulateCededAthlete && previewSubjectLoading;
   const cededSubjectMissing = simulateCededAthlete && !previewSubjectLoading && !previewSubject;
+  const showStack = Boolean(route) && !waitingForCededSubject && !cededSubjectMissing;
 
   const screen = useMemo(() => {
     switch (activeTab) {
@@ -98,6 +116,8 @@ function PreviewTabContent() {
               No se encontró el atleta {CEDED_ATHLETE_MOBILE_PREVIEW_EMAIL}.
             </Text>
           </View>
+        ) : showStack && route ? (
+          <AthleteMobilePreviewStack route={route} onBack={() => navigation?.pop()} />
         ) : (
           screen
         )}
@@ -152,7 +172,47 @@ function PreviewModeToggle({ onOpenTrainer }: { onOpenTrainer?: () => void }) {
   );
 }
 
-function AthleteMobilePreviewIntro({ onOpenTrainer }: { onOpenTrainer?: () => void }) {
+function PreviewColorsToggle({
+  value,
+  onChange,
+}: {
+  value: AthleteColorsId;
+  onChange: (id: AthleteColorsId) => void;
+}) {
+  return (
+    <View style={styles.modeRow}>
+      <Text style={styles.modeRowLabel}>Colores</Text>
+      {ATHLETE_COLOR_OPTIONS.map((option) => {
+        const active = option.id === value;
+        return (
+          <Pressable
+            key={option.id}
+            onPress={() => onChange(option.id)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            style={({ pressed }) => [
+              styles.modeChip,
+              active && styles.modeChipActive,
+              pressed && styles.modeChipPressed,
+            ]}
+          >
+            <Text style={[styles.modeChipText, active && styles.modeChipTextActive]}>{option.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function AthleteMobilePreviewIntro({
+  onOpenTrainer,
+  colorsId,
+  onChangeColors,
+}: {
+  onOpenTrainer?: () => void;
+  colorsId: AthleteColorsId;
+  onChangeColors: (id: AthleteColorsId) => void;
+}) {
   return (
     <View style={styles.intro}>
       <View style={styles.backRow}>
@@ -160,26 +220,37 @@ function AthleteMobilePreviewIntro({ onOpenTrainer }: { onOpenTrainer?: () => vo
       </View>
       <Text style={styles.title}>Vista móvil del atleta</Text>
       <Text style={styles.subtitle}>
-        Así ven la app los atletas en el móvil, siempre en modo noche. Los atletas cedidos a un
-        entrenador no ven gimnasios y en programas solo tienen nutrición; el resto ve la app completa.
-        En «Atleta cedido» se muestra la programación de {CEDED_ATHLETE_MOBILE_PREVIEW_EMAIL}.
+        Así ven la app los atletas en el móvil. Los atletas cedidos a un entrenador no ven gimnasios
+        y en programas solo tienen nutrición; el resto ve la app completa. En «Atleta cedido» se
+        muestra la programación de {CEDED_ATHLETE_MOBILE_PREVIEW_EMAIL}.
       </Text>
       <PreviewModeToggle onOpenTrainer={onOpenTrainer} />
+      <PreviewColorsToggle value={colorsId} onChange={onChangeColors} />
     </View>
   );
 }
 
 export function AthleteMobilePreview({ onOpenTrainer }: { onOpenTrainer?: () => void }) {
+  const [colorsId, setColorsId] = useState<AthleteColorsId>(ATHLETE_COLORS_DEFAULT);
+  const { palette } = getAthleteColors(colorsId).theme;
+
   return (
     <View style={styles.page}>
       <AthletePreviewProvider>
-        <AthleteMobilePreviewIntro onOpenTrainer={onOpenTrainer} />
+        <AthleteMobilePreviewIntro
+          onOpenTrainer={onOpenTrainer}
+          colorsId={colorsId}
+          onChangeColors={setColorsId}
+        />
         <View style={styles.previewArea}>
-          <View style={styles.phoneFrame}>
-            <MobileShell>
-              <PreviewTabContent />
-            </MobileShell>
-          </View>
+          <DevicePreviewPair
+            screen={{ background: palette.background, content: palette.text }}
+            render={() => (
+              <MobileShell bare palette={colorsId}>
+                <PreviewTabContent />
+              </MobileShell>
+            )}
+          />
         </View>
       </AthletePreviewProvider>
     </View>
@@ -212,8 +283,14 @@ const styles = StyleSheet.create({
   modeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    alignItems: 'center',
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  modeRowLabel: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontWeight: '700',
   },
   modeChip: {
     paddingHorizontal: spacing.md,
@@ -250,16 +327,8 @@ const styles = StyleSheet.create({
   previewArea: {
     flex: 1,
     minHeight: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: spacing.md,
-  },
-  phoneFrame: {
-    flex: 1,
     width: '100%',
-    maxWidth: 430,
-    maxHeight: 'min(88vh, 920px)' as unknown as number,
-    minHeight: 560,
+    paddingBottom: spacing.sm,
   },
   phoneBody: {
     flex: 1,
@@ -299,6 +368,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 8,
     width: '100%',
+    position: 'relative',
   },
   tabItem: {
     flex: 1,

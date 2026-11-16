@@ -1,13 +1,15 @@
 import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { HorizontalPager } from '@/components/program/HorizontalPager';
 import { PlanCoverCard } from '@/components/program/PlanCoverCard';
 import {
   planBrandActionButtonStyle,
   planBrandActionButtonTextStyle,
 } from '@/components/program/planBrandUi';
 import { Button } from '@/components/ui/Button';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing } from '@/constants/theme';
+import { fontUiBold, fontUiSemibold } from '@/constants/fonts';
 import type { AppIconName } from '@/constants/icons';
 import { isGymRole, isTrainerRole } from '@/lib/athleteService';
 import { getPlanDisplaySubtitle, type Plan } from '@/lib/programService';
@@ -32,9 +34,15 @@ interface CategoryTabsProps {
   plans: Plan[];
   userRole?: UserRole;
   showSectionLabel?: boolean;
+  layout?: 'compact' | 'page';
 }
 
-export function CategoryTabs({ plans, userRole, showSectionLabel = true }: CategoryTabsProps) {
+export function CategoryTabs({
+  plans,
+  userRole,
+  showSectionLabel = true,
+  layout = 'compact',
+}: CategoryTabsProps) {
   const router = useAppNavigation();
   const gymSections = isGymRole(userRole)
     ? GYM_PLAN_SECTIONS.map((section) => ({
@@ -51,13 +59,14 @@ export function CategoryTabs({ plans, userRole, showSectionLabel = true }: Categ
 
   const isStaff = isTrainerRole(userRole) || isGymRole(userRole);
 
-  const renderPlan = (plan: Plan) => {
+  const renderPlan = (plan: Plan, cardLayout: 'compact' | 'page' = 'compact') => {
     const icon = PLAN_ICONS[plan.category] ?? 'programs';
     const actionLabel = isServicePlanCategory(plan.category)
       ? isStaff
         ? 'Crear plan'
         : 'Solicitar plan'
       : 'Entrar';
+    const page = cardLayout === 'page';
 
     return (
       <PlanCoverCard
@@ -66,19 +75,38 @@ export function CategoryTabs({ plans, userRole, showSectionLabel = true }: Categ
         title={plan.label}
         subtitle={getPlanDisplaySubtitle(plan.category, userRole)}
         onPress={() => openPlan(plan.id)}
+        layout={cardLayout}
         trailing={
           <Button
             title={actionLabel}
             size="compact"
             variant="outline"
             onPress={() => openPlan(plan.id)}
-            style={planBrandActionButtonStyle}
-            textStyle={planBrandActionButtonTextStyle}
+            style={page ? styles.pageButton : planBrandActionButtonStyle}
+            textStyle={{
+              ...planBrandActionButtonTextStyle,
+              fontFamily: fontUiBold,
+              fontWeight: 'normal',
+              fontSize: page ? 16 : 14,
+              lineHeight: page ? 20 : 18,
+            }}
           />
         }
       />
     );
   };
+
+  if (layout === 'page' && !gymSections) {
+    return (
+      <View style={styles.pagerHost}>
+        <HorizontalPager
+          items={plans}
+          label={(plan) => plan.label}
+          renderPage={(plan) => renderPlan(plan, 'page')}
+        />
+      </View>
+    );
+  }
 
   if (gymSections) {
     return (
@@ -102,14 +130,26 @@ export function CategoryTabs({ plans, userRole, showSectionLabel = true }: Categ
 }
 
 const styles = StyleSheet.create({
+  pagerHost: {
+    flex: 1,
+    minHeight: 0,
+  },
+  pageButton: {
+    ...planBrandActionButtonStyle,
+    width: '100%',
+    alignSelf: 'stretch',
+    minHeight: 48,
+  },
   list: {
     gap: spacing.sm,
     marginBottom: spacing.lg,
   },
   cardTitle: {
-    ...typography.caption,
+    fontFamily: fontUiSemibold,
+    fontWeight: 'normal',
     color: colors.textMuted,
-    fontWeight: '700',
+    fontSize: 11,
+    lineHeight: 14,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: spacing.xs,

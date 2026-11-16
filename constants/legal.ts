@@ -9,3 +9,6 @@ export const PRIVACY_POLICY_PUBLIC_URL =
 
 export const ACCOUNT_DELETION_PUBLIC_URL =
   'https://carlosgarciacano87-dev.github.io/app-progras/account-deletion.html';
+
+/** Condiciones de uso estándar de Apple (EULA), exigidas junto a las suscripciones en iOS. */
+export const APPLE_STANDARD_EULA_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';

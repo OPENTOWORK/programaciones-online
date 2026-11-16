@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { Href } from 'expo-router';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { isTrainerRole } from '@/lib/athleteService';
@@ -6,6 +7,10 @@ import {
   loadAthleteMobilePreviewSubject,
   type AthleteMobilePreviewSubject,
 } from '@/lib/athleteMobilePreview';
+import {
+  hrefToAthletePreviewNavAction,
+  type AthletePreviewRoute,
+} from '@/lib/athleteMobilePreviewRoutes';
 import type { UserProfile } from '@/lib/types';
 
 export type AthletePreviewTab = 'home' | 'programs' | 'progress' | 'trainer' | 'profile';
@@ -20,6 +25,15 @@ type AthletePreviewContextValue = {
   previewSubjectLoading: boolean;
 };
 
+type AthletePreviewNavigationValue = {
+  stack: AthletePreviewRoute[];
+  pushHref: (href: Href) => boolean;
+  replaceHref: (href: Href) => boolean;
+  pop: () => boolean;
+  resetStack: () => void;
+  canGoBack: () => boolean;
+};
+
 const AthletePreviewContext = createContext<AthletePreviewContextValue>({
   enabled: false,
   activeTab: 'home',
@@ -30,11 +44,62 @@ const AthletePreviewContext = createContext<AthletePreviewContextValue>({
   previewSubjectLoading: false,
 });
 
+const AthletePreviewNavigationContext = createContext<AthletePreviewNavigationValue | null>(null);
+
 export function AthletePreviewProvider({ children }: { children: ReactNode }) {
-  const [activeTab, setActiveTab] = useState<AthletePreviewTab>('home');
-  const [simulateCededAthlete, setSimulateCededAthlete] = useState(true);
+  const [activeTab, setActiveTabState] = useState<AthletePreviewTab>('home');
+  const [stack, setStack] = useState<AthletePreviewRoute[]>([]);
+  const [simulateCededAthlete, setSimulateCededAthleteState] = useState(true);
   const [previewSubject, setPreviewSubject] = useState<AthleteMobilePreviewSubject | null>(null);
   const [previewSubjectLoading, setPreviewSubjectLoading] = useState(false);
+
+  const setActiveTab = useCallback((tab: AthletePreviewTab) => {
+    setStack([]);
+    setActiveTabState(tab);
+  }, []);
+
+  const setSimulateCededAthlete = useCallback((value: boolean) => {
+    setStack([]);
+    setSimulateCededAthleteState(value);
+  }, []);
+
+  const applyNavAction = useCallback((href: Href, mode: 'push' | 'replace') => {
+    const action = hrefToAthletePreviewNavAction(href);
+    if (!action) return false;
+
+    if (action.kind === 'tab') {
+      setActiveTabState(action.tab);
+      setStack([]);
+      return true;
+    }
+
+    setStack((current) => {
+      if (mode === 'replace' && current.length > 0) {
+        return [...current.slice(0, -1), action.route];
+      }
+      return [...current, action.route];
+    });
+    return true;
+  }, []);
+
+  const pushHref = useCallback((href: Href) => applyNavAction(href, 'push'), [applyNavAction]);
+  const replaceHref = useCallback((href: Href) => applyNavAction(href, 'replace'), [applyNavAction]);
+
+  const pop = useCallback(() => {
+    let didPop = false;
+    setStack((current) => {
+      if (current.length === 0) return current;
+      didPop = true;
+      return current.slice(0, -1);
+    });
+    return didPop;
+  }, []);
+
+  const resetStack = useCallback(() => {
+    setStack([]);
+  }, []);
+
+  const canGoBack = useCallback(() => stack.length > 0, [stack.length]);
 
   useEffect(() => {
     if (!simulateCededAthlete) {
@@ -67,14 +132,39 @@ export function AthletePreviewProvider({ children }: { children: ReactNode }) {
       previewSubject,
       previewSubjectLoading,
     }),
-    [activeTab, previewSubject, previewSubjectLoading, simulateCededAthlete],
+    [activeTab, previewSubject, previewSubjectLoading, setActiveTab, setSimulateCededAthlete, simulateCededAthlete],
   );
 
-  return <AthletePreviewContext.Provider value={value}>{children}</AthletePreviewContext.Provider>;
+  const navigation = useMemo(
+    () => ({
+      stack,
+      pushHref,
+      replaceHref,
+      pop,
+      resetStack,
+      canGoBack,
+    }),
+    [canGoBack, pop, pushHref, replaceHref, resetStack, stack],
+  );
+
+  return (
+    <AthletePreviewContext.Provider value={value}>
+      <AthletePreviewNavigationContext.Provider value={navigation}>
+        {children}
+      </AthletePreviewNavigationContext.Provider>
+    </AthletePreviewContext.Provider>
+  );
 }
 
 export function useAthletePreviewMode() {
   return useContext(AthletePreviewContext);
+}
+
+export function useAthletePreviewNavigation() {
+  const preview = useAthletePreviewMode();
+  const navigation = useContext(AthletePreviewNavigationContext);
+  if (!preview.enabled || !navigation) return null;
+  return navigation;
 }
 
 /** Vista de atleta real o previsualización móvil del entrenador. */

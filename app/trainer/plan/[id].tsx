@@ -870,6 +870,7 @@ export default function TrainerPlanDetailScreen() {
                 hasVideo={hasVideo}
                 preview
                 allowFeedbackVideos={allowsTrainerFeedbackVideos({ planType: plan.planType })}
+                allowBlockComments={plan.planType === 'personalized'}
                 trainerNotes={{ athleteId: plan.athleteId, athletePlanId: plan.id }}
                 attachment={
                   plan.pdfUrl ? (

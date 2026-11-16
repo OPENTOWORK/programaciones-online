@@ -1,14 +1,9 @@
-import { Platform } from 'react-native';
-
 /**
- * En iOS no se muestran precios ni botones de compra de contenido digital.
- * App Review exige que cualquier contenido digital de pago pase por In-App
- * Purchase (guía 3.1.1), y esta app todavía no tiene pasarela: el acceso a las
- * programaciones lo concede el entrenador o el gimnasio desde su panel.
+ * El contenido digital solo se vende con la tienda del dispositivo (`lib/iap`) y solo cuando
+ * tiene un producto en `store_products`. Nunca se muestran precios de referencia ni otros
+ * medios de pago (Apple 3.1.1 y política de pagos de Google Play).
  */
-export const SHOW_CATALOG_PRICING = Platform.OS !== 'ios';
 
-/** Mensaje para el contenido de catálogo al que el usuario aún no tiene acceso. */
-export const CATALOG_ACCESS_REQUEST_MESSAGE = SHOW_CATALOG_PRICING
-  ? 'El contenido está reservado al administrador. Los atletas y entrenadores podrán comprarla cuando conectemos la pasarela de pagos.'
-  : 'El acceso a esta programación lo activa tu entrenador o tu gimnasio desde su panel. Habla con ellos para que te la asignen.';
+/** Mensaje para el contenido de catálogo al que el usuario aún no tiene acceso ni puede contratar. */
+export const CATALOG_ACCESS_REQUEST_MESSAGE =
+  'Esta programación todavía no está disponible para tu cuenta. Mientras tanto, puedes ver su semana de prueba.';

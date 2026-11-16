@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { borderRadius, brandColor, colors, spacing, typography } from '@/constants/theme';
 
 interface ProgressBarProps {
   value: number;
@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
   },
   track: {
     height: 10,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: brandColor('inactive', colors.surfaceLight),
     borderRadius: borderRadius.full,
     overflow: 'hidden',
   },

@@ -432,6 +432,20 @@ export async function updateSupportTicket(
   return { data: mapTicket(data as Record<string, unknown>) };
 }
 
+const supportUnreadListeners = new Set<() => void>();
+
+/** Avisa a la barra lateral cuando un ticket deja de tener mensajes sin leer. */
+export function subscribeSupportUnreadChange(listener: () => void) {
+  supportUnreadListeners.add(listener);
+  return () => {
+    supportUnreadListeners.delete(listener);
+  };
+}
+
+function notifySupportUnreadChange() {
+  for (const listener of supportUnreadListeners) listener();
+}
+
 /** Marca como leídos los mensajes que le corresponden a quien consulta. */
 export async function markSupportTicketRead(ticketId: string): Promise<void> {
   if (!ticketId) return;
@@ -439,7 +453,8 @@ export async function markSupportTicketRead(ticketId: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
 
-  await supabase.rpc('mark_support_messages_read', { p_ticket_id: ticketId });
+  const { error } = await supabase.rpc('mark_support_messages_read', { p_ticket_id: ticketId });
+  if (!error) notifySupportUnreadChange();
 }
 
 /** Tickets con mensajes del usuario sin leer, para el badge del CRM. */

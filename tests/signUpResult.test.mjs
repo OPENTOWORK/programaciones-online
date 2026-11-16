@@ -6,7 +6,7 @@ import { interpretSignUpResponse, mapSignUpErrorMessage } from '../scripts/lib/s
 describe('interpretSignUpResponse', () => {
   it('detecta email ya registrado (identities vacío)', () => {
     const result = interpretSignUpResponse({
-      user: { identities: [] } as never,
+      user: { identities: [] },
       session: null,
     });
     assert.equal(result.type, 'already_registered');
@@ -14,7 +14,7 @@ describe('interpretSignUpResponse', () => {
 
   it('detecta confirmación pendiente', () => {
     const result = interpretSignUpResponse({
-      user: { identities: [{ id: '1' }] } as never,
+      user: { identities: [{ id: '1' }] },
       session: null,
     });
     assert.equal(result.type, 'needs_email_confirmation');
@@ -22,8 +22,8 @@ describe('interpretSignUpResponse', () => {
 
   it('detecta sesión directa (confirmación desactivada)', () => {
     const result = interpretSignUpResponse({
-      user: { identities: [{ id: '1' }] } as never,
-      session: { access_token: 'x' } as never,
+      user: { identities: [{ id: '1' }] },
+      session: { access_token: 'x' },
     });
     assert.equal(result.type, 'session_created');
   });

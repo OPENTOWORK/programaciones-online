@@ -26,6 +26,8 @@ interface AppointmentFormModalProps {
   athletes: readonly AthleteSummary[];
   initialDate: Date;
   saving?: boolean;
+  /** Llamada de voz o videollamada. Si no se indica, se mantiene el formulario general. */
+  appointmentKind?: 'call' | 'video';
   onClose: () => void;
   onSubmit: (draft: AppointmentDraft) => void;
 }
@@ -44,6 +46,7 @@ export function AppointmentFormModal({
   athletes,
   initialDate,
   saving = false,
+  appointmentKind,
   onClose,
   onSubmit,
 }: AppointmentFormModalProps) {
@@ -72,12 +75,14 @@ export function AppointmentFormModal({
     setDate(initialDateRef.current);
     setTime(nextSlotFrom(new Date()));
     setDuration(30);
-    setTitle(DEFAULT_TITLE);
+    setTitle(
+      appointmentKind === 'call' ? 'Llamada' : appointmentKind === 'video' ? 'Videollamada' : DEFAULT_TITLE,
+    );
     setNotes('');
     setMeetingUrl('');
     setError(null);
     setTimeOpen(false);
-  }, [visible]);
+  }, [appointmentKind, visible]);
 
   const providerLabel = useMemo(() => {
     const { url } = normalizeMeetingUrl(meetingUrl);
@@ -298,31 +303,33 @@ export function AppointmentFormModal({
 
             <Input label="Motivo" value={title} onChangeText={setTitle} placeholder={DEFAULT_TITLE} />
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Enlace de la videollamada</Text>
-              <Input
-                value={meetingUrl}
-                onChangeText={setMeetingUrl}
-                placeholder="Pega tu Meet o Zoom, o genera una sala"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-              />
-              <View style={styles.linkActions}>
-                <Pressable
-                  onPress={() => setMeetingUrl(generateMeetingRoomUrl())}
-                  style={({ pressed }) => [styles.linkAction, pressed && styles.chipPressed]}
-                >
-                  <AppIcon name="video" size={14} color={colors.accent} />
-                  <Text style={styles.linkActionText}>Generar sala de vídeo</Text>
-                </Pressable>
-                {providerLabel ? <Text style={styles.hint}>{providerLabel}</Text> : null}
+            {appointmentKind === 'call' ? null : (
+              <View style={styles.field}>
+                <Text style={styles.label}>Enlace de la videollamada</Text>
+                <Input
+                  value={meetingUrl}
+                  onChangeText={setMeetingUrl}
+                  placeholder="Pega tu Meet o Zoom, o genera una sala"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+                <View style={styles.linkActions}>
+                  <Pressable
+                    onPress={() => setMeetingUrl(generateMeetingRoomUrl())}
+                    style={({ pressed }) => [styles.linkAction, pressed && styles.chipPressed]}
+                  >
+                    <AppIcon name="video" size={14} color={colors.accent} />
+                    <Text style={styles.linkActionText}>Generar sala de vídeo</Text>
+                  </Pressable>
+                  {providerLabel ? <Text style={styles.hint}>{providerLabel}</Text> : null}
+                </View>
+                <Text style={styles.hint}>
+                  La sala generada se abre en el navegador y no necesita cuenta. Puedes dejarlo vacío y
+                  añadirlo después.
+                </Text>
               </View>
-              <Text style={styles.hint}>
-                La sala generada se abre en el navegador y no necesita cuenta. Puedes dejarlo vacío y añadirlo
-                después.
-              </Text>
-            </View>
+            )}
 
             <Input
               label="Notas (opcional)"

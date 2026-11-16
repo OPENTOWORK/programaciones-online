@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { isAdminRole } from '@/lib/athleteService';
-import { fetchAdminSupportUnreadCount } from '@/lib/supportService';
+import { fetchAdminSupportUnreadCount, subscribeSupportUnreadChange } from '@/lib/supportService';
 
 /** Número de solicitudes con mensajes del usuario sin leer. Solo para administradores. */
 export function useSupportUnreadBadge() {
@@ -23,6 +23,8 @@ export function useSupportUnreadBadge() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => subscribeSupportUnreadChange(() => void load()), [load]);
 
   useFocusRefresh(() => load());
 

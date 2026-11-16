@@ -78,9 +78,9 @@ function mapEntreno(row: EntrenoRow): Workout {
   };
 }
 
-async function queryEntrenos<T extends { data: unknown; error: { message: string } | null }>(
-  run: (select: string) => Promise<T>,
-) {
+type EntrenoQueryResult = { data: unknown; error: { message: string } | null };
+
+async function queryEntrenos(run: (select: string) => PromiseLike<EntrenoQueryResult>): Promise<EntrenoQueryResult> {
   const withSchedule = await run(entrenoSelect(true));
   if (!withSchedule.error) return withSchedule;
   if (!isMissingScheduleConfigError(withSchedule.error.message)) return withSchedule;

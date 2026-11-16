@@ -3,7 +3,16 @@ import { StyleSheet, View, type TextStyle, type ViewStyle } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { fontPlanBrandDisplay } from '@/constants/fonts';
-import { borderRadius, brandColors, colors, shadows, spacing, typography, withAlpha } from '@/constants/theme';
+import {
+  borderRadius,
+  brandColor,
+  brandColors,
+  colors,
+  shadows,
+  spacing,
+  typography,
+  withAlpha,
+} from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 
 export const PLAN_BRAND_ICON_GRADIENT = [
@@ -50,15 +59,15 @@ export function PlanBrandSilverIcon({
 }
 
 export const planBrandActionButtonStyle: ViewStyle = {
-  backgroundColor: withAlpha(brandColors.orangeAction, '22'),
-  borderColor: brandColors.orangeAction,
+  backgroundColor: withAlpha(brandColor('action', brandColors.orangeAction), '22'),
+  borderColor: brandColor('action', brandColors.orangeAction),
   borderWidth: 1.5,
   shadowOpacity: 0,
   elevation: 0,
 };
 
 export const planBrandActionButtonTextStyle: TextStyle = {
-  color: brandColors.orangeAction,
+  color: brandColor('actionInk', brandColors.orangeAction),
   fontWeight: '800',
   letterSpacing: 0.3,
 };
@@ -69,13 +78,13 @@ export const planBrandStyles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: withAlpha(brandColors.silverMid, '70'),
-    backgroundColor: colors.black,
+    backgroundColor: brandColor('card', colors.black),
     ...shadows.card,
   },
   inner: {
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.black,
+    backgroundColor: brandColor('card', colors.black),
   },
   iconShell: {
     padding: 1,
@@ -94,19 +103,19 @@ export const planBrandStyles = StyleSheet.create({
   },
   lead: {
     fontFamily: fontPlanBrandDisplay,
-    color: brandColors.orangeHighlight,
+    color: brandColor('title', brandColors.orangeHighlight),
     fontWeight: '400',
     fontSize: 22,
     lineHeight: 28,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
-    textShadowColor: withAlpha(brandColors.orangeHighlight, '55'),
+    textShadowColor: brandColor('titleGlow', withAlpha(brandColors.orangeHighlight, '55')),
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
   },
   tag: {
     ...typography.caption,
-    color: brandColors.orangeSecondary,
+    color: brandColor('tag', brandColors.orangeSecondary),
     fontWeight: '600',
     fontSize: 11,
     letterSpacing: 0.55,
@@ -115,14 +124,14 @@ export const planBrandStyles = StyleSheet.create({
   },
   subtitle: {
     ...typography.caption,
-    color: withAlpha(brandColors.orangeSecondary, 'CC'),
+    color: brandColor('body', withAlpha(brandColors.orangeSecondary, 'CC')),
     marginTop: 4,
     lineHeight: 17,
     fontSize: 12,
   },
   metaText: {
     ...typography.bodySmall,
-    color: withAlpha(brandColors.orangeSecondary, 'CC'),
+    color: brandColor('body', withAlpha(brandColors.orangeSecondary, 'CC')),
     lineHeight: 20,
   },
 });

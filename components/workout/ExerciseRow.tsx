@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
-import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
+import { fontUiRegular } from '@/constants/fonts';
+import { borderRadius, brandColor, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { formatExercisePrescription } from '@/lib/exercisePrescription';
 import type { Exercise } from '@/lib/types';
 
@@ -76,16 +77,15 @@ export function ExerciseRow({
           }}
           style={styles.namePressable}
         >
-          <Text style={[styles.name, completed && styles.nameCompleted]} numberOfLines={1}>
+          <Text style={[styles.name, completed && styles.nameCompleted]} numberOfLines={2}>
             {exercise.name}
           </Text>
         </Pressable>
 
         {detail ? (
-          <>
-            <Text style={styles.sep}>·</Text>
-            <Text style={styles.details} numberOfLines={1}>{detail}</Text>
-          </>
+          <Text style={styles.details} numberOfLines={1}>
+            {detail}
+          </Text>
         ) : null}
 
         {renderExtra}
@@ -132,13 +132,12 @@ export function ExerciseRow({
 
 const styles = StyleSheet.create({
   rowShell: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    paddingVertical: 9,
-    paddingHorizontal: spacing.sm,
-    marginBottom: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    paddingVertical: 12,
+    paddingHorizontal: 2,
+    marginBottom: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: brandColor('cardBorder', '#2C313A'),
+    backgroundColor: 'transparent',
     gap: spacing.xs,
   },
   rowLine: {
@@ -147,8 +146,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   rowCompleted: {
-    borderColor: colors.accent,
-    backgroundColor: withAlpha(colors.accent, '11'),
+    backgroundColor: 'transparent',
   },
   rowVideoActive: {
     borderColor: withAlpha(colors.accent, '88'),
@@ -183,14 +181,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   namePressable: {
-    flexShrink: 1,
-    maxWidth: '34%',
-    minWidth: 72,
-  },
-  sep: {
-    ...typography.bodySmall,
-    color: colors.textMuted,
-    flexShrink: 0,
+    flex: 1,
+    minWidth: 0,
   },
   iconRow: {
     flexDirection: 'row',
@@ -216,20 +208,24 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   name: {
-    ...typography.bodySmall,
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
     color: colors.text,
-    fontWeight: '700',
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 20,
   },
   nameCompleted: {
     color: colors.textMuted,
   },
   details: {
-    flex: 1,
-    minWidth: 0,
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    flexShrink: 0,
+    maxWidth: '46%',
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
+    color: brandColor('body', '#C5CAD3'),
+    fontSize: 13,
     lineHeight: 18,
+    textAlign: 'right',
   },
   notesRow: {
     flexDirection: 'row',

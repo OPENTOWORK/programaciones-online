@@ -112,13 +112,14 @@ export class TimeoutError extends Error {
 export async function withTimeout(promise, timeoutMs, message = 'La operación tardó demasiado') {
   let timeoutId;
 
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new TimeoutError(message)), timeoutMs);
+  });
+  // El mismo rechazo puede quedar suelto si la otra promesa ya ganó la carrera.
+  timeout.catch(() => undefined);
+
   try {
-    return await Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new TimeoutError(message)), timeoutMs);
-      }),
-    ]);
+    return await Promise.race([promise, timeout]);
   } finally {
     if (timeoutId !== undefined) {
       clearTimeout(timeoutId);

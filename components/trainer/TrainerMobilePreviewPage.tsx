@@ -82,8 +82,7 @@ const styles = StyleSheet.create({
   previewArea: {
     flex: 1,
     minHeight: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: spacing.md,
+    width: '100%',
+    paddingBottom: spacing.sm,
   },
 });

@@ -1,4 +1,6 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
+import { useEmbeddedRouteParams } from '@/hooks/useEmbeddedRouteParams';
+import { normalizeRouteParam } from '@/lib/routeParams';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -18,8 +20,9 @@ import { formatDayLabel } from '@/lib/programSchedulePreview';
 import { openScheduledSession } from '@/lib/sessionNavigation';
 
 export default function CalendarDayScreen() {
-  const router = useRouter();
-  const { date } = useLocalSearchParams<{ date: string }>();
+  const router = useAppNavigation();
+  const params = useEmbeddedRouteParams<{ date?: string | string[] }>();
+  const date = normalizeRouteParam(params.date);
   const { user } = useAuth();
   const { getById } = usePrograms();
   const [loading, setLoading] = useState(true);

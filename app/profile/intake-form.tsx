@@ -1,4 +1,6 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
+import { useEmbeddedRouteParams } from '@/hooks/useEmbeddedRouteParams';
+import { normalizeRouteParam } from '@/lib/routeParams';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
@@ -10,15 +12,16 @@ import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAthleteIntakeForm } from '@/hooks/useAthleteIntakeForm';
 import { useAthleteIntakeFormEntry } from '@/hooks/useAthleteIntakeForms';
-import { safeGoBack } from '@/lib/navigation';
 import { validateIntakeAnswers } from '@/lib/intakeFormTypes';
 
 export default function AthleteIntakeFormScreen() {
-  const router = useRouter();
-  const { returnTo, templateId: templateIdParam } = useLocalSearchParams<{
-    returnTo?: string;
-    templateId?: string;
+  const router = useAppNavigation();
+  const params = useEmbeddedRouteParams<{
+    returnTo?: string | string[];
+    templateId?: string | string[];
   }>();
+  const returnTo = normalizeRouteParam(params.returnTo);
+  const templateIdParam = normalizeRouteParam(params.templateId);
   const {
     isLoading: legacyLoading,
     usesCustomForms,
@@ -87,7 +90,7 @@ export default function AthleteIntakeFormScreen() {
     }
 
     setSuccessMessage('Formulario guardado correctamente.');
-    setTimeout(() => safeGoBack(router, '/tabs/profile'), 800);
+    setTimeout(() => router.back('/tabs/profile'), 800);
   };
 
   return (
@@ -117,7 +120,7 @@ export default function AthleteIntakeFormScreen() {
       <Button title="Guardar formulario" onPress={() => void handleSave()} loading={saving} />
       <Button
         title="Cancelar"
-        onPress={() => safeGoBack(router, '/tabs/profile')}
+        onPress={() => router.back('/tabs/profile')}
         variant="ghost"
         style={styles.cancelBtn}
       />

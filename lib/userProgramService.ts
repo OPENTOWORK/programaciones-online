@@ -176,6 +176,12 @@ export async function startUserProgram(
   );
 
   if (error) {
+    if (error.message.includes('PURCHASE_REQUIRED')) {
+      return {
+        error:
+          'Esta programación es de pago. Suscríbete desde la tienda de la app o, si ya la contrataste, usa «Restaurar compras».',
+      };
+    }
     return { error: error.message };
   }
 

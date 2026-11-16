@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -158,7 +158,7 @@ export function ProgramSessionsGrid({
   canManage = false,
   onWorkoutsChange,
 }: ProgramSessionsGridProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const { width, height } = useWindowDimensions();
   const { user, refreshUser } = useAuth();
   const { create: createTemplate } = useSessionTemplates();

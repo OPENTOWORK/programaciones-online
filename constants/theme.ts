@@ -88,6 +88,50 @@ export function paletteForScheme(scheme: AppColorScheme): ThemeSurfacePalette {
   return scheme === 'light' ? lightSurfacePalette : darkSurfacePalette;
 }
 
+const BRAND_COLOR_ROLES = [
+  'title',
+  'titleGlow',
+  'tag',
+  'body',
+  'card',
+  'cardBorder',
+  'action',
+  'actionInk',
+  'button',
+  'buttonEdge',
+  'buttonShadow',
+  'onButton',
+  'price',
+  'pill',
+  'pillBorder',
+  'inactive',
+  'trial',
+  'rest',
+] as const;
+
+/** Papeles de los colores de marca (naranjas de planes, botones…) que una paleta puede cambiar. */
+export type BrandColorRole = (typeof BRAND_COLOR_ROLES)[number];
+
+export type BrandColorOverrides = Partial<Record<BrandColorRole, string>>;
+
+function brandCssVar(role: BrandColorRole) {
+  return `--app-brand-${role.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
+}
+
+/** Color de marca: si la paleta activa no lo cambia, se queda `fallback` (en nativo, siempre). */
+export function brandColor(role: BrandColorRole, fallback: string) {
+  return Platform.OS === 'web' ? `var(${brandCssVar(role)}, ${fallback})` : fallback;
+}
+
+export function brandCssVars(overrides: BrandColorOverrides = {}): Record<string, string> {
+  const vars: Record<string, string> = {};
+  for (const role of BRAND_COLOR_ROLES) {
+    const value = overrides[role];
+    if (value) vars[brandCssVar(role)] = value;
+  }
+  return vars;
+}
+
 export function cssVarsFromPalette(palette: ThemeSurfacePalette): Record<string, string> {
   return {
     [THEME_CSS_VARS.background]: palette.background,
@@ -116,15 +160,19 @@ export function applyThemePalette(
   scheme: AppColorScheme,
   palette: ThemeSurfacePalette,
   themeId: string = scheme,
+  brand?: BrandColorOverrides,
 ) {
   if (typeof document === 'undefined') return;
 
-  const vars = cssVarsFromPalette(palette);
+  const vars = { ...cssVarsFromPalette(palette), ...brandCssVars(brand) };
   const root = document.documentElement;
 
   root.setAttribute('data-theme', themeId);
   root.style.colorScheme = scheme;
 
+  for (const role of BRAND_COLOR_ROLES) {
+    root.style.removeProperty(brandCssVar(role));
+  }
   for (const [name, value] of Object.entries(vars)) {
     root.style.setProperty(name, value);
   }
@@ -149,6 +197,7 @@ export function applyAppColorScheme(scheme: AppColorScheme) {
 export function scopedThemeContainerStyle(
   palette: ThemeSurfacePalette,
   scheme: AppColorScheme = 'dark',
+  brand?: BrandColorOverrides,
 ): ViewStyle {
   if (Platform.OS !== 'web') {
     return {
@@ -164,6 +213,7 @@ export function scopedThemeContainerStyle(
     backgroundColor: palette.background,
     colorScheme: scheme,
     ...cssVarsFromPalette(palette),
+    ...brandCssVars(brand),
   } as ViewStyle;
 }
 

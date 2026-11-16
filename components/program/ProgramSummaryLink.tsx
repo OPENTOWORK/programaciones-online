@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon, IconBadge } from '@/components/ui/AppIcon';
@@ -12,7 +12,7 @@ interface ProgramSummaryLinkProps {
 }
 
 export function ProgramSummaryLink({ program }: ProgramSummaryLinkProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
 
   return (
     <Pressable

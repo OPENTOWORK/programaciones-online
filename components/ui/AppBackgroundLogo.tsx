@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Image, Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useAthleteColors } from '@/hooks/useAthleteColors';
 
 const logoWatermark = require('@/assets/logo-watermark.png');
 const logoWatermarkOnLight = require('@/assets/logo-watermark-on-light.png');
@@ -29,7 +30,8 @@ export function AppBackgroundScaffold({ children, style }: AppBackgroundScaffold
 
 export function AppBackgroundLogo() {
   const { scheme } = useAppTheme();
-  const isLight = scheme === 'light';
+  const shellScheme = useAthleteColors()?.theme.scheme;
+  const isLight = (shellScheme ?? scheme) === 'light';
 
   return (
     <View

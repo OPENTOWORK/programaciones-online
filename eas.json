@@ -51,7 +51,8 @@
       "ios": {
         "language": "es-ES",
         "appName": "Training ProgLine",
-        "bundleIdentifier": "com.trainingprogline.app"
+        "bundleIdentifier": "com.trainingprogline.app",
+        "ascAppId": "6810687197"
       }
     }
   }

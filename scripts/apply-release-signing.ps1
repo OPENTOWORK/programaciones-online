@@ -37,14 +37,16 @@ if ($content -notmatch 'signingConfigs\.release') {
   $content = $content.Replace("        }`n    }`n    buildTypes {", "        }`n$releaseBlock`n    }`n    buildTypes {")
 }
 
-$content = $content.Replace(
-  "            signingConfig signingConfigs.debug`r`n            def enableShrinkResources",
-  "            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug`r`n            def enableShrinkResources"
+# Las plantillas de Expo usan "signingConfig signingConfigs.debug" o, desde SDK 56, "signingConfig = signingConfigs.debug".
+$content = [regex]::Replace(
+  $content,
+  '(signingConfig\s*=?\s*)signingConfigs\.debug(\r?\n\s*def enableShrinkResources)',
+  '${1}keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug${2}'
 )
-$content = $content.Replace(
-  "            signingConfig signingConfigs.debug`n            def enableShrinkResources",
-  "            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug`n            def enableShrinkResources"
-)
+
+if ($content -notmatch 'signingConfigs\.release : signingConfigs\.debug') {
+  throw "No se pudo aplicar la firma de release en $BuildGradlePath"
+}
 
 Set-Content -Path $BuildGradlePath -Value $content -NoNewline
 Write-Host "Firma de release aplicada en $BuildGradlePath"

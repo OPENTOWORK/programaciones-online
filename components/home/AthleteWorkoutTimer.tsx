@@ -1,46 +1,29 @@
-import { useRouter } from 'expo-router';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { StyleSheet, Text } from 'react-native';
 
-import { borderRadius, colors, spacing, typography } from '@/constants/theme';
+import { HomeBlock } from '@/components/home/HomeBlock';
+import { Button } from '@/components/ui/Button';
+import { colors, spacing, typography } from '@/constants/theme';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 
 export function AthleteWorkoutTimer() {
-  const router = useRouter();
+  const navigation = useAppNavigation();
 
   return (
-    <Pressable
-      onPress={() => router.push('/timer')}
-      accessibilityRole="button"
-      accessibilityLabel="Abrir cronómetro de entreno"
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-    >
-      <Text style={styles.title}>Cronómetro</Text>
-      <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-    </Pressable>
+    <HomeBlock kicker="Entreno" title="Cronómetro">
+      <Text style={styles.lead}>Intervalos, descanso y series, listos para la sesión.</Text>
+      <Button title="Abrir cronómetro" onPress={() => navigation.push('/timer')} style={styles.action} />
+    </HomeBlock>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
-  },
-  pressed: {
-    opacity: 0.9,
-  },
-  title: {
+  lead: {
     ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
-    flex: 1,
+    color: colors.textSecondary,
+    lineHeight: 22,
+  },
+  action: {
+    marginTop: spacing.lg,
+    alignSelf: 'flex-start',
   },
 });

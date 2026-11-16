@@ -75,4 +75,20 @@ describe('withTimeout', () => {
       TimeoutError,
     );
   });
+
+  it('no deja el rechazo del temporizador sin recoger', async () => {
+    const unhandled = [];
+    const onUnhandled = (error) => unhandled.push(error);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      await assert.rejects(
+        () => withTimeout(new Promise(() => undefined), 20, 'timeout-test'),
+        TimeoutError,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      assert.equal(unhandled.length, 0);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
 });

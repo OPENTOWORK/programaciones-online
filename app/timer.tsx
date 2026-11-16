@@ -1,8 +1,9 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TimerSoundToggle } from '@/components/timer/TimerSoundToggle';
+import { WorkoutSequenceFullscreen } from '@/components/timer/WorkoutSequenceFullscreen';
 import { WorkoutTimerCountdown } from '@/components/timer/WorkoutTimerCountdown';
 import { WorkoutTimerFullscreen } from '@/components/timer/WorkoutTimerFullscreen';
 import { WorkoutTimerSetupForm } from '@/components/timer/WorkoutTimerSetupForm';
@@ -10,17 +11,21 @@ import { AppBackgroundScaffold } from '@/components/ui/AppBackgroundLogo';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
 import { colors, spacing, typography, withAlpha } from '@/constants/theme';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
+import { useEmbeddedRouteParams } from '@/hooks/useEmbeddedRouteParams';
+import { primeTimerCues, useTimerCues } from '@/hooks/useTimerCues';
 import { useWorkoutTimer } from '@/hooks/useWorkoutTimer';
 import {
   DEFAULT_WORKOUT_TIMER_SETTINGS,
   workoutTimerSettingsFromParams,
 } from '@/lib/athleteWorkoutTimer';
+import { workoutBlockTimerFromRouteParam } from '@/lib/workoutBlockTimer';
 
 type TimerPhase = 'setup' | 'countdown' | 'run';
 
 export default function WorkoutTimerScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams<{
+  const navigation = useAppNavigation();
+  const params = useEmbeddedRouteParams<{
     mode?: string;
     direction?: string;
     duration?: string;
@@ -28,30 +33,38 @@ export default function WorkoutTimerScreen() {
     rest?: string;
     rounds?: string;
     title?: string;
+    block?: string;
   }>();
 
   // Abierto desde un bloque del entreno: llega configurado y arranca sin pasar por los ajustes.
   const preset = useMemo(() => workoutTimerSettingsFromParams(params), [params]);
   const blockTitle = typeof params.title === 'string' ? params.title : undefined;
+  const blockParam = typeof params.block === 'string' ? params.block : undefined;
+  const sequence = useMemo(
+    () => workoutBlockTimerFromRouteParam(blockParam)?.sequence ?? null,
+    [blockParam],
+  );
 
-  const [phase, setPhase] = useState<TimerPhase>(preset ? 'countdown' : 'setup');
-  const timer = useWorkoutTimer(preset ?? DEFAULT_WORKOUT_TIMER_SETTINGS);
+  const [phase, setPhase] = useState<TimerPhase>(preset || sequence ? 'countdown' : 'setup');
+  const cue = useTimerCues();
+  const timer = useWorkoutTimer(preset ?? DEFAULT_WORKOUT_TIMER_SETTINGS, cue);
   const { start, reset, patchSettings, settings } = timer;
 
   const handleCountdownComplete = useCallback(() => {
-    start();
+    if (!sequence) start();
     setPhase('run');
-  }, [start]);
+  }, [sequence, start]);
 
   const handleBegin = useCallback(() => {
+    primeTimerCues();
     reset();
     setPhase('countdown');
   }, [reset]);
 
   const handleExit = useCallback(() => {
     reset();
-    router.back();
-  }, [reset, router]);
+    navigation.back();
+  }, [navigation, reset]);
 
   const handleOpenSettings = useCallback(() => {
     reset();
@@ -59,7 +72,20 @@ export default function WorkoutTimerScreen() {
   }, [reset]);
 
   if (phase === 'countdown') {
-    return <WorkoutTimerCountdown label={blockTitle} onComplete={handleCountdownComplete} />;
+    return (
+      <WorkoutTimerCountdown label={blockTitle} onComplete={handleCountdownComplete} onCue={cue} />
+    );
+  }
+
+  if (phase === 'run' && sequence) {
+    return (
+      <WorkoutSequenceFullscreen
+        sequence={sequence}
+        title={blockTitle}
+        onExit={handleExit}
+        onCue={cue}
+      />
+    );
   }
 
   if (phase === 'run') {
@@ -78,7 +104,7 @@ export default function WorkoutTimerScreen() {
       <AppBackgroundScaffold style={styles.scaffold}>
         <View style={styles.header}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => navigation.back()}
             accessibilityRole="button"
             accessibilityLabel="Volver"
             style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
@@ -86,7 +112,7 @@ export default function WorkoutTimerScreen() {
             <AppIcon name="chevronLeft" size={22} color={colors.text} />
           </Pressable>
           <Text style={styles.title}>Cronómetro</Text>
-          <View style={styles.headerSpacer} />
+          <TimerSoundToggle style={styles.backBtn} />
         </View>
 
         <ScrollView
@@ -129,9 +155,6 @@ const styles = StyleSheet.create({
     backgroundColor: withAlpha(colors.surface, 'CC'),
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  headerSpacer: {
-    width: 40,
   },
   title: {
     ...typography.h2,

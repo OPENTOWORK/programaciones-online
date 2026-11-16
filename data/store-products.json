@@ -1,0 +1,222 @@
+{
+  "$comment": "Única fuente de los productos de las tiendas. La leen scripts/iap-admin.mjs (Supabase), scripts/iap-google-play-products.mjs y scripts/iap-app-store-products.mjs. Los identificadores de las tiendas no se pueden reutilizar nunca: no los cambies una vez creados. Los precios son los iniciales para España; el precio que ve el usuario lo da siempre la tienda.",
+  "version": 1,
+  "android": {
+    "packageName": "com.trainingprogline.app",
+    "listingLanguage": "es-ES",
+    "regionsVersion": "2022/02",
+    "launchRegion": "ES"
+  },
+  "ios": {
+    "bundleId": "com.trainingprogline.app",
+    "appAppleId": "6810687197",
+    "locale": "es-ES",
+    "launchTerritory": "ESP"
+  },
+  "products": [
+    {
+      "productKey": "sub.basico.monthly",
+      "type": "subscription",
+      "billingPeriod": "P1M",
+      "sortOrder": 10,
+      "programs": [{ "id": "eac0124f-071c-48ec-b0e1-d36033f3846c", "name": "Básico" }],
+      "price": { "amount": "9.99", "currency": "EUR" },
+      "app": {
+        "title": "Básico",
+        "description": "Programación de inicio para consolidar técnica y una base sólida de fuerza.",
+        "benefits": [
+          "Acceso completo a la programación Básico",
+          "Para principiantes o quien retoma el entreno tras tiempo parado",
+          "Material: mancuernas, barra y discos, banco y rack",
+          "En Android, iPhone y web con tu cuenta"
+        ]
+      },
+      "google": {
+        "productId": "sub_basico",
+        "basePlanId": "monthly",
+        "listing": {
+          "title": "Básico",
+          "description": "Programación de inicio para consolidar técnica y una base sólida de fuerza.",
+          "benefits": ["Acceso completo a Básico", "En Android, iPhone y web", "Cancela cuando quieras"]
+        }
+      },
+      "apple": {
+        "productId": "com.trainingprogline.app.sub.basico.monthly",
+        "referenceName": "Básico mensual",
+        "displayName": "Básico",
+        "description": "Acceso a la programación Básico",
+        "group": { "referenceName": "Programación Básico", "displayName": "Básico" }
+      }
+    },
+    {
+      "productKey": "sub.calistenia.monthly",
+      "type": "subscription",
+      "billingPeriod": "P1M",
+      "sortOrder": 20,
+      "programs": [{ "id": "5c70a402-f829-4d94-883b-d844955ef0b8", "name": "Calistenia" }],
+      "price": { "amount": "15.99", "currency": "EUR" },
+      "app": {
+        "title": "Calistenia",
+        "description": "Fuerza relativa y control en barra, fondos y progresiones de peso corporal.",
+        "benefits": [
+          "Acceso completo a la programación Calistenia",
+          "Para quien domina lo básico y quiere progresar en barra y peso corporal",
+          "Material: barra de dominadas, paralelas, anillas y banda elástica",
+          "En Android, iPhone y web con tu cuenta"
+        ]
+      },
+      "google": {
+        "productId": "sub_calistenia",
+        "basePlanId": "monthly",
+        "listing": {
+          "title": "Calistenia",
+          "description": "Fuerza relativa y control en barra, fondos y progresiones de peso corporal.",
+          "benefits": ["Acceso completo a Calistenia", "En Android, iPhone y web", "Cancela cuando quieras"]
+        }
+      },
+      "apple": {
+        "productId": "com.trainingprogline.app.sub.calistenia.monthly",
+        "referenceName": "Calistenia mensual",
+        "displayName": "Calistenia",
+        "description": "Acceso a la programación Calistenia",
+        "group": { "referenceName": "Programación Calistenia", "displayName": "Calistenia" }
+      }
+    },
+    {
+      "productKey": "sub.athx.monthly",
+      "type": "subscription",
+      "billingPeriod": "P1M",
+      "sortOrder": 30,
+      "programs": [{ "id": "9b9d3120-adca-4227-aa0d-22fd5f617e61", "name": "ATHX" }],
+      "price": { "amount": "15.99", "currency": "EUR" },
+      "app": {
+        "title": "ATHX",
+        "description": "Condición híbrida: potencia, agilidad y trabajo metabólico en el mismo bloque.",
+        "benefits": [
+          "Acceso completo a la programación ATHX",
+          "Para atletas con base que buscan mezclar fuerza, potencia y condición",
+          "Material: turf, kettlebells, balón medicinal y conos",
+          "En Android, iPhone y web con tu cuenta"
+        ]
+      },
+      "google": {
+        "productId": "sub_athx",
+        "basePlanId": "monthly",
+        "listing": {
+          "title": "ATHX",
+          "description": "Condición híbrida: potencia, agilidad y trabajo metabólico en el mismo bloque.",
+          "benefits": ["Acceso completo a ATHX", "En Android, iPhone y web", "Cancela cuando quieras"]
+        }
+      },
+      "apple": {
+        "productId": "com.trainingprogline.app.sub.athx.monthly",
+        "referenceName": "ATHX mensual",
+        "displayName": "ATHX",
+        "description": "Acceso a la programación ATHX",
+        "group": { "referenceName": "Programación ATHX", "displayName": "ATHX" }
+      }
+    },
+    {
+      "productKey": "sub.crosstraining.monthly",
+      "type": "subscription",
+      "billingPeriod": "P1M",
+      "sortOrder": 40,
+      "programs": [{ "id": "7cef96c9-69e2-4c4d-8f1f-77d7493678d7", "name": "Crosstraining" }],
+      "price": { "amount": "15.99", "currency": "EUR" },
+      "app": {
+        "title": "Crosstraining",
+        "description": "Entrenamiento funcional con barra, cajón y máquina para construir motor.",
+        "benefits": [
+          "Acceso completo a la programación Crosstraining",
+          "Para personas con experiencia en fuerza que quieren mejorar el motor",
+          "Material: barra y discos, cajón pliométrico, remo y kettlebells",
+          "En Android, iPhone y web con tu cuenta"
+        ]
+      },
+      "google": {
+        "productId": "sub_crosstraining",
+        "basePlanId": "monthly",
+        "listing": {
+          "title": "Crosstraining",
+          "description": "Entrenamiento funcional con barra, cajón y máquina para construir motor.",
+          "benefits": ["Acceso completo a Crosstraining", "En Android, iPhone y web", "Cancela cuando quieras"]
+        }
+      },
+      "apple": {
+        "productId": "com.trainingprogline.app.sub.crosstraining.monthly",
+        "referenceName": "Crosstraining mensual",
+        "displayName": "Crosstraining",
+        "description": "Acceso a la programación Crosstraining",
+        "group": { "referenceName": "Programación Crosstraining", "displayName": "Crosstraining" }
+      }
+    },
+    {
+      "productKey": "sub.hype.monthly",
+      "type": "subscription",
+      "billingPeriod": "P1M",
+      "sortOrder": 50,
+      "programs": [{ "id": "a8ade79c-94aa-4960-9cd6-de5a8e6e8f0b", "name": "Hype" }],
+      "price": { "amount": "15.99", "currency": "EUR" },
+      "app": {
+        "title": "Hype",
+        "description": "Sesiones de alta intensidad para subir el ritmo y la capacidad de trabajo.",
+        "benefits": [
+          "Acceso completo a la programación Hype",
+          "Para atletas avanzados que toleran alta intensidad y mucho volumen",
+          "Material: cuerda de batalla, slam ball, mancuernas y cajón",
+          "En Android, iPhone y web con tu cuenta"
+        ]
+      },
+      "google": {
+        "productId": "sub_hype",
+        "basePlanId": "monthly",
+        "listing": {
+          "title": "Hype",
+          "description": "Sesiones de alta intensidad para subir el ritmo y la capacidad de trabajo.",
+          "benefits": ["Acceso completo a Hype", "En Android, iPhone y web", "Cancela cuando quieras"]
+        }
+      },
+      "apple": {
+        "productId": "com.trainingprogline.app.sub.hype.monthly",
+        "referenceName": "Hype mensual",
+        "displayName": "Hype",
+        "description": "Acceso a la programación Hype",
+        "group": { "referenceName": "Programación Hype", "displayName": "Hype" }
+      }
+    },
+    {
+      "productKey": "sub.hyrox.monthly",
+      "type": "subscription",
+      "billingPeriod": "P1M",
+      "sortOrder": 60,
+      "programs": [{ "id": "364f8433-601e-4511-85bf-6cad6374acd5", "name": "Hyrox" }],
+      "price": { "amount": "15.99", "currency": "EUR" },
+      "app": {
+        "title": "Hyrox",
+        "description": "Preparación de carrera: estaciones, trineo y máquina con ritmo de competición.",
+        "benefits": [
+          "Acceso completo a la programación Hyrox",
+          "Para quien prepara Hyrox o carreras de estaciones y running",
+          "Material: SkiErg o remo, trineo, saco y turf",
+          "En Android, iPhone y web con tu cuenta"
+        ]
+      },
+      "google": {
+        "productId": "sub_hyrox",
+        "basePlanId": "monthly",
+        "listing": {
+          "title": "Hyrox",
+          "description": "Preparación de carrera: estaciones, trineo y máquina con ritmo de competición.",
+          "benefits": ["Acceso completo a Hyrox", "En Android, iPhone y web", "Cancela cuando quieras"]
+        }
+      },
+      "apple": {
+        "productId": "com.trainingprogline.app.sub.hyrox.monthly",
+        "referenceName": "Hyrox mensual",
+        "displayName": "Hyrox",
+        "description": "Acceso a la programación Hyrox",
+        "group": { "referenceName": "Programación Hyrox", "displayName": "Hyrox" }
+      }
+    }
+  ]
+}

@@ -6,9 +6,9 @@ import { AthleteCurrentSchedule } from '@/components/home/AthleteCurrentSchedule
 import { AthleteGymAccess } from '@/components/home/AthleteGymAccess';
 import { AthleteWorkoutTimer } from '@/components/home/AthleteWorkoutTimer';
 import { HomeBrandShowcase } from '@/components/home/HomeBrandShowcase';
+import { HorizontalPager } from '@/components/program/HorizontalPager';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
-import { useAthleteCededAccess } from '@/hooks/useAthleteCededAccess';
 import { useAthletePreviewEffectiveUser, useAthletePreviewMode } from '@/hooks/useAthletePreviewMode';
 import { useAuth } from '@/hooks/useAuth';
 import { isTrainerRole } from '@/lib/athleteService';
@@ -31,64 +31,65 @@ export default function HomeScreen() {
   const { user: authUser } = useAuth();
   const user = useAthletePreviewEffectiveUser() ?? authUser;
   const preview = useAthletePreviewMode();
-  const { isCeded: isCededAthlete } = useAthleteCededAccess();
   const firstName = user?.name?.split(' ')[0] ?? 'atleta';
   const isTrainer = !preview.enabled && isTrainerRole(user?.role);
 
   const scrollRef = useRef<ScrollView>(null);
-  const calendarOffsetY = useRef(0);
 
   useEffect(() => {
     if (!focusCalendar || isTrainer) return;
-
-    const timer = setTimeout(() => {
-      scrollRef.current?.scrollTo({
-        y: Math.max(calendarOffsetY.current - 12, 0),
-        animated: true,
-      });
-      router.setParams({ focus: '' });
-    }, 220);
-
+    const timer = setTimeout(() => router.setParams({ focus: '' }), 400);
     return () => clearTimeout(timer);
   }, [focusCalendar, isTrainer, router]);
 
   return (
-    <ScreenWrapper scrollRef={scrollRef} resetScrollOnFocus={!focusCalendar}>
-      <View style={styles.page}>
-        <View style={styles.header}>
-          <View style={styles.headerCopy}>
-            <Text style={styles.greeting}>Hola, {firstName}</Text>
-            <Text style={styles.date}>{formatToday()}</Text>
+    <ScreenWrapper
+      scrollable={isTrainer}
+      scrollRef={scrollRef}
+      resetScrollOnFocus={!focusCalendar && !isTrainer}
+      style={isTrainer ? undefined : styles.screen}
+    >
+      <View style={[styles.page, !isTrainer && styles.pageFill]}>
+        {isTrainer ? (
+          <View style={styles.header}>
+            <View style={styles.headerCopy}>
+              <Text style={styles.greeting}>Hola, {firstName}</Text>
+              <Text style={styles.date}>{formatToday()}</Text>
+            </View>
+            <Pressable
+              onPress={() => router.push('/tabs/profile')}
+              accessibilityRole="button"
+              accessibilityLabel="Ir al perfil"
+              style={({ pressed }) => [styles.avatar, pressed && styles.avatarPressed]}
+            >
+              <Text style={styles.avatarText}>{user?.avatarInitials ?? 'TP'}</Text>
+            </Pressable>
           </View>
-          <Pressable
-            onPress={() => {
-              if (preview.enabled) {
-                preview.setActiveTab('profile');
-                return;
-              }
-              router.push('/tabs/profile');
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Ir al perfil"
-            style={({ pressed }) => [styles.avatar, pressed && styles.avatarPressed]}
-          >
-            <Text style={styles.avatarText}>{user?.avatarInitials ?? 'TP'}</Text>
-          </Pressable>
-        </View>
+        ) : null}
 
         {!isTrainer ? (
-          <View style={styles.athleteBody}>
+          <View style={[styles.athleteBody, styles.athleteBodyFill]}>
             <HomeBrandShowcase />
-            <View
-              style={styles.modules}
-              onLayout={(event) => {
-                calendarOffsetY.current = event.nativeEvent.layout.y;
+            <AthleteCurrentSchedule preferPersonalized={focusCalendar} forceExpanded={focusCalendar}>
+              {({ schedule }) => {
+                const blocks = [
+                  { id: 'calendar', label: 'Tu calendario', node: schedule },
+                  { id: 'gym', label: 'Acceso a tus gimnasios', node: <AthleteGymAccess /> },
+                  { id: 'timer', label: 'Cronómetro', node: <AthleteWorkoutTimer /> },
+                ];
+                const calendarPage = blocks.findIndex((block) => block.id === 'calendar');
+                return (
+                  <View style={styles.blockPager}>
+                    <HorizontalPager
+                      items={blocks}
+                      label={(block) => block.label}
+                      activeIndex={focusCalendar ? calendarPage : undefined}
+                      renderPage={(block) => <View style={styles.blockPage}>{block.node}</View>}
+                    />
+                  </View>
+                );
               }}
-            >
-              {!isCededAthlete ? <AthleteGymAccess /> : null}
-              <AthleteCurrentSchedule preferPersonalized={focusCalendar} forceExpanded={focusCalendar} />
-              <AthleteWorkoutTimer />
-            </View>
+            </AthleteCurrentSchedule>
           </View>
         ) : (
           <HomeBrandShowcase />
@@ -99,14 +100,30 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    minHeight: 0,
+  },
   page: {
     gap: spacing.lg,
+  },
+  pageFill: {
+    flex: 1,
+    minHeight: 0,
   },
   athleteBody: {
     gap: spacing.lg,
   },
-  modules: {
-    gap: spacing.md,
+  athleteBodyFill: {
+    flex: 1,
+    minHeight: 0,
+  },
+  blockPager: {
+    flex: 1,
+    minHeight: 280,
+  },
+  blockPage: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

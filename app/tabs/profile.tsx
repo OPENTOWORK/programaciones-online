@@ -21,6 +21,7 @@ import { useFocusRefresh } from '@/hooks/useFocusRefresh';
 import { useIntakeFormTemplates } from '@/hooks/useIntakeFormTemplates';
 import { useNutritionProfile } from '@/hooks/useNutritionProfile';
 import { usePhysicalProfile } from '@/hooks/usePhysicalProfile';
+import { usePurchases } from '@/hooks/usePurchases';
 import { useTrainingProfile } from '@/hooks/useTrainingProfile';
 import { isTrainerRole } from '@/lib/athleteService';
 import {
@@ -62,6 +63,8 @@ export default function ProfileScreen() {
   const { profile: nutrition, refresh: refreshNutrition } = useNutritionProfile();
   const { profile: training, refresh: refreshTraining } = useTrainingProfile();
   const isAthlete = preview.enabled || !isTrainerRole(user?.role);
+  const store = usePurchases();
+  const showPurchases = store.catalog.length > 0 || (store.snapshot?.purchases.length ?? 0) > 0;
   const { isComplete: intakeComplete, isLoading: intakeLoading, usesCustomForms } = useAthleteIntakeForm();
   const { statuses: intakeStatuses, isLoading: intakeListLoading } = useAthleteIntakeForms();
   const { templates: trainerIntakeForms, isLoading: trainerIntakeFormsLoading } = useIntakeFormTemplates();
@@ -118,6 +121,11 @@ export default function ProfileScreen() {
 
   const handleEdit = () => {
     router.push('/profile/edit');
+  };
+
+  const handleRestorePurchases = async () => {
+    const result = await store.restore();
+    Alert.alert(result.title, result.message);
   };
 
   const showBodyMeasurementReminder =
@@ -252,6 +260,36 @@ export default function ProfileScreen() {
           <CollapsibleSection title="Entrenamientos favoritos" style={styles.sectionCard}>
             <Text style={styles.sectionLead}>Sesiones que marcaste con la estrella</Text>
             <SavedMetconsCard />
+          </CollapsibleSection>
+        ) : null}
+
+        {showPurchases ? (
+          <CollapsibleSection title="Compras" style={styles.sectionCard}>
+            <Text style={styles.sectionLead}>Programaciones y suscripciones compradas en la app</Text>
+            {store.catalog.length > 0 ? (
+              <Button
+                title="Tienda"
+                variant="outline"
+                onPress={() => router.push('/store')}
+                style={styles.sectionButton}
+              />
+            ) : null}
+            <Button
+              title="Mis compras"
+              variant="outline"
+              onPress={() => router.push('/store/purchases')}
+              style={styles.sectionButton}
+            />
+            {store.storeReady ? (
+              <Button
+                title="Restaurar compras"
+                variant="ghost"
+                loading={store.isRestoring}
+                disabled={store.isRestoring}
+                onPress={() => void handleRestorePurchases()}
+                style={styles.sectionButton}
+              />
+            ) : null}
           </CollapsibleSection>
         ) : null}
 

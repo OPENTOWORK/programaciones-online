@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -47,7 +47,7 @@ export function ProgramInfoContent({
   onUserRefresh,
   showCalendarLink = true,
 }: ProgramInfoContentProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const [starting, setStarting] = useState(false);
 
   const isLocked = program.status === 'bloqueada';

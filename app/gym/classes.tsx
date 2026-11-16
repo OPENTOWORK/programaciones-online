@@ -1073,12 +1073,6 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null),
   },
   row: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-  },
-  row: {
     paddingHorizontal: spacing.md,
     paddingVertical: 12,
     borderBottomWidth: 1,

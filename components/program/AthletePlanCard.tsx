@@ -14,6 +14,8 @@ import type { AthletePlan } from '@/lib/types';
 const PLAN_ICONS: Record<AthletePlan['planType'], AppIconName> = {
   personalized: 'personal',
   nutrition: 'measure',
+  home_training: 'home',
+  gym_training: 'phase',
 };
 
 function formatDate(isoDate: string) {

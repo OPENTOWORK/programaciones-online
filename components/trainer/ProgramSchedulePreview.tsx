@@ -36,6 +36,8 @@ interface ProgramSchedulePreviewProps {
   initialViewMode?: ScheduleViewMode;
   hideHeader?: boolean;
   embedded?: boolean;
+  /** Sin marco propio: el calendario vive dentro de otra tarjeta. */
+  flush?: boolean;
 }
 
 export function ProgramSchedulePreview({
@@ -55,6 +57,7 @@ export function ProgramSchedulePreview({
   initialViewMode,
   hideHeader = false,
   embedded = false,
+  flush = false,
 }: ProgramSchedulePreviewProps) {
   const mobileLayout = useTrainerMobileLayout();
   const preview = useTrainerMobilePreviewMode();
@@ -103,7 +106,7 @@ export function ProgramSchedulePreview({
   );
 
   return (
-    <Card style={[styles.panel, isAthlete && styles.panelAthlete, embedded && styles.panelEmbedded]}>
+    <Card style={[styles.panel, isAthlete && styles.panelAthlete, embedded && styles.panelEmbedded, flush && styles.panelFlush]}>
       {!isAthlete && !hideHeader ? (
         <View style={styles.header}>
           <View style={styles.headerText}>
@@ -140,6 +143,7 @@ export function ProgramSchedulePreview({
           onDayPress={onDayPress}
           onSessionPress={onSessionPress}
           size="athlete"
+          fill
           layout={isWeeklyChallenge ? 'weeklyChallenge' : 'default'}
           onWeeklyChallengeWeekSelect={isWeeklyChallenge ? handleWeeklyChallengeWeekSelect : undefined}
         />
@@ -190,13 +194,24 @@ const styles = StyleSheet.create({
   panelAthlete: {
     padding: spacing.md,
     minHeight: 0,
-    flex: 0,
+    flex: 1,
   },
   panelEmbedded: {
     flex: 0,
     minHeight: 0,
     padding: spacing.md,
     marginBottom: 0,
+  },
+  panelFlush: {
+    flex: 1,
+    minHeight: 0,
+    padding: 0,
+    marginBottom: 0,
+    borderWidth: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   header: {
     flexDirection: 'row',

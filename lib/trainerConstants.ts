@@ -6,9 +6,6 @@ export type { AthletePlanType };
 export const PERSONALIZED_PLAN_REQUEST_MESSAGE =
   'Hola, me gustaría solicitar un plan de entrenamiento personalizado adaptado a mis objetivos y nivel. ¿Podemos empezar?';
 
-export const PERSONALIZED_GYM_PLAN_REQUEST_MESSAGE =
-  'Hola, me gustaría solicitar un plan de entrenamiento personalizado para entrenar en el gimnasio, adaptado a mi objetivo, nivel y disponibilidad. ¿Podemos empezar?';
-
 export const PERSONALIZED_NUTRITION_REQUEST_MESSAGE =
   'Hola, me gustaría solicitar un plan nutricional personalizado adaptado a mis objetivos y hábitos. ¿Podemos empezar?';
 
@@ -26,7 +23,7 @@ export const HOME_TRAINING_STAFF_JOIN = {
 };
 
 export const GYM_TRAINING_REQUEST_MESSAGE =
-  'Hola, me gustaría solicitar una programación para entrenar en mi gimnasio, adaptada a mi objetivo, nivel y equipamiento disponible. ¿Podemos empezar?';
+  'Hola, me gustaría solicitar un plan semanal para los usuarios de mi gimnasio. ¿Podemos empezar?';
 
 export const GYM_ATHLETE_PROGRAMMING_REQUEST_MESSAGE =
   'Hola, me gustaría solicitar una programación personalizada para los atletas de mi gimnasio. ¿Podemos empezar?';
@@ -70,7 +67,7 @@ export const PERSONALIZED_GYM_PLAN_CONTENT = {
   title: 'Plan personalizado para tu gimnasio',
   text: 'Te diseñamos una programación a medida para tu gimnasio.',
   button: 'Pide tu plan para gimnasio',
-  prefill: PERSONALIZED_GYM_PLAN_REQUEST_MESSAGE,
+  prefill: GYM_TRAINING_REQUEST_MESSAGE,
 };
 
 export const TRAINER_NUTRITION_FOR_ATHLETE_MESSAGE =

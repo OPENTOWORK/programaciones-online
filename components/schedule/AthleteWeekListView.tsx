@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import {
@@ -25,6 +25,8 @@ function formatDayMonth(date: Date) {
 interface AthleteWeekListViewProps {
   focusDate: Date;
   items: SchedulePreviewItem[];
+  /** Cabe en el alto del calendario de la home y se desplaza si la semana no entra. */
+  fit?: boolean;
   onDayPress?: (date: Date, dayItems: SchedulePreviewItem[]) => void;
   onSessionPress?: (item: SchedulePreviewItem) => void;
 }
@@ -47,15 +49,14 @@ function sessionMetaLabel(item: SchedulePreviewItem) {
 export function AthleteWeekListView({
   focusDate,
   items,
+  fit = false,
   onDayPress,
   onSessionPress,
 }: AthleteWeekListViewProps) {
   const days = getWeekDays(focusDate);
   const today = new Date();
 
-  return (
-    <View style={styles.list}>
-      {days.map((day) => {
+  const list = days.map((day) => {
         const dayItems = itemsForDate(items, day);
         const weekdayIndex = day.getDay() === 0 ? 6 : day.getDay() - 1;
         const isToday = isSameDate(day, today);
@@ -68,6 +69,7 @@ export function AthleteWeekListView({
             disabled={!onDayPress}
             style={({ pressed }) => [
               styles.dayCard,
+              fit && styles.dayCardFit,
               isToday && styles.dayCardToday,
               !hasSessions && styles.dayCardEmpty,
               onDayPress && pressed && styles.dayCardPressed,
@@ -75,11 +77,22 @@ export function AthleteWeekListView({
           >
             <View style={styles.dayHeader}>
               <View style={styles.dayHeaderText}>
-                <Text style={[styles.weekday, isToday && styles.weekdayToday]}>
-                  {WEEKDAY_SHORT[weekdayIndex]}
-                </Text>
-                <Text style={[styles.dayTitle, isToday && styles.dayTitleToday]} numberOfLines={1}>
-                  {WEEKDAY_LABELS[weekdayIndex]} · {formatDayMonth(day)}
+                {fit ? null : (
+                  <Text style={[styles.weekday, isToday && styles.weekdayToday]}>
+                    {WEEKDAY_SHORT[weekdayIndex]}
+                  </Text>
+                )}
+                <Text
+                  style={[
+                    styles.dayTitle,
+                    fit && styles.dayTitleFit,
+                    isToday && styles.dayTitleToday,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {fit
+                    ? `${WEEKDAY_SHORT[weekdayIndex]} · ${formatDayMonth(day)}`
+                    : `${WEEKDAY_LABELS[weekdayIndex]} · ${formatDayMonth(day)}`}
                 </Text>
               </View>
               {isToday ? (
@@ -106,15 +119,16 @@ export function AthleteWeekListView({
                     }
                     style={({ pressed }) => [
                       styles.session,
+                      fit && styles.sessionFit,
                       sessionCardStyle(item),
                       onSessionPress && pressed && styles.sessionPressed,
                     ]}
                   >
                     <View style={styles.sessionCopy}>
-                      <Text style={styles.sessionName} numberOfLines={2}>
-                        {item.name}
+                      <Text style={styles.sessionName} numberOfLines={fit ? 1 : 2}>
+                        {fit ? `${item.name} · ${sessionMetaLabel(item)}` : item.name}
                       </Text>
-                      <Text style={styles.sessionMeta}>{sessionMetaLabel(item)}</Text>
+                      {fit ? null : <Text style={styles.sessionMeta}>{sessionMetaLabel(item)}</Text>}
                     </View>
                     {onSessionPress ? <Text style={styles.sessionAction}>Ver</Text> : null}
                   </Pressable>
@@ -123,14 +137,31 @@ export function AthleteWeekListView({
             )}
           </Pressable>
         );
-      })}
-    </View>
+      });
+
+  if (!fit) {
+    return <View style={styles.list}>{list}</View>;
+  }
+
+  return (
+    <ScrollView
+      style={styles.listFill}
+      contentContainerStyle={styles.list}
+      nestedScrollEnabled
+      showsVerticalScrollIndicator={false}
+    >
+      {list}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   list: {
     gap: spacing.sm,
+  },
+  listFill: {
+    flex: 1,
+    minHeight: 0,
   },
   dayCard: {
     borderRadius: borderRadius.md,
@@ -143,6 +174,10 @@ const styles = StyleSheet.create({
   dayCardToday: {
     borderColor: withAlpha(colors.accent, '99'),
     backgroundColor: withAlpha(colors.accent, '0F'),
+  },
+  dayCardFit: {
+    padding: spacing.sm,
+    gap: 6,
   },
   dayCardEmpty: {
     opacity: 0.72,
@@ -175,6 +210,10 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     fontWeight: '700',
+  },
+  dayTitleFit: {
+    fontSize: 14,
+    lineHeight: 18,
   },
   dayTitleToday: {
     color: colors.text,
@@ -229,6 +268,10 @@ const styles = StyleSheet.create({
   sessionPdf: {
     borderColor: withAlpha(colors.textSecondary, '55'),
     backgroundColor: withAlpha(colors.textSecondary, '12'),
+  },
+  sessionFit: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
   },
   sessionPressed: {
     opacity: 0.88,

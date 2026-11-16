@@ -35,6 +35,8 @@ export type AppIconName =
   | 'play'
   | 'time'
   | 'timer'
+  | 'soundOn'
+  | 'soundOff'
   | 'chevronLeft'
   | 'chevronRight'
   | 'chevronDown'
@@ -105,6 +107,8 @@ const ICONS: Record<AppIconName, { default: IoniconName; outline?: IoniconName }
   play: { default: 'play-circle-outline' },
   time: { default: 'time-outline' },
   timer: { default: 'stopwatch', outline: 'stopwatch-outline' },
+  soundOn: { default: 'volume-high', outline: 'volume-high-outline' },
+  soundOff: { default: 'volume-mute', outline: 'volume-mute-outline' },
   chevronLeft: { default: 'chevron-back' },
   chevronRight: { default: 'chevron-forward' },
   chevronDown: { default: 'chevron-down' },

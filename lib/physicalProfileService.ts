@@ -6,6 +6,7 @@ import {
 } from '@/lib/bodyMetrics';
 import { readPersistedRecord, writePersistedRecord } from '@/lib/localUserDataStorage';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { retryOnTransient, userFacingRequestError } from '@/lib/transientNetwork';
 
 const TABLE = 'user_physical_profile';
 const LOCAL_STORAGE_KEY = 'user-physical-profile-v1';
@@ -94,18 +95,31 @@ export async function savePhysicalProfile(
     return {};
   }
 
-  const { error } = await supabase.from(TABLE).upsert(
-    {
-      user_id: userId,
-      birth_date: input.birthDate ?? null,
-      biological_sex: input.biologicalSex ?? null,
-      activity_level: input.activityLevel ?? null,
-      primary_goal: input.primaryGoal ?? null,
-      target_weight_kg: input.targetWeightKg ?? null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id' },
-  );
+  let result: { error: { message?: string; code?: string } | null };
+  try {
+    result = await retryOnTransient(
+      () =>
+        supabase.from(TABLE).upsert(
+          {
+            user_id: userId,
+            birth_date: input.birthDate ?? null,
+            biological_sex: input.biologicalSex ?? null,
+            activity_level: input.activityLevel ?? null,
+            primary_goal: input.primaryGoal ?? null,
+            target_weight_kg: input.targetWeightKg ?? null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' },
+        ),
+      (value) => value.error?.message,
+    );
+  } catch (error) {
+    await persistLocalProfile(userId, input);
+    const message = error instanceof Error ? error.message : '';
+    return { error: userFacingRequestError(message, 'No se pudo guardar el perfil físico.') };
+  }
+
+  const { error } = result;
 
   if (error) {
     await persistLocalProfile(userId, input);
@@ -115,7 +129,7 @@ export async function savePhysicalProfile(
           'Guardado en este dispositivo. Ejecuta npm run supabase:physical-profile para sincronizar con tu perfil.',
       };
     }
-    return { error: error.message };
+    return { error: userFacingRequestError(error.message, 'No se pudo guardar el perfil físico.') };
   }
 
   await persistLocalProfile(userId, input);

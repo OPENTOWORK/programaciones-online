@@ -25,6 +25,8 @@ interface CollapsibleSectionProps {
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
   tone?: 'default' | 'warning';
+  /** Cabecera más alta. La usa la home del atleta para que haya que deslizar. */
+  prominent?: boolean;
 }
 
 export function CollapsibleSection({
@@ -42,6 +44,7 @@ export function CollapsibleSection({
   expanded: expandedProp,
   onExpandedChange,
   tone = 'default',
+  prominent = false,
 }: CollapsibleSectionProps) {
   const isControlled = expandedProp !== undefined;
   const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
@@ -58,8 +61,8 @@ export function CollapsibleSection({
   }, [autoExpand]);
 
   return (
-    <Card style={StyleSheet.flatten([style, pending && styles.cardPending])}>
-      <View style={styles.header}>
+    <Card style={StyleSheet.flatten([style, pending && styles.cardPending, prominent && styles.cardProminent])}>
+      <View style={[styles.header, prominent && styles.headerProminent]}>
         <Pressable
           onPress={() => setExpanded(!expanded)}
           accessibilityRole="button"
@@ -68,7 +71,7 @@ export function CollapsibleSection({
           style={({ pressed }) => [styles.headerMain, pressed && styles.headerPressed]}
         >
           <View style={styles.headerText}>
-            <Text style={[styles.title, pending && styles.titlePending]}>{title}</Text>
+            <Text style={[styles.title, pending && styles.titlePending, prominent && styles.titleProminent]}>{title}</Text>
             {subtitle ? (
               <Text style={[styles.subtitle, pending && styles.subtitlePending]}>{subtitle}</Text>
             ) : null}
@@ -107,7 +110,7 @@ export function CollapsibleSection({
           >
             <Ionicons
               name={expanded ? 'chevron-up' : 'chevron-down'}
-              size={20}
+              size={prominent ? 26 : 20}
               color={colors.textSecondary}
             />
           </Pressable>
@@ -120,6 +123,19 @@ export function CollapsibleSection({
 }
 
 const styles = StyleSheet.create({
+  cardProminent: {
+    flex: 1,
+    minHeight: 220,
+    paddingVertical: 28,
+    justifyContent: 'center',
+  },
+  headerProminent: {
+    alignItems: 'center',
+  },
+  titleProminent: {
+    fontSize: 20,
+    lineHeight: 26,
+  },
   cardPending: {
     borderColor: colors.warning,
     backgroundColor: 'rgba(255, 179, 0, 0.1)',

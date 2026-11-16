@@ -1,4 +1,6 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
+import { useEmbeddedRouteParams } from '@/hooks/useEmbeddedRouteParams';
+import { normalizeRouteParam } from '@/lib/routeParams';
 import { useMemo } from 'react';
 import { Text } from 'react-native';
 
@@ -15,11 +17,11 @@ import { isPdfOnlyPlanSession, parsePersonalizedPlanContent } from '@/lib/person
 import { formatDayLabel } from '@/lib/programSchedulePreview';
 import { PDF_SESSION_DURATION, pdfSessionTitle } from '@/lib/trainerSessionDraft';
 import { allowsTrainerFeedbackVideos } from '@/lib/feedbackVideoAccess';
-import { safeGoBack } from '@/lib/navigation';
-
 export default function AthletePlanSessionScreen() {
-  const { id, date } = useLocalSearchParams<{ id: string; date?: string }>();
-  const router = useRouter();
+  const params = useEmbeddedRouteParams<{ id?: string | string[]; date?: string | string[] }>();
+  const id = normalizeRouteParam(params.id);
+  const date = normalizeRouteParam(params.date);
+  const router = useAppNavigation();
   const { user, isDemoMode } = useAuth();
   const { plan, isLoading } = useAthletePlan(id ?? '');
   const { getVideoId, hasVideo } = useAthleteSessionExerciseVideos({
@@ -110,7 +112,7 @@ export default function AthletePlanSessionScreen() {
               router.replace({ pathname: '/calendar/[date]', params: { date } });
               return;
             }
-            safeGoBack(router, '/tabs/programs');
+            router.back('/tabs/programs');
           });
         }}
         saving={runner.saving}
@@ -122,6 +124,7 @@ export default function AthletePlanSessionScreen() {
         getVideoId={getVideoId}
         hasVideo={hasVideo}
         allowFeedbackVideos={allowsTrainerFeedbackVideos({ planType: plan.planType })}
+        allowBlockComments={plan.planType === 'personalized'}
       />
     </ScreenWrapper>
   );

@@ -14,6 +14,10 @@ interface AthleteProgramPickerProps {
   selectedId?: string;
   onSelect: (programId: string) => void;
   defaultExpanded?: boolean;
+  /** Lista visible, sin cabecera desplegable. */
+  bare?: boolean;
+  /** Filas bajas para convivir con el calendario. */
+  compact?: boolean;
 }
 
 export function AthleteProgramPicker({
@@ -21,14 +25,15 @@ export function AthleteProgramPicker({
   selectedId,
   onSelect,
   defaultExpanded = false,
+  bare = false,
+  compact = false,
 }: AthleteProgramPickerProps) {
   const selected = programs.find((program) => program.id === selectedId) ?? programs[0];
 
   if (programs.length === 0 || !selected) return null;
 
-  return (
-    <CollapsibleSection title="Programación actual" defaultExpanded={defaultExpanded}>
-      <View style={styles.options}>
+  const options = (
+      <View style={[styles.options, compact && styles.optionsCompact]}>
         {programs.map((program) => {
           const active = program.id === selected.id;
           return (
@@ -40,11 +45,15 @@ export function AthleteProgramPicker({
               accessibilityLabel={active ? `${program.name}, seleccionada` : `Elegir ${program.name}`}
               style={({ pressed }) => [
                 styles.option,
+                compact && styles.optionCompact,
                 active && styles.optionActive,
                 pressed && styles.optionPressed,
               ]}
             >
-              <Text style={[styles.optionText, active && styles.optionTextActive]} numberOfLines={2}>
+              <Text
+                style={[styles.optionText, compact && styles.optionTextCompact, active && styles.optionTextActive]}
+                numberOfLines={1}
+              >
                 {program.name}
               </Text>
               {active ? <Ionicons name="checkmark" size={18} color={colors.accent} /> : null}
@@ -52,13 +61,30 @@ export function AthleteProgramPicker({
           );
         })}
       </View>
+  );
+
+  if (bare) return options;
+
+  return (
+    <CollapsibleSection title="Programación actual" defaultExpanded={defaultExpanded} style={styles.fill}>
+      {options}
     </CollapsibleSection>
   );
 }
 
 const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+  },
   options: {
     gap: spacing.sm,
+  },
+  optionsCompact: {
+    gap: 6,
+  },
+  optionCompact: {
+    paddingVertical: 7,
+    paddingHorizontal: spacing.sm + 2,
   },
   option: {
     flexDirection: 'row',
@@ -88,5 +114,9 @@ const styles = StyleSheet.create({
   optionTextActive: {
     color: colors.text,
     fontWeight: '700',
+  },
+  optionTextCompact: {
+    fontSize: 14,
+    lineHeight: 18,
   },
 });

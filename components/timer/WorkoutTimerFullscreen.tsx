@@ -1,12 +1,12 @@
-import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TimerSoundToggle } from '@/components/timer/TimerSoundToggle';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { AppBackgroundScaffold } from '@/components/ui/AppBackgroundLogo';
 import { Button } from '@/components/ui/Button';
-import { colors, spacing, typography, withAlpha } from '@/constants/theme';
+import { brandColor, colors, spacing, typography, withAlpha } from '@/constants/theme';
+import { useTimerKeepAwake } from '@/hooks/useTimerKeepAwake';
 import type { useWorkoutTimer } from '@/hooks/useWorkoutTimer';
 import { WORKOUT_TIMER_MODE_LABELS, formatWorkoutTimer } from '@/lib/athleteWorkoutTimer';
 
@@ -29,24 +29,13 @@ export function WorkoutTimerFullscreen({
   // Retocar los ajustes reinicia el crono, así que solo se ofrece con el reloj parado.
   const canOpenSettings = Boolean(onOpenSettings) && status !== 'running';
 
-  useEffect(() => {
-    if (status !== 'running') return undefined;
-
-    void activateKeepAwakeAsync('workout-timer');
-    return () => {
-      try {
-        deactivateKeepAwake('workout-timer');
-      } catch {
-        // Ignorar si el wake lock no llegó a activarse (p. ej. web o transición rápida).
-      }
-    };
-  }, [status]);
+  useTimerKeepAwake(status === 'running');
 
   const phaseColor =
     display.tabataPhase === 'work'
-      ? colors.accent
+      ? brandColor('actionInk', colors.accent)
       : display.tabataPhase === 'rest'
-        ? colors.accentBlue
+        ? brandColor('rest', colors.accentBlue)
         : display.finished
           ? colors.success
           : colors.text;
@@ -72,25 +61,30 @@ export function WorkoutTimerFullscreen({
                 </Text>
               ) : null}
             </View>
-            {canOpenSettings ? (
-              <Pressable
-                onPress={onOpenSettings}
-                disabled={!onOpenSettings}
-                accessibilityRole="button"
-                accessibilityLabel="Ajustar el cronómetro"
-                style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
-              >
-                <AppIcon name="settings" size={20} color={colors.textSecondary} outlined />
-              </Pressable>
-            ) : (
-              <View style={styles.headerSpacer} />
-            )}
+            <View style={styles.headerActions}>
+              {canOpenSettings ? (
+                <Pressable
+                  onPress={onOpenSettings}
+                  disabled={!onOpenSettings}
+                  accessibilityRole="button"
+                  accessibilityLabel="Ajustar el cronómetro"
+                  style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
+                >
+                  <AppIcon name="settings" size={20} color={colors.textSecondary} outlined />
+                </Pressable>
+              ) : (
+                <View style={styles.headerSpacer} />
+              )}
+              <TimerSoundToggle style={styles.closeBtn} />
+            </View>
           </View>
 
           <View style={styles.body}>
             <Text style={styles.statusLabel}>{display.statusLabel}</Text>
             <Text style={[styles.timerValue, { color: phaseColor }]} accessibilityLiveRegion="polite">
-              {formatWorkoutTimer(display.primarySeconds)}
+              {formatWorkoutTimer(
+                display.countdown ? Math.ceil(display.primarySeconds) : display.primarySeconds,
+              )}
             </Text>
             {display.detailLabel ? <Text style={styles.detailLabel}>{display.detailLabel}</Text> : null}
           </View>
@@ -145,6 +139,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: withAlpha(colors.surfaceLight, 'CC'),
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   headerSpacer: {
     width: 40,

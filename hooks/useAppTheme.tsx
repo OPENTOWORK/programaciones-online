@@ -10,6 +10,7 @@ import {
   type AppThemeDefinition,
   type AppThemeId,
 } from '@/constants/appThemes';
+import { getAthleteColors } from '@/constants/athleteColors';
 import { applyThemePalette, type AppColorScheme } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { isBackofficeRole } from '@/lib/athleteService';
@@ -34,15 +35,19 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
   const canToggleNightMode = canChooseTheme;
   const [themeId, setThemeIdState] = useState<AppThemeId>(resolveStaffThemeId);
 
+  const athleteColors = Platform.OS === 'web' && user && !isStaff ? getAthleteColors() : null;
+
   // Sin sesión (login/registro) siempre modo noche para que no mezcle fondo oscuro con tarjeta clara.
-  const theme = user && canChooseTheme ? getAppTheme(themeId) : getAppTheme('night');
+  const theme =
+    user && canChooseTheme ? getAppTheme(themeId) : (athleteColors?.theme ?? getAppTheme('night'));
   const scheme = theme.scheme;
   const nightMode = theme.id === 'night';
+  const brand = athleteColors?.brand;
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    applyThemePalette(theme.scheme, theme.palette, theme.id);
-  }, [theme]);
+    applyThemePalette(theme.scheme, theme.palette, theme.id, brand);
+  }, [brand, theme]);
 
   useEffect(() => {
     if (!canChooseTheme || Platform.OS !== 'web' || typeof window === 'undefined') return;

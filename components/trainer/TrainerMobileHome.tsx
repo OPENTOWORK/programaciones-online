@@ -25,7 +25,7 @@ function formatToday() {
   });
 }
 
-export function TrainerMobileHome() {
+export function TrainerMobileHome({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const { user } = useAuth();
   const { items, counts, chatUnread, isLoading } = useTrainerNotifications();
@@ -57,10 +57,12 @@ export function TrainerMobileHome() {
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Hola, {firstName}</Text>
-        <Text style={styles.date}>{formatToday()}</Text>
-      </View>
+      {embedded ? null : (
+        <View style={styles.header}>
+          <Text style={styles.greeting}>Hola, {firstName}</Text>
+          <Text style={styles.date}>{formatToday()}</Text>
+        </View>
+      )}
 
       <View style={styles.summaryRow}>
         <SummaryTile label="Avisos" value={counts.total} tone="accent" />

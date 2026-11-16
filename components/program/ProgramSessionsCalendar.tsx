@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -14,10 +14,12 @@ import {
   ScheduleCalendarModal,
   type CalendarSessionSaveInput,
 } from '@/components/trainer/ScheduleCalendarModal';
+import { CatalogSampleWeek } from '@/components/program/CatalogSampleWeek';
 import { ProgramSchedulePreview } from '@/components/trainer/ProgramSchedulePreview';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { colors, spacing, typography, withAlpha } from '@/constants/theme';
+import { fontUiBold, fontUiRegular, fontUiSemibold } from '@/constants/fonts';
+import { brandColor, brandColors, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import {
   attachCatalogPdfToDate,
@@ -34,6 +36,7 @@ import {
   workoutIdFromCalendarItem,
 } from '@/lib/catalogProgramCalendar';
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
+import { buildCatalogSampleWeek } from '@/lib/catalogSampleWeek';
 import { getWeekDays } from '@/lib/programSchedulePreview';
 import type { PickedPlanPdf } from '@/lib/planPdfPicker';
 import {
@@ -53,6 +56,8 @@ interface ProgramSessionsCalendarProps {
   workouts: Workout[];
   isLoading?: boolean;
   canManage?: boolean;
+  /** Muestra solo la semana fija de ejemplo, sin el calendario real. */
+  sampleWeekOnly?: boolean;
   onWorkoutsChange?: () => Promise<void> | void;
 }
 
@@ -61,9 +66,10 @@ export function ProgramSessionsCalendar({
   workouts,
   isLoading = false,
   canManage = false,
+  sampleWeekOnly = false,
   onWorkoutsChange,
 }: ProgramSessionsCalendarProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const { user, refreshUser } = useAuth();
   const emptyDraft = useMemo(() => createEmptySessionDraft(0), []);
   const [starting, setStarting] = useState(false);
@@ -91,6 +97,12 @@ export function ProgramSessionsCalendar({
   );
   const canJoin = !canManage && !isLocked && !isUserActive && workouts.length > 0;
   const isWeeklyChallenge = isHypeWeeklyChallengeProgram(program);
+  const sampleWeek = useMemo(() => {
+    if (isWeeklyChallenge) return [];
+    if (!sampleWeekOnly && (canManage || isUserActive)) return [];
+    return buildCatalogSampleWeek(workouts);
+  }, [canManage, isUserActive, isWeeklyChallenge, sampleWeekOnly, workouts]);
+  const showSampleWeek = sampleWeek.length > 0;
 
   const handleJoin = useCallback(async () => {
     if (!canJoin) return;
@@ -276,13 +288,19 @@ export function ProgramSessionsCalendar({
             <Text style={[styles.athleteTitle, isWeeklyChallenge && styles.athleteTitleWeeklyChallenge]}>
               {program.name}
             </Text>
-            <Text style={styles.athleteSubtitle}>
-              {isWeeklyChallenge
-                ? 'Reto semanal para toda la semana. Pulsa el desafío para verlo o completarlo.'
-                : isUserActive
-                  ? 'Ya estás apuntado. Pulsa un día o una sesión para ver tu entreno.'
-                  : 'Consulta el calendario y apúntate si quieres seguir esta programación.'}
-            </Text>
+            {showSampleWeek ? (
+              program.description.trim() ? (
+                <Text style={styles.sampleDescription}>{program.description.trim()}</Text>
+              ) : null
+            ) : (
+              <Text style={styles.athleteSubtitle}>
+                {isWeeklyChallenge
+                  ? 'Reto semanal para toda la semana. Pulsa el desafío para verlo o completarlo.'
+                  : isUserActive
+                    ? 'Ya estás apuntado. Pulsa un día o una sesión para ver tu entreno.'
+                    : 'Consulta el calendario y apúntate si quieres seguir esta programación.'}
+              </Text>
+            )}
           </View>
           <View style={styles.athleteHeaderActions}>
             {isUserActive ? (
@@ -306,10 +324,13 @@ export function ProgramSessionsCalendar({
                   params: { id: program.id },
                 })
               }
-              style={({ pressed }) => [styles.headerLink, pressed && styles.headerLinkPressed]}
+              style={({ pressed }) => [
+                showSampleWeek ? styles.sampleLink : styles.headerLink,
+                pressed && styles.headerLinkPressed,
+              ]}
               accessibilityRole="link"
             >
-              <Text style={styles.headerLinkText}>Ver ficha</Text>
+              <Text style={showSampleWeek ? styles.sampleLinkText : styles.headerLinkText}>Ver ficha</Text>
             </Pressable>
           </View>
         </View>
@@ -320,7 +341,19 @@ export function ProgramSessionsCalendar({
             onPress={() => void handleJoin()}
             loading={starting}
             style={styles.joinButton}
+            textStyle={styles.joinButtonText}
           />
+        ) : null}
+
+        {showSampleWeek ? (
+          <View style={styles.sampleFacts}>
+            {['Semana fija', 'No cambia el calendario', 'No modifica la programación'].map((fact) => (
+              <View key={fact} style={styles.sampleFact}>
+                <View style={styles.sampleFactDot} />
+                <Text style={styles.sampleFactText}>{fact}</Text>
+              </View>
+            ))}
+          </View>
         ) : null}
 
         {isUserActive ? (
@@ -334,6 +367,8 @@ export function ProgramSessionsCalendar({
             <Text style={styles.emptyTitle}>Sin sesiones todavía</Text>
             <Text style={styles.emptyText}>Esta programación aún no tiene entrenos publicados.</Text>
           </Card>
+        ) : showSampleWeek ? (
+          <CatalogSampleWeek days={sampleWeek} />
         ) : (
           <ProgramSchedulePreview
             program={program}
@@ -450,8 +485,68 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   athleteTitle: {
-    ...typography.h2,
+    fontFamily: fontUiBold,
+    fontWeight: 'normal',
+    fontSize: 22,
+    lineHeight: 28,
     color: colors.text,
+  },
+  sampleDescription: {
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textSecondary,
+  },
+  sampleLink: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: brandColor('cardBorder', '#2C313A'),
+    backgroundColor: brandColor('card', colors.black),
+  },
+  sampleLinkText: {
+    fontFamily: fontUiSemibold,
+    fontWeight: 'normal',
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.text,
+  },
+  sampleFacts: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  sampleFact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: brandColor('card', '#12161C'),
+    borderWidth: 1,
+    borderColor: brandColor('cardBorder', '#2C313A'),
+  },
+  sampleFactDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: brandColor('action', brandColors.orangeAction),
+  },
+  sampleFactText: {
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
+    fontSize: 12,
+    lineHeight: 16,
+    color: brandColor('body', '#C5CAD3'),
+  },
+  joinButtonText: {
+    fontFamily: fontUiBold,
+    fontWeight: 'normal',
+    fontSize: 15,
+    lineHeight: 20,
   },
   athleteTitleWeeklyChallenge: {
     ...typography.h1,

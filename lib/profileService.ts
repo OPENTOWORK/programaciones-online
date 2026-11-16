@@ -8,6 +8,7 @@ import {
   type ProfileFetchResult,
 } from '@/lib/profileFetchResult';
 import { logReleaseDiagnostic } from '@/lib/releaseDiagnostics';
+import { retryOnTransient, userFacingRequestError } from '@/lib/transientNetwork';
 import { TimeoutError } from '@/lib/withTimeout';
 
 const PERFIL_TABLE = 'Perfil';
@@ -172,6 +173,7 @@ export async function updateUserProfile(
   userId: string,
   email: string,
   updates: ProfileUpdates,
+  options?: { updateAuthName?: boolean },
 ): Promise<{ error?: string; profile?: UserProfile }> {
   if (!isSupabaseConfigured) {
     return { error: 'Supabase no está configurado' };
@@ -182,48 +184,62 @@ export async function updateUserProfile(
     return { error: 'Supabase no está disponible' };
   }
 
-  const { error: authError } = await supabase.auth.updateUser({
-    data: { name: updates.name.trim() },
-  });
+  try {
+    if (options?.updateAuthName !== false) {
+      const authResult = await retryOnTransient(
+        () => supabase.auth.updateUser({ data: { name: updates.name.trim() } }),
+        (value) => value.error?.message,
+      );
 
-  if (authError) {
-    return { error: authError.message };
+      if (authResult.error) {
+        return {
+          error: userFacingRequestError(authResult.error.message, 'No se pudo actualizar el nombre.'),
+        };
+      }
+    }
+
+    const profilePayload: Record<string, unknown> = {
+      id: userId,
+      email: email.trim(),
+      name: updates.name.trim(),
+    };
+
+    if ('fitnessLevel' in updates) profilePayload.nivel = updates.fitnessLevel ?? null;
+    if ('mainGoal' in updates) profilePayload.objetivo = updates.mainGoal ?? null;
+    if ('height' in updates) profilePayload.altura = updates.height ?? null;
+    if ('weight' in updates) profilePayload.peso = updates.weight ?? null;
+    if ('injuries' in updates) profilePayload.lesiones = updates.injuries?.trim() || null;
+
+    const [{ data, error }, activePrograms] = await Promise.all([
+      retryOnTransient(
+        () =>
+          supabase
+            .from(PERFIL_TABLE)
+            .upsert(profilePayload, { onConflict: 'id' })
+            .select('*, roles(slug)')
+            .single(),
+        (value) => value.error?.message,
+      ),
+      fetchActiveProgramsForUser(userId).catch(() => [] as UserActiveProgram[]),
+    ]);
+
+    if (error) {
+      const message = error.message.toLowerCase().includes('perfil')
+        ? 'La tabla Perfil no está disponible en Supabase. Ejecuta: npm run supabase:perfil'
+        : userFacingRequestError(error.message, 'No se pudo guardar el perfil.');
+      return { error: message };
+    }
+
+    if (!data) {
+      return { error: 'No se pudo guardar el perfil en Supabase.' };
+    }
+
+    const roles = data.roles as { slug?: string } | { slug?: string }[] | null | undefined;
+    const roleData = Array.isArray(roles) ? roles[0] : roles;
+
+    return { profile: mapProfileRow(data, activePrograms, roleData?.slug) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    return { error: userFacingRequestError(message, 'No se pudo guardar el perfil.') };
   }
-
-  const profilePayload: Record<string, unknown> = {
-    id: userId,
-    email: email.trim(),
-    name: updates.name.trim(),
-  };
-
-  if ('fitnessLevel' in updates) profilePayload.nivel = updates.fitnessLevel ?? null;
-  if ('mainGoal' in updates) profilePayload.objetivo = updates.mainGoal ?? null;
-  if ('height' in updates) profilePayload.altura = updates.height ?? null;
-  if ('weight' in updates) profilePayload.peso = updates.weight ?? null;
-  if ('injuries' in updates) profilePayload.lesiones = updates.injuries?.trim() || null;
-
-  const [{ data, error }, activePrograms] = await Promise.all([
-    supabase
-      .from(PERFIL_TABLE)
-      .upsert(profilePayload, { onConflict: 'id' })
-      .select('*, roles(slug)')
-      .single(),
-    fetchActiveProgramsForUser(userId),
-  ]);
-
-  if (error) {
-    const message = error.message.toLowerCase().includes('perfil')
-      ? 'La tabla Perfil no está disponible en Supabase. Ejecuta: npm run supabase:perfil'
-      : error.message;
-    return { error: message };
-  }
-
-  if (!data) {
-    return { error: 'No se pudo guardar el perfil en Supabase.' };
-  }
-
-  const roles = data.roles as { slug?: string } | { slug?: string }[] | null | undefined;
-  const roleData = Array.isArray(roles) ? roles[0] : roles;
-
-  return { profile: mapProfileRow(data, activePrograms, roleData?.slug) };
 }

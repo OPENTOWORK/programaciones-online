@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -36,7 +36,7 @@ interface AthleteMetconSessionsListProps {
 }
 
 export function AthleteMetconSessionsList({ program, entries }: AthleteMetconSessionsListProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const { isSaved, toggleSaved, isSaving } = useSavedMetcons();
   const [expandedId, setExpandedId] = useState<string | null>(entries[0]?.workout.id ?? null);
 

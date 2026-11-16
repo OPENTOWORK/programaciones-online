@@ -10,7 +10,9 @@ import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { usePurchases } from '@/hooks/usePurchases';
 import { deleteOwnAccount } from '@/lib/accountDeletionService';
+import { hasAutoRenewingSubscription } from '@/lib/iap/entitlements';
 
 const CONFIRM_WORD = 'BORRAR';
 
@@ -30,6 +32,9 @@ export default function DeleteAccountScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const { snapshot, storeReady, manageSubscriptions } = usePurchases();
+  const storePurchases = snapshot?.purchases ?? [];
+  const hasRenewingSubscription = hasAutoRenewingSubscription(storePurchases);
 
   if (!user) {
     return <Redirect href="/auth/login" />;
@@ -71,6 +76,26 @@ export default function DeleteAccountScreen() {
           asociada a {user.email}. No se guarda ninguna copia y no podrás recuperarla.
         </Text>
       </Card>
+
+      {storePurchases.length > 0 ? (
+        <Card style={styles.purchasesCard}>
+          <Text style={styles.warningTitle}>Compras en la app</Text>
+          <Text style={styles.warningText}>
+            Perderás el acceso a las programaciones y suscripciones compradas con esta cuenta.
+            {hasRenewingSubscription
+              ? ' Eliminar la cuenta no cancela tus suscripciones de Google Play o del App Store: cancélalas antes desde la tienda para que no se vuelvan a cobrar.'
+              : ''}
+          </Text>
+          {hasRenewingSubscription && storeReady ? (
+            <Button
+              title="Gestionar suscripciones"
+              variant="outline"
+              onPress={() => void manageSubscriptions()}
+              style={styles.manageButton}
+            />
+          ) : null}
+        </Card>
+      ) : null}
 
       <Text style={styles.listTitle}>Se eliminará</Text>
       <View style={styles.list}>
@@ -133,6 +158,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     borderColor: colors.danger,
     backgroundColor: `${colors.danger}11`,
+  },
+  purchasesCard: {
+    marginTop: spacing.md,
+  },
+  manageButton: {
+    marginTop: spacing.md,
   },
   warningTitle: {
     ...typography.body,

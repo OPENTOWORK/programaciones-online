@@ -3,12 +3,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_WORKOUT_TIMER_SETTINGS,
   getWorkoutTimerDisplay,
+  workoutTimerCue,
   type WorkoutTimerDisplay,
   type WorkoutTimerSettings,
   type WorkoutTimerStatus,
 } from '@/lib/athleteWorkoutTimer';
+import type { TimerCueHandler } from '@/lib/timerCues';
 
-export function useWorkoutTimer(initialSettings: WorkoutTimerSettings = DEFAULT_WORKOUT_TIMER_SETTINGS) {
+/** Solo pita lo que pasa con el reloj en marcha: Repetir, Reiniciar o Pausar no suenan. */
+export function useWorkoutTimer(
+  initialSettings: WorkoutTimerSettings = DEFAULT_WORKOUT_TIMER_SETTINGS,
+  onCue?: TimerCueHandler,
+) {
   const [settings, setSettings] = useState<WorkoutTimerSettings>(initialSettings);
   const [status, setStatus] = useState<WorkoutTimerStatus>('idle');
   const [display, setDisplay] = useState<WorkoutTimerDisplay>(() =>
@@ -18,6 +24,17 @@ export function useWorkoutTimer(initialSettings: WorkoutTimerSettings = DEFAULT_
   const startedAtRef = useRef<number | null>(null);
   const pausedAccumRef = useRef(0);
   const pauseStartedRef = useRef<number | null>(null);
+  const displayRef = useRef(display);
+  const onCueRef = useRef(onCue);
+
+  useEffect(() => {
+    onCueRef.current = onCue;
+  }, [onCue]);
+
+  const showDisplay = useCallback((next: WorkoutTimerDisplay) => {
+    displayRef.current = next;
+    setDisplay(next);
+  }, []);
 
   const getElapsedMs = useCallback(() => {
     if (!startedAtRef.current) return 0;
@@ -32,15 +49,20 @@ export function useWorkoutTimer(initialSettings: WorkoutTimerSettings = DEFAULT_
 
   const syncDisplay = useCallback(() => {
     const next = getWorkoutTimerDisplay(settings, getElapsedMs());
-    setDisplay(next);
-    return next.finished;
-  }, [getElapsedMs, settings]);
+    showDisplay(next);
+    return next;
+  }, [getElapsedMs, settings, showDisplay]);
 
   useEffect(() => {
     if (status !== 'running') return undefined;
 
     const tick = () => {
-      if (syncDisplay()) {
+      const previous = displayRef.current;
+      const next = syncDisplay();
+      const cue = workoutTimerCue(previous, next);
+      if (cue) onCueRef.current?.(cue);
+
+      if (next.finished) {
         setStatus('finished');
         pauseStartedRef.current = null;
       }
@@ -79,16 +101,16 @@ export function useWorkoutTimer(initialSettings: WorkoutTimerSettings = DEFAULT_
     pausedAccumRef.current = 0;
     pauseStartedRef.current = null;
     setStatus('idle');
-    setDisplay(getWorkoutTimerDisplay(settings, 0));
-  }, [settings]);
+    showDisplay(getWorkoutTimerDisplay(settings, 0));
+  }, [settings, showDisplay]);
 
   const patchSettings = useCallback((patch: Partial<WorkoutTimerSettings>) => {
     setSettings((current) => {
       const next = { ...current, ...patch };
-      setDisplay(getWorkoutTimerDisplay(next, getElapsedMs()));
+      showDisplay(getWorkoutTimerDisplay(next, getElapsedMs()));
       return next;
     });
-  }, [getElapsedMs]);
+  }, [getElapsedMs, showDisplay]);
 
   const isLocked = status === 'running' || status === 'paused';
 

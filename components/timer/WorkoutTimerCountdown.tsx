@@ -4,17 +4,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppBackgroundLogo } from '@/components/ui/AppBackgroundLogo';
 import { colors, typography } from '@/constants/theme';
+import type { TimerCueHandler } from '@/lib/timerCues';
 
 export function WorkoutTimerCountdown({
   label: blockLabel,
   onComplete,
+  onCue,
 }: {
   /** Bloque del entreno que se va a cronometrar, si el crono viene de una sesión. */
   label?: string;
   onComplete: () => void;
+  onCue?: TimerCueHandler;
 }) {
   const [step, setStep] = useState(3);
   const completedRef = useRef(false);
+  const announcedStepRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (completedRef.current) return undefined;
@@ -25,10 +29,15 @@ export function WorkoutTimerCountdown({
       return undefined;
     }
 
+    if (announcedStepRef.current !== step) {
+      announcedStepRef.current = step;
+      onCue?.(step > 0 ? 'tick' : 'phase');
+    }
+
     const delay = step === 0 ? 700 : 1000;
     const timer = setTimeout(() => setStep((current) => current - 1), delay);
     return () => clearTimeout(timer);
-  }, [onComplete, step]);
+  }, [onComplete, onCue, step]);
 
   const label = step > 0 ? String(step) : 'GO';
 

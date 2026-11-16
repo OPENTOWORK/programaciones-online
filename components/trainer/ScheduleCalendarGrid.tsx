@@ -750,6 +750,7 @@ export function ScheduleCalendarGrid({
                 focusDate={periodDate}
                 items={items}
                 size={size}
+                fit={stretchPeriod}
                 selectedDate={selectedDate}
                 onDayPress={onDayPress}
                 onDayActionsPress={onDayActionsPress}
@@ -780,6 +781,7 @@ export function ScheduleCalendarGrid({
           ) : null}
           {viewMode === 'day' ? (
             <DayView
+              fill={stretchPeriod}
               focusDate={periodDate}
               items={items}
               onDayActionsPress={onDayActionsPress}
@@ -821,10 +823,18 @@ export function ScheduleCalendarGrid({
   );
 }
 
+function monthMarkColor(item: SchedulePreviewItem) {
+  if (item.kind === 'rest') return colors.restDay;
+  if (item.kind === 'metcon') return colors.metcon;
+  if (item.kind === 'activation') return colors.activation;
+  return colors.accent;
+}
+
 function MonthView({
   focusDate,
   items,
   size,
+  fit = false,
   selectedDate,
   onDayPress,
   onDayActionsPress,
@@ -833,6 +843,8 @@ function MonthView({
   focusDate: Date;
   items: SchedulePreviewItem[];
   size: ScheduleCalendarSize;
+  /** Reparte el mes en el alto disponible, sin tapar lo que hay debajo. */
+  fit?: boolean;
   selectedDate?: Date;
   onDayPress?: (date: Date, dayItems: SchedulePreviewItem[]) => void;
   onDayActionsPress?: (
@@ -845,30 +857,72 @@ function MonthView({
   const days = getMonthGrid(focusDate);
   const weekdayLabels = getWeekdayShortLabels();
   const visibleSessions = size === 'large' ? 4 : size === 'athlete' ? 1 : 2;
+  const sessionLines = fit ? 1 : size === 'athlete' ? 2 : 1;
+  const today = new Date();
+  const weeks = Array.from({ length: days.length / 7 }, (_, index) =>
+    days.slice(index * 7, index * 7 + 7),
+  );
 
-  return (
-    <View>
-      <View style={styles.monthWeekdays}>
-        {weekdayLabels.map((label) => (
-          <Text key={label} style={styles.monthWeekday}>
-            {label}
-          </Text>
-        ))}
-      </View>
-      <View style={styles.monthGrid}>
-        {days.map((day) => {
+  const renderDay = (day: Date) => {
           const dayItems = itemsForDate(items, day);
           const inMonth = isDateInSameMonth(day, focusDate);
           const selected = isSameDate(day, selectedDate);
+          const isToday = isSameDate(day, today);
           const Wrapper = onDayPress ? Pressable : View;
+
+          if (fit) {
+            const marks = dayItems.slice(0, 3);
+            return (
+              <Wrapper
+                key={day.toISOString()}
+                onPress={onDayPress ? () => onDayPress(day, dayItems) : undefined}
+                accessibilityLabel={
+                  dayItems.length === 0
+                    ? `${day.getDate()}, sin entreno`
+                    : `${day.getDate()}, ${dayItems.length} ${dayItems.length === 1 ? 'sesión' : 'sesiones'}`
+                }
+                style={[
+                  styles.monthCellFrame,
+                  styles.monthCellFit,
+                  !inMonth && styles.monthCellMuted,
+                  isToday && styles.monthCellToday,
+                  selected && styles.monthCellSelected,
+                ]}
+              >
+                <View style={styles.monthFitBody}>
+                  <View style={[styles.monthFitNumberWrap, isToday && styles.monthFitNumberToday]}>
+                    <Text
+                      style={[
+                        styles.monthFitNumber,
+                        !inMonth && styles.monthDayNumberMuted,
+                        isToday && styles.monthFitNumberOnToday,
+                      ]}
+                    >
+                      {day.getDate()}
+                    </Text>
+                  </View>
+                  <View style={styles.monthFitMarks}>
+                    {marks.map((item) => (
+                      <View
+                        key={item.id}
+                        style={[styles.monthFitMark, { backgroundColor: monthMarkColor(item) }]}
+                      />
+                    ))}
+                  </View>
+                </View>
+              </Wrapper>
+            );
+          }
+
           return (
             <Wrapper
               key={day.toISOString()}
               onPress={onDayPress ? () => onDayPress(day, dayItems) : undefined}
               style={[
-                styles.monthCell,
-                size === 'large' && styles.monthCellLarge,
-                size === 'athlete' && styles.monthCellAthlete,
+                fit ? styles.monthCellFrame : styles.monthCell,
+                !fit && size === 'large' && styles.monthCellLarge,
+                size === 'athlete' && !fit && styles.monthCellAthlete,
+                fit && styles.monthCellFit,
                 !inMonth && styles.monthCellMuted,
                 onDayPress && styles.monthCellPressable,
                 selected && styles.monthCellSelected,
@@ -891,13 +945,13 @@ function MonthView({
                       style={[
                         styles.monthSessionDot,
                         size === 'large' && styles.monthSessionDotLarge,
-                        size === 'athlete' && styles.monthSessionDotAthlete,
+                        size === 'athlete' && !fit && styles.monthSessionDotAthlete,
                         item.isCurrent && styles.monthSessionDotCurrent,
                         item.kind === 'activation' && styles.monthSessionDotActivation,
                         item.kind === 'metcon' && styles.monthSessionDotMetcon,
                         item.kind === 'rest' && styles.monthSessionDotRestDay,
                       ]}
-                      numberOfLines={size === 'athlete' ? 2 : 1}
+                      numberOfLines={sessionLines}
                     >
                       {size === 'athlete' && dayItems.length > 1
                         ? `${dayItems.length} sesiones`
@@ -910,13 +964,13 @@ function MonthView({
                     style={[
                       styles.monthSessionDot,
                       size === 'large' && styles.monthSessionDotLarge,
-                      size === 'athlete' && styles.monthSessionDotAthlete,
+                      size === 'athlete' && !fit && styles.monthSessionDotAthlete,
                       item.isCurrent && styles.monthSessionDotCurrent,
                       item.kind === 'activation' && styles.monthSessionDotActivation,
                       item.kind === 'metcon' && styles.monthSessionDotMetcon,
                       item.kind === 'rest' && styles.monthSessionDotRestDay,
                     ]}
-                    numberOfLines={size === 'athlete' ? 2 : 1}
+                    numberOfLines={sessionLines}
                   >
                     {size === 'athlete' && dayItems.length > 1
                       ? `${dayItems.length} sesiones`
@@ -929,8 +983,28 @@ function MonthView({
               ) : null}
             </Wrapper>
           );
-        })}
+  };
+
+  return (
+    <View style={fit ? styles.monthFill : undefined}>
+      <View style={styles.monthWeekdays}>
+        {weekdayLabels.map((label) => (
+          <Text key={label} style={styles.monthWeekday}>
+            {label}
+          </Text>
+        ))}
       </View>
+      {fit ? (
+        <View style={styles.monthRows}>
+          {weeks.map((week) => (
+            <View key={week[0].toISOString()} style={styles.monthRow}>
+              {week.map((day) => renderDay(day))}
+            </View>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.monthGrid}>{days.map((day) => renderDay(day))}</View>
+      )}
     </View>
   );
 }
@@ -1398,6 +1472,7 @@ function WeekView({
       <AthleteWeekListView
         focusDate={focusDate}
         items={items}
+        fit={fill}
         onDayPress={onDayPress}
         onSessionPress={onSessionPress}
       />
@@ -1508,6 +1583,7 @@ function WeekView({
 }
 
 function DayView({
+  fill = false,
   focusDate,
   items,
   onDayActionsPress,
@@ -1518,6 +1594,7 @@ function DayView({
   onSessionMenuPress,
   sessionSelection,
 }: {
+  fill?: boolean;
   focusDate: Date;
   items: SchedulePreviewItem[];
   onDayActionsPress?: (
@@ -1538,7 +1615,7 @@ function DayView({
   const dayItems = itemsForDate(items, focusDate);
 
   return (
-    <View style={styles.dayView}>
+    <View style={[styles.dayView, fill && styles.dayViewFill]}>
       {onDayActionsPress ? (
         <View style={styles.dayActionsRow}>
           <Text style={styles.dayActionsLabel}>{formatDayLabel(focusDate)}</Text>
@@ -1561,7 +1638,10 @@ function DayView({
           const selected = canSelect && sessionSelection?.selectedKeys.has(itemKey);
 
           return (
-            <View key={itemKey} style={[styles.dayCard, selected && styles.sessionChipSelected]}>
+            <View
+              key={itemKey}
+              style={[styles.dayCard, fill && dayItems.length === 1 && styles.dayCardFill, selected && styles.sessionChipSelected]}
+            >
               <View style={styles.dayCardHeader}>
                 <Text style={styles.dayCardTitle}>{item.name}</Text>
                 {item.isDraft ? <Text style={styles.dayCardDraft}>Borrador</Text> : null}
@@ -1755,6 +1835,11 @@ const styles = StyleSheet.create({
     padding: 4,
     backgroundColor: colors.background,
   },
+  monthCellFrame: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
   monthCellLarge: {
     minHeight: 112,
     padding: spacing.xs,
@@ -1762,6 +1847,66 @@ const styles = StyleSheet.create({
   monthCellAthlete: {
     minHeight: 58,
     padding: 2,
+  },
+  monthCellFit: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+    padding: 2,
+  },
+  monthCellToday: {
+    borderColor: withAlpha(colors.accent, '88'),
+  },
+  monthFitBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  monthFitNumberWrap: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  monthFitNumberToday: {
+    backgroundColor: colors.accent,
+  },
+  monthFitNumber: {
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  monthFitNumberOnToday: {
+    color: colors.black,
+  },
+  monthFitMarks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    minHeight: 5,
+  },
+  monthFitMark: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  monthFill: {
+    flex: 1,
+    minHeight: 0,
+  },
+  monthRows: {
+    flex: 1,
+    minHeight: 0,
+  },
+  monthRow: {
+    flex: 1,
+    flexDirection: 'row',
+    minHeight: 0,
   },
   monthCellMuted: {
     backgroundColor: withAlpha(colors.surfaceLight, '88'),
@@ -2217,6 +2362,12 @@ const styles = StyleSheet.create({
   },
   dayView: {
     gap: spacing.sm,
+  },
+  dayViewFill: {
+    flex: 1,
+  },
+  dayCardFill: {
+    flex: 1,
   },
   dayEmpty: {
     alignItems: 'center',

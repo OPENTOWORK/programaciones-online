@@ -17,7 +17,8 @@ import { ExerciseVideoPanel } from '@/components/workout/ExerciseVideoPanel';
 import { SessionLogVideos } from '@/components/workout/SessionLogVideos';
 import { SessionVideoSendModal } from '@/components/workout/SessionVideoSendModal';
 import { WorkoutSection } from '@/components/workout/WorkoutSection';
-import { colors, spacing, typography } from '@/constants/theme';
+import { brandColor, colors, spacing, typography } from '@/constants/theme';
+import { fontUiBold, fontUiRegular, fontUiSemibold } from '@/constants/fonts';
 import { useSessionBlockComments } from '@/hooks/useSessionBlockComments';
 import type { SessionWorkoutContent } from '@/hooks/useSessionRunner';
 import { useSessionVideos } from '@/hooks/useSessionVideos';
@@ -68,6 +69,8 @@ interface SessionWorkoutViewProps {
   onLogEnsured?: (logId: string) => void;
   /** Vídeos para el entrenador: solo Personal · Coaching. */
   allowFeedbackVideos?: boolean;
+  /** Comentario del bloque: solo en planes personalizados. */
+  allowBlockComments?: boolean;
   /** Contenido extra sobre los bloques, p. ej. el PDF adjunto a la sesión. */
   attachment?: ReactNode;
   /** Misma pantalla que el atleta, sin guardar marcas ni comentarios. */
@@ -104,6 +107,7 @@ export function SessionWorkoutView({
   ensureLog,
   onLogEnsured,
   allowFeedbackVideos = false,
+  allowBlockComments = false,
   attachment,
   preview = false,
   onAnnotatedVideo,
@@ -161,6 +165,16 @@ export function SessionWorkoutView({
 
   const completedTotal = checklist.filter((item) => completed[item.key]).length;
   const total = checklist.length;
+  const metaParts = [scheduledDateLabel, meta]
+    .filter(Boolean)
+    .join(' · ')
+    .split(' · ')
+    .map((part) => part.trim())
+    .filter((part, index, all) => {
+      if (index === 0) return true;
+      if (scheduledDateLabel && /^\d{4}-\d{2}-\d{2}$/.test(part)) return false;
+      return all.indexOf(part) === index;
+    });
 
   const openExerciseVideo = (
     key: string,
@@ -296,7 +310,7 @@ export function SessionWorkoutView({
           },
     uploadingExerciseKey: locked ? null : uploadingExerciseKey,
     sentExerciseKeys: locked ? undefined : sentExerciseKeys,
-    renderAfterBlock: renderBlockComment,
+    renderAfterBlock: allowBlockComments ? renderBlockComment : undefined,
     // El crono acompaña al entreno en marcha, no al registro que ya cerró el atleta.
     showBlockTimers: !readOnly || preview,
     renderExerciseExtra: exerciseNotes.enabled
@@ -311,27 +325,36 @@ export function SessionWorkoutView({
   const displayError = localError || videosError || blockCommentsError || error;
 
   return (
-    <View>
-      <Text style={styles.title}>{workout.name}</Text>
-      <Text style={styles.meta}>{[scheduledDateLabel, meta].filter(Boolean).join(' · ')}</Text>
+    <View style={styles.screen}>
+      <View style={styles.hero}>
+        <Text style={styles.title}>{workout.name}</Text>
+        {metaParts.length > 0 ? (
+          <Text style={styles.meta}>{metaParts.join('  ·  ')}</Text>
+        ) : null}
+      </View>
 
-      <Card style={styles.progressCard}>
-        {preview ? (
-          <Text style={styles.textOnlyHint}>Marca las partes del entreno conforme las vayas haciendo</Text>
-        ) : readOnly ? (
-          total > 0 ? (
-            <ProgressBar value={completedTotal} max={total} label="Partes completadas por el atleta" />
-          ) : (
-            <Text style={styles.textOnlyHint}>
-              {readOnlySubtitle ?? 'Registro del atleta'}
+      {total > 0 && !preview ? (
+        <View style={styles.progressBlock}>
+          <View style={styles.progressHead}>
+            <Text style={styles.progressCount}>
+              {completedTotal} de {total}
             </Text>
-          )
-        ) : total > 0 ? (
-          <ProgressBar value={completedTotal} max={total} label="Partes completadas" />
-        ) : (
-          <Text style={styles.textOnlyHint}>Marca las partes del entreno conforme las vayas haciendo</Text>
-        )}
-      </Card>
+            <Text style={styles.progressLabel}>
+              {readOnly ? 'Partes completadas por el atleta' : 'Partes completadas'}
+            </Text>
+          </View>
+          <ProgressBar
+            value={completedTotal}
+            max={total}
+            showPercent={false}
+            color={colors.accent}
+          />
+        </View>
+      ) : null}
+
+      {readOnly && !preview && total === 0 ? (
+        <Text style={styles.textOnlyHint}>{readOnlySubtitle ?? 'Registro del atleta'}</Text>
+      ) : null}
 
       {attachment}
 
@@ -397,7 +420,7 @@ export function SessionWorkoutView({
 
       <WorkoutSection title="Vuelta a la calma" content={workout.cooldown} icon="cooldown" {...sectionProps('cooldown')} />
 
-      {readOnly && !preview && feelings.trim() ? (
+      {allowBlockComments && readOnly && !preview && feelings.trim() ? (
         <Card style={styles.feelingsCard}>
           <Text style={styles.feelingsLabel}>Sensaciones del atleta</Text>
           <Text style={styles.feelingsReadOnly}>{feelings}</Text>
@@ -406,17 +429,19 @@ export function SessionWorkoutView({
 
       {!locked || preview ? (
         <>
-          <Input
-            label="¿Cómo te has sentido?"
-            value={preview ? '' : feelings}
-            onChangeText={preview ? () => {} : onFeelingsChange}
-            placeholder="Energía, fatiga, dolor, sensaciones…"
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            editable={!preview}
-            style={styles.feelingsInput}
-          />
+          {allowBlockComments ? (
+            <Input
+              label="¿Cómo te has sentido?"
+              value={preview ? '' : feelings}
+              onChangeText={preview ? () => {} : onFeelingsChange}
+              placeholder="Energía, fatiga, dolor, sensaciones…"
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              editable={!preview}
+              style={styles.feelingsInput}
+            />
+          ) : null}
 
           {allowFeedbackVideos && !preview ? (
             <SessionLogVideos
@@ -437,7 +462,9 @@ export function SessionWorkoutView({
               <Text style={styles.successText}>
                 {allowFeedbackVideos
                   ? 'Tu entrenador podrá ver tu progreso, sensaciones y videos del entreno.'
-                  : 'Tu entrenador podrá ver tu progreso y sensaciones del entreno.'}
+                  : allowBlockComments
+                    ? 'Tu entrenador podrá ver tu progreso y sensaciones del entreno.'
+                    : 'Tu entrenador podrá ver tu progreso del entreno.'}
               </Text>
             </Card>
           ) : (
@@ -544,11 +571,64 @@ export function SessionWorkoutView({
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    gap: spacing.md,
+  },
   loader: { marginTop: spacing.xl },
-  title: { ...typography.h1, color: colors.text },
-  meta: { ...typography.bodySmall, color: colors.textSecondary, marginBottom: spacing.md },
-  progressCard: { marginBottom: spacing.md },
-  textOnlyHint: { ...typography.bodySmall, color: colors.textSecondary, textAlign: 'center' },
+  hero: {
+    gap: 4,
+  },
+  title: {
+    fontFamily: fontUiBold,
+    fontWeight: 'normal',
+    color: colors.text,
+    fontSize: 24,
+    lineHeight: 30,
+  },
+  meta: {
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
+    color: brandColor('body', '#C5CAD3'),
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  progressBlock: {
+    gap: 8,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: brandColor('card', '#12161C'),
+    borderWidth: 1,
+    borderColor: brandColor('cardBorder', '#2C313A'),
+  },
+  progressHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  progressCount: {
+    fontFamily: fontUiSemibold,
+    fontWeight: 'normal',
+    color: colors.text,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  progressLabel: {
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  textOnlyHint: {
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
+    color: brandColor('body', '#C5CAD3'),
+    fontSize: 13,
+    lineHeight: 18,
+  },
   exerciseBlock: { marginBottom: spacing.xs },
   feelingsCard: { marginTop: spacing.md },
   feelingsLabel: {

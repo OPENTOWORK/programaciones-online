@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
+import { HomeBlock } from '@/components/home/HomeBlock';
 import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
 import { useAthleteLinkedGyms } from '@/hooks/useAthleteLinkedGyms';
 import { useFocusRefresh } from '@/hooks/useFocusRefresh';
@@ -79,8 +79,8 @@ export function AthleteGymAccess() {
   };
 
   return (
-    <View key={menusKey}>
-      <CollapsibleSection title="Acceso a tus gimnasios">
+    <View key={menusKey} style={styles.fill}>
+      <HomeBlock kicker="Gimnasio" title="Acceso a tus gimnasios">
         {isLoading ? (
           <View style={styles.stateCard}>
             <ActivityIndicator color={colors.accent} />
@@ -105,12 +105,15 @@ export function AthleteGymAccess() {
             ))}
           </View>
         )}
-      </CollapsibleSection>
+      </HomeBlock>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+  },
   list: {
     gap: spacing.sm,
   },

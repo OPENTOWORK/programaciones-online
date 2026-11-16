@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 
 import { AppIcon } from '@/components/ui/AppIcon';
+import { AthleteColorStripe } from '@/components/ui/AthleteColorStripe';
 import { NavCountBadge } from '@/components/ui/NavCountBadge';
 import { colors } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
@@ -75,6 +76,7 @@ export function AthleteTabBar() {
 
   return (
     <View style={[styles.bar, { paddingBottom: bottomInset }]}>
+      <AthleteColorStripe />
       {tabs.map((tab) => {
         const focused = tab.match(pathname);
 
@@ -120,6 +122,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingTop: 8,
     width: '100%',
+    position: 'relative',
   },
   item: {
     flex: 1,

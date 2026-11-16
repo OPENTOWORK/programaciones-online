@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { StyleSheet, Text } from 'react-native';
 
 import { IconBadge } from '@/components/ui/AppIcon';
@@ -14,7 +14,7 @@ interface StandardVenuePlaceholderProps {
 }
 
 export function StandardVenuePlaceholder({ venue, planId }: StandardVenuePlaceholderProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
 
   return (
     <>

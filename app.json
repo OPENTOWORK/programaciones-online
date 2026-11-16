@@ -2,7 +2,7 @@
   "expo": {
     "name": "Training ProgLine",
     "slug": "programaciones-online",
-    "version": "1.0.21",
+    "version": "1.0.22",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "programaciones-online",
@@ -127,7 +127,7 @@
     },
     "android": {
       "package": "com.trainingprogline.app",
-      "versionCode": 21,
+      "versionCode": 23,
       "blockedPermissions": [
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
@@ -185,7 +185,15 @@
         }
       ],
       "./plugins/withAndroidPlayCompatibility",
-      "react-native-compressor"
+      "react-native-compressor",
+      [
+        "expo-iap",
+        {
+          "android": {
+            "store": "play"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

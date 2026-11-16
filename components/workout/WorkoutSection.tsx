@@ -1,10 +1,11 @@
-import { Fragment, type ReactNode } from 'react';
+﻿import { Fragment, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { BlockTimerButton } from '@/components/workout/BlockTimerButton';
 import { Card } from '@/components/ui/Card';
-import { borderRadius, colors, spacing, typography, withAlpha } from '@/constants/theme';
+import { borderRadius, brandColor, colors, spacing, typography, withAlpha } from '@/constants/theme';
+import { fontUiRegular, fontUiSemibold } from '@/constants/fonts';
 import type { AppIconName } from '@/constants/icons';
 import {
   parseFreeTextBlockContent,
@@ -19,7 +20,6 @@ import {
 } from '@/lib/workoutContentParser';
 import { resolveWorkoutBlockTimer } from '@/lib/workoutBlockTimer';
 import {
-  getBlockTimingHint,
   parseBlockItemForDisplay,
   parseTimingForDisplay,
   splitBlockTimingMetadata,
@@ -189,21 +189,15 @@ function BlockItems({
                 disabled={!onToggleItem || !itemKey}
                 style={styles.itemNamePressable}
               >
-                <Text
-                  style={[styles.itemName, isChecked && styles.itemNameChecked]}
-                  numberOfLines={1}
-                >
+                <Text style={[styles.itemName, isChecked && styles.itemNameChecked]} numberOfLines={2}>
                   {display.name}
                 </Text>
               </Pressable>
 
               {metricLine ? (
-                <>
-                  <Text style={styles.itemSep}>·</Text>
-                  <Text style={styles.itemMetricInline} numberOfLines={1}>
-                    {metricLine}
-                  </Text>
-                </>
+                <Text style={styles.itemMetricInline} numberOfLines={1}>
+                  {metricLine}
+                </Text>
               ) : null}
 
               {renderExerciseExtra?.(exerciseName)}
@@ -374,6 +368,21 @@ function WorkoutNoteCard({ block, ...itemProps }: BlockCardProps) {
   );
 }
 
+function normalizeBlockText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function titleRepeatsLabel(label: string, title: string) {
+  const normalizedLabel = normalizeBlockText(label);
+  const normalizedTitle = normalizeBlockText(title);
+  if (!normalizedLabel || !normalizedTitle) return false;
+  return normalizedTitle === normalizedLabel || normalizedTitle.startsWith(`${normalizedLabel} `);
+}
+
 function WorkoutBlockCard({ block, showTimer, ...itemProps }: BlockCardProps) {
   if (block.text !== undefined) {
     return <WorkoutTextCard block={block} {...itemProps} />;
@@ -385,18 +394,15 @@ function WorkoutBlockCard({ block, showTimer, ...itemProps }: BlockCardProps) {
 
   const { blockTitle, pillTiming } = splitBlockTimingMetadata(block.timing);
   const timingParts = parseTimingForDisplay(pillTiming, block.label);
-  const pillParts = timingParts.filter((part) => part.icon !== 'info' || part.value.length <= 28);
-  const instructionNotes = timingParts
-    .filter((part) => part.icon === 'info' && part.value.length > 28)
-    .map((part) => part.value);
-  const timingHint = getBlockTimingHint(block.label);
+  const pillParts = timingParts.filter((part) => part.icon !== 'time' && part.icon !== 'info');
   const timerPlan = showTimer ? resolveWorkoutBlockTimer(block) : null;
+  const hideLabel = Boolean(blockTitle && titleRepeatsLabel(block.label, blockTitle));
 
   return (
     <View style={styles.blockCard}>
       <View style={styles.blockHeader}>
         <View style={styles.blockHeaderTop}>
-          <Text style={styles.blockLabel}>{block.label}</Text>
+          {hideLabel ? null : <Text style={styles.blockLabel}>{block.label}</Text>}
           {blockTitle ? <Text style={styles.blockTitleText}>{blockTitle}</Text> : null}
         </View>
         {pillParts.length > 0 ? (
@@ -408,15 +414,7 @@ function WorkoutBlockCard({ block, showTimer, ...itemProps }: BlockCardProps) {
         ) : null}
       </View>
 
-      {instructionNotes.map((note, index) => (
-        <Text key={`${note}-${index}`} style={styles.blockInstruction}>
-          {note}
-        </Text>
-      ))}
-
-      {timingHint ? <Text style={styles.timingHint}>{timingHint}</Text> : null}
-
-      {timerPlan ? <BlockTimerButton plan={timerPlan} /> : null}
+      {timerPlan ? <BlockTimerButton plan={timerPlan} block={block} /> : null}
 
       <BlockItems items={block.items} {...itemProps} />
     </View>
@@ -512,65 +510,74 @@ export function WorkoutSection({
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: spacing.md,
-    padding: spacing.md,
+    marginBottom: 0,
+    padding: 16,
+    backgroundColor: brandColor('card', '#12161C'),
+    borderColor: brandColor('cardBorder', '#2C313A'),
+    borderRadius: 14,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.md,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    marginBottom: 14,
   },
   headerTitle: {
-    ...typography.body,
+    fontFamily: fontUiSemibold,
+    fontWeight: 'normal',
     color: colors.text,
-    fontWeight: '600',
+    fontSize: 18,
+    lineHeight: 24,
     flex: 1,
   },
   paragraph: {
-    ...typography.body,
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
     color: colors.textSecondary,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 22,
   },
   blocks: {
-    gap: spacing.sm,
+    gap: 16,
   },
   blockDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-    marginVertical: spacing.sm,
+    backgroundColor: brandColor('cardBorder', '#2C313A'),
+    marginVertical: 4,
   },
   blockCard: {
-    paddingTop: spacing.xs,
+    gap: 8,
   },
   blockHeader: {
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
+    gap: 4,
   },
   blockHeaderTop: {
     gap: 2,
   },
   blockLabel: {
-    ...typography.caption,
+    fontFamily: fontUiSemibold,
+    fontWeight: 'normal',
     color: colors.textMuted,
-    fontWeight: '600',
+    fontSize: 11,
+    lineHeight: 14,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   blockTitleText: {
-    ...typography.body,
+    fontFamily: fontUiSemibold,
+    fontWeight: 'normal',
     color: colors.text,
-    fontWeight: '600',
+    fontSize: 16,
     lineHeight: 22,
   },
   blockInstruction: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
+    color: brandColor('body', '#C5CAD3'),
+    fontSize: 14,
     lineHeight: 20,
-    marginBottom: spacing.xs,
   },
   timingPill: {
     flexDirection: 'row',
@@ -581,49 +588,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: spacing.xs,
+    gap: spacing.sm,
+    marginTop: 2,
   },
   timingValue: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '500',
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
+    color: brandColor('body', '#C5CAD3'),
+    fontSize: 13,
+    lineHeight: 18,
   },
   timingUnit: {
-    ...typography.caption,
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
     color: colors.textMuted,
-    fontWeight: '500',
+    fontSize: 12,
+    lineHeight: 16,
   },
   timingHint: {
-    ...typography.caption,
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
     color: colors.textMuted,
-    marginBottom: spacing.sm,
-    fontStyle: 'italic',
+    fontSize: 12,
+    lineHeight: 16,
   },
   itemsList: {
-    gap: 6,
-    marginTop: spacing.xs,
+    marginTop: 4,
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 9,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    gap: 12,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: brandColor('cardBorder', '#2C313A'),
   },
   itemRowPressed: {
     opacity: 0.85,
   },
   itemRowActive: {
-    borderColor: withAlpha(colors.accent, '66'),
-    backgroundColor: withAlpha(colors.accent, '0C'),
+    backgroundColor: withAlpha(colors.accent, '10'),
   },
   itemRowChecked: {
-    borderColor: withAlpha(colors.accent, '55'),
-    backgroundColor: withAlpha(colors.accent, '0A'),
+    backgroundColor: 'transparent',
   },
   itemCheckbox: {
     flexShrink: 0,
@@ -631,9 +638,9 @@ const styles = StyleSheet.create({
   checkbox: {
     width: 22,
     height: 22,
-    borderRadius: borderRadius.sm,
-    borderWidth: 2,
-    borderColor: colors.border,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: brandColor('inactive', '#3A4150'),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -656,33 +663,31 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
   },
   itemNamePressable: {
-    flexShrink: 1,
-    maxWidth: '34%',
-    minWidth: 72,
+    flex: 1,
+    minWidth: 0,
   },
   itemName: {
-    ...typography.bodySmall,
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
     color: colors.text,
-    fontWeight: '700',
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 20,
   },
   itemNameChecked: {
     color: colors.textMuted,
   },
-  itemSep: {
-    ...typography.bodySmall,
-    color: colors.textMuted,
-    flexShrink: 0,
-  },
   itemMetricInline: {
-    flex: 1,
-    minWidth: 0,
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    flexShrink: 0,
+    maxWidth: '46%',
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
+    color: brandColor('body', '#C5CAD3'),
+    fontSize: 13,
     lineHeight: 18,
+    textAlign: 'right',
   },
   itemIconRow: {
     flexDirection: 'row',
@@ -714,27 +719,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.textMuted,
   },
   noteCard: {
-    paddingTop: spacing.xs,
-    gap: spacing.xs,
+    gap: 6,
   },
   noteTitle: {
-    ...typography.body,
+    fontFamily: fontUiSemibold,
+    fontWeight: 'normal',
     color: colors.text,
-    fontWeight: '600',
+    fontSize: 16,
     lineHeight: 22,
   },
   noteTitleWithBody: {
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
   noteDetail: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    lineHeight: 22,
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
+    color: brandColor('body', '#C5CAD3'),
+    fontSize: 14,
+    lineHeight: 20,
   },
   noteText: {
-    ...typography.body,
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
     color: colors.text,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 22,
   },
   textVideos: {
     flexDirection: 'row',

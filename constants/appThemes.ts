@@ -17,7 +17,8 @@ export type AppThemeId =
   | 'wine'
   | 'lavender'
   | 'olive'
-  | 'rose';
+  | 'rose'
+  | 'pastel';
 
 export interface AppThemeDefinition {
   id: AppThemeId;

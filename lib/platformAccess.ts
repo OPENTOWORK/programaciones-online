@@ -25,6 +25,11 @@ export function isTrainerRoleOnWeb(role?: UserRole) {
   return isWebPlatform() && isTrainerRole(role);
 }
 
+/** Una ficha a pantalla completa: la app y las vistas previas del teléfono, no el panel web. */
+export function usesPhoneProgramPager(inPhonePreview = false) {
+  return !isWebPlatform() || inPhonePreview;
+}
+
 /** Panel lateral de escritorio: entrenador en web con viewport amplio. */
 export function isTrainerDesktopWeb(role?: UserRole, viewportWidth?: number) {
   if (!isTrainerRoleOnWeb(role)) return false;

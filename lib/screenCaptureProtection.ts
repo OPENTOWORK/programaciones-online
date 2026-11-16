@@ -4,10 +4,17 @@ import { Platform } from 'react-native';
 import { logReleaseDiagnostic, logReleaseError } from '@/lib/releaseDiagnostics';
 
 /**
- * Bloquea capturas y grabaciones de pantalla en móvil para que las programaciones
- * no se puedan compartir fuera de la cuenta que las ha pagado.
- *
- * En web no hay API equivalente: el navegador siempre permite capturar.
+ * Interruptor de pantallazos en Android e iOS.
+ * `true`: el móvil no puede capturar ni grabar la pantalla.
+ * `false`: se vuelven a permitir. El código se queda; solo hay que cambiar esta constante.
+ * En la web no tiene efecto: el navegador siempre puede capturar.
+ */
+export const SCREEN_CAPTURE_BLOCKED = true;
+
+const PROTECTION_KEY = 'training-progline';
+
+/**
+ * Aplica el interruptor de arriba al arrancar la app nativa.
  */
 export async function enableScreenCaptureProtection() {
   if (Platform.OS === 'web') return;
@@ -19,7 +26,16 @@ export async function enableScreenCaptureProtection() {
       return;
     }
 
-    await ScreenCapture.preventScreenCaptureAsync();
+    if (!SCREEN_CAPTURE_BLOCKED) {
+      await ScreenCapture.allowScreenCaptureAsync(PROTECTION_KEY);
+      if (Platform.OS === 'ios') {
+        await ScreenCapture.disableAppSwitcherProtectionAsync();
+      }
+      logReleaseDiagnostic('screen_capture_protection_disabled');
+      return;
+    }
+
+    await ScreenCapture.preventScreenCaptureAsync(PROTECTION_KEY);
 
     // En iOS además oculta el contenido en el selector de apps; en Android lo hace FLAG_SECURE.
     if (Platform.OS === 'ios') {

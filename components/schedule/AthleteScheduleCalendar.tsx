@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 
 import { ProgramSchedulePreview } from '@/components/trainer/ProgramSchedulePreview';
-import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, spacing } from '@/constants/theme';
 import { useAthletePreviewEffectiveUser } from '@/hooks/useAthletePreviewMode';
@@ -22,6 +21,8 @@ interface AthleteScheduleCalendarProps {
   subtitle?: string;
   /** Oculta el título interno (p. ej. cuando va dentro de un CollapsibleSection). */
   hideHeader?: boolean;
+  /** Sin tarjeta propia, para incrustarlo en la home. */
+  plain?: boolean;
 }
 
 export function AthleteScheduleCalendar({
@@ -30,8 +31,9 @@ export function AthleteScheduleCalendar({
   title = 'Tu calendario',
   subtitle,
   hideHeader = false,
+  plain = false,
 }: AthleteScheduleCalendarProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const { user: authUser } = useAuth();
   const previewUser = useAthletePreviewEffectiveUser();
   const scheduleUserId = previewUser?.id ?? authUser?.id;
@@ -91,11 +93,11 @@ export function AthleteScheduleCalendar({
     [plans, workouts, program],
   );
 
-  if (loading) {
+  if (loading && plans.length === 0) {
     return (
-      <Card style={styles.card}>
+      <View style={plain ? styles.plainLoading : styles.card}>
         <ActivityIndicator color={colors.accent} />
-      </Card>
+      </View>
     );
   }
 
@@ -113,6 +115,7 @@ export function AthleteScheduleCalendar({
         isNewSession={false}
         athleteSchedule={calendarItems}
         variant="athlete"
+        flush={plain}
         onDayPress={(date) => openCalendarDay(router, date)}
         onSessionPress={(item) => openScheduledSession(router, item)}
       />
@@ -126,11 +129,18 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   wrapEmbedded: {
+    flex: 1,
+    minHeight: 0,
     marginTop: 0,
   },
   card: {
     marginTop: spacing.lg,
     padding: spacing.lg,
     alignItems: 'center',
+  },
+  plainLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

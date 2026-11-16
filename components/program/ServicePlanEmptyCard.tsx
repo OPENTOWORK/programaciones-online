@@ -9,7 +9,7 @@ import {
 } from '@/components/program/planBrandUi';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
-import { brandColors, spacing, withAlpha } from '@/constants/theme';
+import { brandColor, brandColors, spacing, withAlpha } from '@/constants/theme';
 import type { AppIconName } from '@/constants/icons';
 import type { ServicePlanCategory } from '@/lib/trainerConstants';
 
@@ -34,7 +34,7 @@ interface ServicePlanEmptyCardProps {
 function MetaItem({ icon, text }: { icon: AppIconName; text: string }) {
   return (
     <View style={styles.metaRow}>
-      <AppIcon name={icon} size={16} color={withAlpha(brandColors.orangeSecondary, 'CC')} />
+      <AppIcon name={icon} size={16} color={brandColor('tag', withAlpha(brandColors.orangeSecondary, 'CC'))} />
       <Text style={planBrandStyles.metaText}>{text}</Text>
     </View>
   );

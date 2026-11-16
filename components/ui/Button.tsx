@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -8,7 +9,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { borderRadius, brandColors, colors, typography, withAlpha } from '@/constants/theme';
+import { borderRadius, brandColor, brandColors, colors, typography, withAlpha } from '@/constants/theme';
 
 interface ButtonProps {
   title: string;
@@ -19,6 +20,7 @@ interface ButtonProps {
   disabled?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  numberOfLines?: number;
 }
 
 export function Button({
@@ -30,6 +32,7 @@ export function Button({
   disabled = false,
   style,
   textStyle,
+  numberOfLines,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
 
@@ -49,10 +52,19 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator
-          color={variant === 'primary' || variant === 'success' ? colors.white : colors.accent}
+          color={
+            variant === 'primary'
+              ? brandColor('onButton', colors.white)
+              : variant === 'success'
+                ? colors.white
+                : colors.accent
+          }
         />
       ) : (
         <Text
+          numberOfLines={numberOfLines}
+          adjustsFontSizeToFit={numberOfLines === 1}
+          minimumFontScale={0.72}
           style={[
             styles.text,
             size === 'compact' ? styles.compactText : styles.regularText,
@@ -84,11 +96,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   primary: {
-    backgroundColor: brandColors.orangeDark,
-    borderColor: withAlpha(brandColors.orangeGlow, '44'),
-    shadowColor: brandColors.orangeDark,
+    backgroundColor: brandColor('button', brandColors.orangeDark),
+    borderColor: brandColor('buttonEdge', withAlpha(brandColors.orangeGlow, '44')),
+    // En web la opacidad va dentro del color: react-native-web ignora shadowOpacity con var().
+    ...Platform.select({
+      web: { shadowColor: brandColor('buttonShadow', 'rgba(168, 95, 46, 0.32)'), shadowOpacity: 1 },
+      default: { shadowColor: brandColors.orangeDark, shadowOpacity: 0.32 },
+    }),
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.32,
     shadowRadius: 12,
     elevation: 5,
   },
@@ -97,8 +112,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   outline: {
-    backgroundColor: withAlpha(brandColors.orangeDark, '12'),
-    borderColor: withAlpha(brandColors.orange, '72'),
+    backgroundColor: withAlpha(brandColor('button', brandColors.orangeDark), '12'),
+    borderColor: brandColor('buttonEdge', withAlpha(brandColors.orange, '72')),
   },
   ghost: {
     backgroundColor: 'transparent',
@@ -136,13 +151,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   primaryText: {
-    color: colors.white,
+    color: brandColor('onButton', colors.white),
   },
   secondaryText: {
     color: colors.text,
   },
   outlineText: {
-    color: brandColors.orangeGlow,
+    color: brandColor('actionInk', brandColors.orangeGlow),
   },
   ghostText: {
     color: colors.textSecondary,

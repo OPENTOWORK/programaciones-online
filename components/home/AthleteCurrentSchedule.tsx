@@ -1,12 +1,13 @@
 import { useFocusEffect, useNavigation } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, typography } from '@/constants/theme';
 
+import { HomeBlock } from '@/components/home/HomeBlock';
 import { AthleteProgramPicker } from '@/components/program/AthleteProgramPicker';
 import { AthleteScheduleCalendar } from '@/components/schedule/AthleteScheduleCalendar';
-import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { useAthleteCededAccess } from '@/hooks/useAthleteCededAccess';
 import {
   useAthletePreviewEffectiveUser,
@@ -30,9 +31,12 @@ import type { AthletePlan, Program } from '@/lib/types';
 export function AthleteCurrentSchedule({
   preferPersonalized = false,
   forceExpanded = false,
+  children,
 }: {
   preferPersonalized?: boolean;
   forceExpanded?: boolean;
+  /** Si se pasa, la home coloca el bloque unido en el carrusel. */
+  children?: (sections: { schedule: ReactNode }) => ReactNode;
 } = {}) {
   const navigation = useNavigation();
   const { user: authUser, refreshUser } = useAuth();
@@ -199,7 +203,7 @@ export function AthleteCurrentSchedule({
   }
 
   if (!hasScheduleHistory) {
-    if (!preview.enabled && !isCededAthlete) {
+    if (!preview.enabled && !isCededAthlete && !children) {
       return null;
     }
 
@@ -210,20 +214,19 @@ export function AthleteCurrentSchedule({
       ? 'Tus planes asignados por tu entrenador aparecerán aquí.'
       : 'Los atletas eligen aquí entre sus planes asignados y las programaciones de catálogo activas.';
 
+    const schedule = (
+      <ScheduleCard
+        calendar={<Text style={styles.emptyHint}>{calendarHint}</Text>}
+        program={<Text style={styles.emptyHint}>{programHint}</Text>}
+      />
+    );
+    if (children) return children({ schedule });
     return (
       <View style={styles.wrap} key={menusKey}>
-        <CollapsibleSection title="Tu calendario" defaultExpanded={forceExpanded}>
-          <Text style={styles.emptyHint}>{calendarHint}</Text>
-        </CollapsibleSection>
-        <CollapsibleSection title="Programación actual" defaultExpanded={forceExpanded}>
-          <Text style={styles.emptyHint}>{programHint}</Text>
-        </CollapsibleSection>
+        {schedule}
       </View>
     );
   }
-
-  const activeProgramForCalendar =
-    selectedPickerOption?.kind === 'catalog' ? selectedPickerOption.program : undefined;
 
   const programHint =
     pickerOptions.length === 0
@@ -232,33 +235,111 @@ export function AthleteCurrentSchedule({
         : 'No tienes programación activa. Las anteriores siguen en tu calendario.'
       : null;
 
+  const schedule = (
+    <ScheduleCard
+      calendar={
+        <AthleteScheduleCalendar
+          plain
+          hideHeader
+          program={selectedPickerOption?.kind === 'catalog' ? selectedPickerOption.program : undefined}
+          assignedPlans={
+            selectedPickerOption?.kind === 'plan'
+              ? selectedPickerOption.plans
+              : selectedPickerOption?.kind === 'catalog'
+                ? []
+                : undefined
+          }
+        />
+      }
+      program={
+        pickerOptions.length > 0 && selectedPickerOption ? (
+          <AthleteProgramPicker
+            bare
+            compact
+            programs={pickerOptions.map((option) => ({
+              id: option.id,
+              name: option.name,
+            }))}
+            selectedId={selectedPickerOption.id}
+            onSelect={setSelectedPickerId}
+          />
+        ) : (
+          <Text style={styles.emptyHint}>{programHint}</Text>
+        )
+      }
+    />
+  );
+
+  if (children) return children({ schedule });
+
   return (
     <View style={styles.wrap} key={menusKey}>
-      <CollapsibleSection title="Tu calendario" defaultExpanded={forceExpanded}>
-        <AthleteScheduleCalendar program={activeProgramForCalendar} hideHeader />
-      </CollapsibleSection>
-      {pickerOptions.length > 0 && selectedPickerOption ? (
-        <AthleteProgramPicker
-          programs={pickerOptions.map((option) => ({
-            id: option.id,
-            name: option.name,
-          }))}
-          selectedId={selectedPickerOption.id}
-          onSelect={setSelectedPickerId}
-          defaultExpanded={forceExpanded}
-        />
-      ) : (
-        <CollapsibleSection title="Programación actual" defaultExpanded={forceExpanded}>
-          <Text style={styles.emptyHint}>{programHint}</Text>
-        </CollapsibleSection>
-      )}
+      {schedule}
     </View>
+  );
+}
+
+function ScheduleCard({ calendar, program }: { calendar: ReactNode; program: ReactNode }) {
+  const [programExpanded, setProgramExpanded] = useState(false);
+
+  return (
+    <HomeBlock kicker="Calendario">
+      <View style={styles.calendarFill}>{calendar}</View>
+      <View style={styles.programSection}>
+        <Pressable
+          onPress={() => setProgramExpanded((open) => !open)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: programExpanded }}
+          accessibilityLabel={
+            programExpanded ? 'Contraer programación actual' : 'Desplegar programación actual'
+          }
+          style={({ pressed }) => [styles.programHeader, pressed && styles.programHeaderPressed]}
+        >
+          <Text style={styles.programLabel}>Programación actual</Text>
+          <Ionicons
+            name={programExpanded ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+        {programExpanded ? program : null}
+      </View>
+    </HomeBlock>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: spacing.md,
+    flex: 1,
+    gap: spacing.lg,
+  },
+  calendarFill: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  programSection: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: 6,
+  },
+  programHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  programHeaderPressed: {
+    opacity: 0.75,
+  },
+  programLabel: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   emptyHint: {
     ...typography.bodySmall,

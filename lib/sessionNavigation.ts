@@ -1,6 +1,11 @@
-import { useRouter } from 'expo-router';
+import type { Href } from 'expo-router';
+
 import type { SchedulePreviewItem } from '@/lib/programSchedulePreview';
 import { stashTrainerPreview, type TrainerPreviewState } from '@/lib/trainerPreviewContext';
+
+type SessionRouter = {
+  push: (href: Href) => void;
+};
 
 export function formatDateParam(date: Date) {
   const year = date.getFullYear();
@@ -9,14 +14,14 @@ export function formatDateParam(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-export function openCalendarDay(router: ReturnType<typeof useRouter>, date: Date) {
+export function openCalendarDay(router: SessionRouter, date: Date) {
   router.push({
     pathname: '/calendar/[date]',
     params: { date: formatDateParam(date) },
   });
 }
 
-export function openScheduledSession(router: ReturnType<typeof useRouter>, item: SchedulePreviewItem) {
+export function openScheduledSession(router: SessionRouter, item: SchedulePreviewItem) {
   const date = formatDateParam(item.date);
 
   if (item.id.startsWith('plan:')) {
@@ -35,7 +40,7 @@ export function openScheduledSession(router: ReturnType<typeof useRouter>, item:
 }
 
 export function openTrainerPreviewDay(
-  router: ReturnType<typeof useRouter>,
+  router: SessionRouter,
   date: Date,
   state: TrainerPreviewState,
 ) {
@@ -47,7 +52,7 @@ export function openTrainerPreviewDay(
 }
 
 export function openTrainerPreviewSession(
-  router: ReturnType<typeof useRouter>,
+  router: SessionRouter,
   item: SchedulePreviewItem,
   state: TrainerPreviewState,
 ) {

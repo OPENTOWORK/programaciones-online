@@ -1,3 +1,5 @@
+import { timerCueTickSecond, type TimerCue } from '@/lib/timerCues';
+
 export type WorkoutTimerMode = 'crono' | 'for_time' | 'amrap' | 'emom' | 'tabata';
 export type WorkoutTimerDirection = 'up' | 'down';
 export type WorkoutTimerStatus = 'idle' | 'running' | 'paused' | 'finished';
@@ -17,6 +19,8 @@ export interface WorkoutTimerSettings {
 
 export interface WorkoutTimerDisplay {
   primarySeconds: number;
+  /** `primarySeconds` va a la contra hasta el próximo cambio de fase o el final. */
+  countdown?: boolean;
   statusLabel: string;
   detailLabel?: string;
   finished: boolean;
@@ -108,7 +112,12 @@ export function getWorkoutTimerDisplay(
       const remaining = settings.durationSeconds - elapsedSeconds;
       return remaining <= 0
         ? { primarySeconds: 0, statusLabel: 'Tiempo completado', finished: true }
-        : { primarySeconds: remaining, statusLabel: 'Cuenta atrás', finished: false };
+        : {
+            primarySeconds: remaining,
+            countdown: true,
+            statusLabel: 'Cuenta atrás',
+            finished: false,
+          };
     }
 
     return {
@@ -139,6 +148,7 @@ export function getWorkoutTimerDisplay(
 
     return {
       primarySeconds: state.phaseRemaining,
+      countdown: true,
       statusLabel: state.phase === 'work' ? 'Trabajo' : 'Descanso',
       detailLabel: `Ronda ${state.round} / ${settings.tabataRounds}`,
       finished: false,
@@ -180,6 +190,7 @@ export function getWorkoutTimerDisplay(
     const intervalRemaining = interval - withinRound;
     return {
       primarySeconds: intervalRemaining,
+      countdown: true,
       statusLabel: `Minuto ${round}`,
       detailLabel: `Quedan ${formatWorkoutTimer(remainingTotal)}`,
       finished: false,
@@ -207,9 +218,23 @@ export function getWorkoutTimerDisplay(
 
   return {
     primarySeconds: remaining,
+    countdown: true,
     statusLabel: settings.mode === 'amrap' ? 'AMRAP · cuenta atrás' : 'For time · cuenta atrás',
     finished: false,
   };
+}
+
+/** Aviso que toca entre dos lecturas seguidas del reloj en marcha (fin, cambio de fase o 3-2-1). */
+export function workoutTimerCue(
+  previous: WorkoutTimerDisplay,
+  next: WorkoutTimerDisplay,
+): TimerCue | null {
+  if (next.finished) return previous.finished ? null : 'finish';
+  if (next.tabataPhase !== previous.tabataPhase || next.round !== previous.round) return 'phase';
+  if (!next.countdown) return null;
+
+  const second = timerCueTickSecond(next.primarySeconds);
+  return second != null && second !== Math.ceil(previous.primarySeconds) ? 'tick' : null;
 }
 
 export function parseDurationMinutes(value: string, fallbackMinutes: number): number {

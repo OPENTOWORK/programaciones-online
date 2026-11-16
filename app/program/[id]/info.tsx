@@ -1,4 +1,6 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useAthletePreviewMode } from '@/hooks/useAthletePreviewMode';
+import { useEmbeddedRouteParams } from '@/hooks/useEmbeddedRouteParams';
+import { normalizeRouteParam } from '@/lib/routeParams';
 import { ActivityIndicator, StyleSheet, Text } from 'react-native';
 
 import { ProgramInfoContent } from '@/components/program/ProgramInfoContent';
@@ -7,13 +9,17 @@ import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useProgram } from '@/hooks/usePrograms';
+import { useProgramEntitlement } from '@/hooks/usePurchases';
 import { canEnterHypeCatalogProgram, isPaidHypeCatalogProgram } from '@/lib/hypeCatalog';
 import { canManageTrainerProgram } from '@/lib/programService';
 
 export default function ProgramInfoScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useEmbeddedRouteParams<{ id?: string | string[] }>();
+  const id = normalizeRouteParam(params.id) ?? '';
+  const preview = useAthletePreviewMode();
   const { user, refreshUser } = useAuth();
-  const { program, workouts, isLoading, isLoadingWorkouts, reloadWorkouts } = useProgram(id ?? '');
+  const { program, workouts, isLoading, isLoadingWorkouts, reloadWorkouts } = useProgram(id);
+  const hasProgramEntitlement = useProgramEntitlement();
 
   if (isLoading && !program) {
     return (
@@ -31,9 +37,13 @@ export default function ProgramInfoScreen() {
     );
   }
 
-  const canEdit = canManageTrainerProgram(user?.role, program.category, program);
+  const canEdit = !preview.enabled && canManageTrainerProgram(user?.role, program.category, program);
 
-  if (isPaidHypeCatalogProgram(program) && !canEnterHypeCatalogProgram(user?.role)) {
+  if (
+    isPaidHypeCatalogProgram(program) &&
+    !canEnterHypeCatalogProgram(user?.role) &&
+    !hasProgramEntitlement(program.id)
+  ) {
     return <HypeCatalogAccessGate program={program} />;
   }
 

@@ -4,7 +4,7 @@ import type { StandardVenueId } from '@/lib/standardVenues';
 
 export type FitnessLevel = 'principiante' | 'intermedio' | 'avanzado';
 export type ProgramGoal = 'fuerza' | 'hipertrofia' | 'pérdida de grasa' | 'rendimiento' | 'movilidad';
-export type ProgramDuration = '4 semanas' | '8 semanas' | '12 semanas';
+export type ProgramDuration = '4 semanas' | '8 semanas' | '12 semanas' | 'Por definir';
 export type ProgramStatus = 'disponible' | 'activa' | 'bloqueada' | 'personalizada';
 export type ProgramCategory =
   | 'standard'

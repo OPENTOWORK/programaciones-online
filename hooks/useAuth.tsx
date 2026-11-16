@@ -102,23 +102,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadUserFromSupabase = useCallback(async (authUser: User) => {
-    const result = await withTimeout(
-      fetchUserProfileResult(authUser.id),
-      PROFILE_LOAD_TIMEOUT_MS,
-      'Tiempo de espera agotado al cargar el perfil',
-    );
+    try {
+      const result = await withTimeout(
+        fetchUserProfileResult(authUser.id),
+        PROFILE_LOAD_TIMEOUT_MS,
+        'Tiempo de espera agotado al cargar el perfil',
+      );
 
-    if (isProfileReadyForNavigation(result)) {
-      setUser(result.profile);
-      setProfileError(null);
-      return { ok: true as const, profile: result.profile };
+      if (isProfileReadyForNavigation(result)) {
+        setUser(result.profile);
+        setProfileError(null);
+        return { ok: true as const, profile: result.profile };
+      }
+
+      const message = profileResultToUserMessage(result);
+      setUser(null);
+      setProfileError(message);
+      return { ok: false as const, error: message };
+    } catch (error) {
+      const message =
+        error instanceof TimeoutError
+          ? 'La carga del perfil tardó demasiado. Comprueba tu conexión e inténtalo de nuevo.'
+          : error instanceof Error
+            ? error.message
+            : 'No se pudo cargar el perfil.';
+      logReleaseError('profile_load_failed', error);
+      setUser(null);
+      setProfileError(message);
+      return { ok: false as const, error: message };
     }
-
-    const message = profileResultToUserMessage(result);
-    setUser(null);
-    setProfileError(message);
-    return { ok: false as const, error: message };
-  }, []);
+  }, [setUser]);
 
   const processAuthDeepLink = useCallback(
     async (url: string, supabase: NonNullable<ReturnType<typeof getSupabase>>) => {
@@ -266,7 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
 
         if (!sharedAuthSubscription) {
-          const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+          const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
             logAuthEvent('state_change', { event, hasSession: Boolean(session?.user) });
 
             if (!session?.user) {
@@ -288,22 +301,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               return;
             }
 
+            // Fuera del aviso de Supabase: si se espera aquí, un perfil lento bloquea
+            // el resto de eventos de sesión y el cliente se queda colgado.
             if (event === 'INITIAL_SESSION') {
               if (!cachedAuthUser) {
-                try {
-                  await loadUserFromSupabase(session.user);
-                } catch (error) {
-                  logReleaseError('auth_state_profile_failed', error, { event });
-                }
+                setTimeout(() => void loadUserFromSupabase(session.user), 0);
               }
               return;
             }
 
-            try {
-              await loadUserFromSupabase(session.user);
-            } catch (error) {
-              logReleaseError('auth_state_profile_failed', error, { event });
-            }
+            setTimeout(() => void loadUserFromSupabase(session.user), 0);
           });
           sharedAuthSubscription = listener.subscription;
         }
@@ -356,10 +363,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setUser(null);
       }
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'No se pudo cargar el perfil.');
     } finally {
       setIsLoading(false);
     }
-  }, [loadUserFromSupabase]);
+  }, [loadUserFromSupabase, setUser]);
 
   const getAuthCallbackSnapshot = useCallback((url?: string | null) => {
     return getAuthCallbackFlowSnapshot(url ?? pendingAuthCallbackUrl);
@@ -658,7 +667,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return {};
       }
 
-      const { error, profile } = await updateUserProfile(user.id, user.email, updates);
+      const { error, profile } = await updateUserProfile(user.id, user.email, updates, {
+        updateAuthName: updates.name.trim() !== user.name.trim(),
+      });
       if (error) {
         return { error };
       }

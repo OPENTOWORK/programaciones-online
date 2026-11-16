@@ -6,6 +6,7 @@ import ProfileScreen from '@/app/tabs/profile';
 import ProgramsScreen from '@/app/tabs/programs';
 import TrainerChatsScreen from '@/app/trainer/chats/index';
 import TrainerScreen from '@/app/tabs/trainer';
+import { DevicePreviewPair } from '@/components/trainer/DevicePreviewFrame';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { MobileShell } from '@/components/ui/MobileShell';
 import { colors, spacing, typography } from '@/constants/theme';
@@ -107,23 +108,18 @@ function PreviewPhoneContent() {
 export function TrainerMobilePreviewFrame() {
   return (
     <TrainerMobilePreviewProvider>
-      <View style={styles.phoneFrame}>
-        <MobileShell>
-          <PreviewPhoneContent />
-        </MobileShell>
-      </View>
+      <DevicePreviewPair
+        render={() => (
+          <MobileShell bare palette="night">
+            <PreviewPhoneContent />
+          </MobileShell>
+        )}
+      />
     </TrainerMobilePreviewProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  phoneFrame: {
-    flex: 1,
-    width: '100%',
-    maxWidth: 430,
-    maxHeight: 'min(88vh, 920px)' as unknown as number,
-    minHeight: 560,
-  },
   phoneBody: {
     flex: 1,
     width: '100%',

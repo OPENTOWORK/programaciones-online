@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
@@ -15,7 +15,7 @@ function formatSavedDate(iso: string) {
 }
 
 export function SavedMetconsCard({ style }: SavedMetconsCardProps) {
-  const router = useRouter();
+  const router = useAppNavigation();
   const { entries, isLoading, toggleSaved, isSaving } = useSavedMetcons();
 
   return (

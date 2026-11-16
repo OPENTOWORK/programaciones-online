@@ -1,4 +1,6 @@
+import { Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { Orbitron_900Black } from '@expo-google-fonts/orbitron';
+import { Rajdhani_700Bold } from '@expo-google-fonts/rajdhani';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -13,9 +15,11 @@ import { AppThemeProvider, useAppTheme } from '@/hooks/useAppTheme';
 import { useAppUpdateGate } from '@/hooks/useAppUpdateGate';
 import { GymProvider } from '@/hooks/useGym';
 import { ProgramsProvider } from '@/hooks/usePrograms';
+import { PurchasesProvider } from '@/hooks/usePurchases';
 import { AppShell } from '@/components/ui/AppShell';
 import { HeaderBackButton } from '@/components/ui/HeaderBackButton';
 import { UpdateRequiredScreen } from '@/components/ui/UpdateRequiredScreen';
+import { storeColors } from '@/constants/storeColors';
 import { colors } from '@/constants/theme';
 import { logAppRuntimeInfo, logReleaseDiagnostic, logReleaseError } from '@/lib/releaseDiagnostics';
 import { enableScreenCaptureProtection } from '@/lib/screenCaptureProtection';
@@ -41,6 +45,14 @@ function installGlobalErrorHandlers() {
 installGlobalErrorHandlers();
 logReleaseDiagnostic('app_start');
 logAppRuntimeInfo();
+
+const storeScreenOptions = {
+  headerStyle: { backgroundColor: storeColors.background },
+  headerTintColor: storeColors.text,
+  headerShadowVisible: false,
+  headerLeft: () => <HeaderBackButton tint={storeColors.text} />,
+  contentStyle: { backgroundColor: storeColors.background, flex: 1 },
+};
 
 function RootNavigator() {
   const { isLoading } = useAuth();
@@ -104,6 +116,8 @@ function RootNavigator() {
           <Stack.Screen name="profile/training" options={{ title: 'Datos de entrenamiento' }} />
           <Stack.Screen name="profile/appointments" options={{ title: 'Citas' }} />
           <Stack.Screen name="profile/delete-account" options={{ title: 'Eliminar cuenta' }} />
+          <Stack.Screen name="store/index" options={{ ...storeScreenOptions, title: 'Tienda' }} />
+          <Stack.Screen name="store/purchases" options={{ ...storeScreenOptions, title: 'Mis compras' }} />
           <Stack.Screen name="legal/privacy" options={{ title: 'Política de privacidad' }} />
           <Stack.Screen name="support/index" options={{ title: 'Contacto' }} />
           <Stack.Screen name="support/[id]" options={{ title: 'Solicitud de soporte' }} />
@@ -140,6 +154,10 @@ function RootNavigator() {
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Orbitron_900Black,
+    Inter_400Regular,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Rajdhani_700Bold,
   });
 
   if (!fontsLoaded) {
@@ -154,7 +172,9 @@ export default function RootLayout() {
             <AppThemeProvider>
               <GymProvider>
                 <ProgramsProvider>
-                  <RootNavigator />
+                  <PurchasesProvider>
+                    <RootNavigator />
+                  </PurchasesProvider>
                 </ProgramsProvider>
               </GymProvider>
             </AppThemeProvider>

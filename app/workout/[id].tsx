@@ -1,20 +1,22 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { StyleSheet, Text } from 'react-native';
+import { useAppNavigation } from '@/hooks/useAppNavigation';
+import { useEmbeddedRouteParams } from '@/hooks/useEmbeddedRouteParams';
+import { normalizeRouteParam } from '@/lib/routeParams';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { SessionPdfCard } from '@/components/workout/SessionPdfCard';
 import { SessionWorkoutView } from '@/components/workout/SessionWorkoutView';
 import { HypeCatalogAccessGate } from '@/components/program/HypeCatalogAccessGate';
 import { ScreenWrapper } from '@/components/ui/ScreenWrapper';
-import { Card } from '@/components/ui/Card';
-import { colors, spacing, typography, withAlpha } from '@/constants/theme';
+import { brandColor, brandColors, colors, spacing } from '@/constants/theme';
+import { fontUiRegular, fontUiSemibold } from '@/constants/fonts';
 import { useAuth } from '@/hooks/useAuth';
-import { useAthleteSessionExerciseVideos } from '@/hooks/useAthleteSessionExerciseVideos';
+import { useExerciseVideos } from '@/hooks/useExerciseVideos';
 import { useProgram, useWorkout } from '@/hooks/usePrograms';
+import { useProgramEntitlement } from '@/hooks/usePurchases';
 import { useSessionRunner } from '@/hooks/useSessionRunner';
 import { signedUrlForCatalogWorkoutPdf } from '@/lib/catalogWorkoutPdfService';
 import { canEnterHypeCatalogProgram, isPaidHypeCatalogProgram } from '@/lib/hypeCatalog';
 import { formatDayLabel } from '@/lib/programSchedulePreview';
-import { safeGoBack } from '@/lib/navigation';
 
 function formatWorkoutMeta(workout: {
   workoutDate?: string;
@@ -32,13 +34,22 @@ function formatWorkoutMeta(workout: {
 }
 
 export default function WorkoutDetailScreen() {
-  const { id, date, preview } = useLocalSearchParams<{ id: string; date?: string; preview?: string }>();
-  const isPreview = preview === '1' || preview === 'true';
-  const router = useRouter();
+  const params = useEmbeddedRouteParams<{
+    id?: string | string[];
+    date?: string | string[];
+    preview?: string | string[];
+  }>();
+  const id = normalizeRouteParam(params.id);
+  const date = normalizeRouteParam(params.date);
+  const preview = normalizeRouteParam(params.preview);
+  const isSampleWeek = preview === 'week';
+  const isPreview = preview === '1' || preview === 'true' || isSampleWeek;
+  const router = useAppNavigation();
   const { user, isDemoMode } = useAuth();
   const { workout, isLoading } = useWorkout(id ?? '');
   const { program: parentProgram } = useProgram(workout?.programId ?? '');
-  const { getVideoId, hasVideo } = useAthleteSessionExerciseVideos({ athleteId: user?.id });
+  const hasProgramEntitlement = useProgramEntitlement();
+  const { getVideoId, hasVideo } = useExerciseVideos();
 
   const scheduledDate = date ?? new Date().toISOString().slice(0, 10);
   const scheduledDateLabel = formatDayLabel(new Date(`${scheduledDate}T12:00:00`));
@@ -80,7 +91,8 @@ export default function WorkoutDetailScreen() {
     !isPreview &&
     parentProgram &&
     isPaidHypeCatalogProgram(parentProgram) &&
-    !canEnterHypeCatalogProgram(user?.role)
+    !canEnterHypeCatalogProgram(user?.role) &&
+    !hasProgramEntitlement(parentProgram.id)
   ) {
     return <HypeCatalogAccessGate program={parentProgram} />;
   }
@@ -90,12 +102,14 @@ export default function WorkoutDetailScreen() {
   if (isPreview) {
     return (
       <ScreenWrapper>
-        <Card style={styles.previewBanner}>
-          <Text style={styles.previewTitle}>Día de ejemplo</Text>
+        <View style={styles.previewBanner}>
+          <Text style={styles.previewTitle}>{isSampleWeek ? 'Semana de prueba' : 'Día de ejemplo'}</Text>
           <Text style={styles.previewText}>
-            Vista previa de una sesión de {parentProgram?.name ?? 'esta programación'}. No se guardan marcas ni sensaciones.
+            {isSampleWeek
+              ? `Sesión fija de ${parentProgram?.name ?? 'esta programación'}. No se guarda nada.`
+              : `Vista previa de ${parentProgram?.name ?? 'esta programación'}. No se guardan marcas.`}
           </Text>
-        </Card>
+        </View>
         <SessionWorkoutView
           workout={{
             name: workout.name,
@@ -122,7 +136,7 @@ export default function WorkoutDetailScreen() {
           feelings=""
           onFeelingsChange={() => {}}
           onToggleItem={() => {}}
-          onSave={() => safeGoBack(router, '/tabs/programs')}
+          onSave={() => router.back('/tabs/programs')}
           saving={false}
           getVideoId={getVideoId}
           hasVideo={hasVideo}
@@ -167,7 +181,7 @@ export default function WorkoutDetailScreen() {
               router.replace({ pathname: '/calendar/[date]', params: { date } });
               return;
             }
-            safeGoBack(router, '/tabs/programs');
+            router.back('/tabs/programs');
           });
         }}
         saving={runner.saving}
@@ -186,18 +200,26 @@ export default function WorkoutDetailScreen() {
 const styles = StyleSheet.create({
   previewBanner: {
     marginBottom: spacing.md,
-    borderColor: withAlpha(colors.accent, '55'),
-    backgroundColor: withAlpha(colors.accent, '12'),
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: brandColor('cardBorder', '#2C313A'),
+    backgroundColor: brandColor('card', '#12161C'),
+    gap: 2,
   },
   previewTitle: {
-    ...typography.body,
-    color: colors.accent,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
+    fontFamily: fontUiSemibold,
+    fontWeight: 'normal',
+    color: brandColor('title', brandColors.orangeHighlight),
+    fontSize: 13,
+    lineHeight: 18,
   },
   previewText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    lineHeight: 20,
+    fontFamily: fontUiRegular,
+    fontWeight: 'normal',
+    color: brandColor('body', '#C5CAD3'),
+    fontSize: 13,
+    lineHeight: 18,
   },
 });
