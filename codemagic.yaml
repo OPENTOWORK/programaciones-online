@@ -14,6 +14,8 @@ definitions:
     ios_vars: &ios_vars
       BUNDLE_ID: "com.trainingprogline.app"
       APP_APPLE_ID: "6810687197"
+      # Xcode 26: altool ya no deduce el Apple ID desde el Bundle ID (error 19).
+      APP_STORE_CONNECT_ALTOOL_ADDITIONAL_ARGUMENTS: "--apple-id 6810687197"
     ios_signing: &ios_signing
       distribution_type: app_store
       bundle_identifier: com.trainingprogline.app
